@@ -1,0 +1,12 @@
+# Local development profile.
+# Points at the PostgreSQL 17 instance running on this machine.
+# Set PROJECTMODULE_DB_PASSWORD in your environment before starting the application.
+spring:
+  datasource:
+    url: ${PROJECTMODULE_DB_URL:jdbc:postgresql://localhost:5432/projectmodule}
+    username: ${PROJECTMODULE_DB_USERNAME:postgres}
+    password: ${PROJECTMODULE_DB_PASSWORD}
+
+logging:
+  level:
+    com.projectmodule: DEBUG

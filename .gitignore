@@ -1,0 +1,21 @@
+# Build output
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Secrets and local overrides - never commit these
+.env
+*.local.yml
+application-local-*.yml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# OS
+Thumbs.db
+.DS_Store
+desktop.ini

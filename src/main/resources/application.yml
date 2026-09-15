@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: project-module
+
+  datasource:
+    # Credentials come from the environment only. Never commit a secret to this file.
+    url: ${PROJECTMODULE_DB_URL}
+    username: ${PROJECTMODULE_DB_USERNAME}
+    password: ${PROJECTMODULE_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Flyway is the only schema authority. Hibernate never creates or alters a table.
+      ddl-auto: validate
+    # Off deliberately: Boot defaults this on, which hides lazy-loading and N+1 problems
+    # behind the view layer.
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # No business migrations exist yet; this is the location they will land in.
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.projectmodule: INFO
