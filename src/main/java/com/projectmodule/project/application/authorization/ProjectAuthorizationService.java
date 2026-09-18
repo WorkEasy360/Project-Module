@@ -15,8 +15,11 @@ import java.util.UUID;
  * <p>This module decides only what a user may do <em>within a project</em>. Establishing who
  * the user is belongs to Authentication and User Management.
  *
- * <p>Interface only at this stage. The role-to-permission matrix and its implementation arrive
- * with the ProjectMember entity, which supplies the membership this contract reads.
+ * <p>Implemented by {@link ProjectAuthorizationServiceImpl}, which reads the caller's
+ * {@code ProjectMember} row and checks it against an explicit role-to-permission matrix. Project
+ * creation is not gated through this interface: {@link #hasPermission} requires a
+ * {@code projectId}, and a project being created does not have one yet — "is this caller
+ * allowed to perform this operation on <em>this</em> project" presupposes the project exists.
  */
 public interface ProjectAuthorizationService {
 

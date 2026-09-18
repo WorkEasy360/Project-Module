@@ -13,6 +13,8 @@ import com.projectmodule.common.exception.MissingIdentityException;
 import com.projectmodule.common.exception.ProjectModuleException;
 import com.projectmodule.common.exception.ResourceNotFoundException;
 import com.projectmodule.common.exception.ValidationException;
+import com.projectmodule.work.domain.TaskStatus;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,8 +28,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -105,5 +109,33 @@ class GlobalExceptionHandlerTest {
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
         assertThat(problem.getDetail()).isEqualTo("An unexpected error occurred");
         assertThat(problem.getDetail()).doesNotContain("connection string");
+    }
+
+    /**
+     * Coverage for the Filters handler, per {@code docs/project/14-FILTERS-SPEC.md} §14: an
+     * invalid enum value in a filter query parameter (e.g. {@code ?status=NOT_A_STATUS}) must
+     * report the module's standard {@code ProblemDetail} shape, not Spring's generic default.
+     */
+    @Test
+    @DisplayName("reports an invalid filter query parameter as the standard validation-failed shape")
+    void reportsInvalidFilterQueryParameter() throws NoSuchMethodException {
+        Method dummyMethod = GlobalExceptionHandlerTest.class.getDeclaredMethod("dummyFilterMethod", String.class);
+        MethodParameter parameter = new MethodParameter(dummyMethod, 0);
+        MethodArgumentTypeMismatchException exception = new MethodArgumentTypeMismatchException(
+                "NOT_A_STATUS", TaskStatus.class, "status", parameter, new IllegalArgumentException("bad enum"));
+
+        ProblemDetail problem = handler.handleMethodArgumentTypeMismatch(exception);
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problem.getType()).hasToString("https://errors.projectmodule/validation-failed");
+        assertThat(problem.getProperties()).containsKey("errors");
+        @SuppressWarnings("unchecked")
+        List<FieldViolation> violations = (List<FieldViolation>) problem.getProperties().get("errors");
+        assertThat(violations).hasSize(1);
+        assertThat(violations.get(0).field()).isEqualTo("status");
+    }
+
+    @SuppressWarnings("unused")
+    private void dummyFilterMethod(String status) {
     }
 }

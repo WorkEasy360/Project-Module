@@ -1,4 +1,4 @@
-package com.projectmodule.project.application.authorization;
+package com.projectmodule.project.domain;
 
 /**
  * A member's role on a single project.

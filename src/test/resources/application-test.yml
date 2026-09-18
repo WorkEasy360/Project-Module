@@ -1,0 +1,40 @@
+# Repository tests run against a real PostgreSQL 17 instance.
+#
+# They are skipped unless PROJECTMODULE_TEST_DB_URL is set, so the build stays green on a
+# machine with no database. To enable them, create a throwaway database and export:
+#
+#   PROJECTMODULE_TEST_DB_URL=jdbc:postgresql://localhost:5432/projectmodule_test
+#   PROJECTMODULE_TEST_DB_USERNAME=postgres
+#   PROJECTMODULE_TEST_DB_PASSWORD=<your local password>
+#
+# A real instance is used rather than an in-memory substitute because the schema relies on
+# PostgreSQL behaviour an emulation does not reproduce: jsonb columns, partial indexes and
+# timestamptz. Testing against a different engine would verify a schema that is not the one
+# being deployed.
+spring:
+  datasource:
+    url: ${PROJECTMODULE_TEST_DB_URL:}
+    username: ${PROJECTMODULE_TEST_DB_USERNAME:postgres}
+    password: ${PROJECTMODULE_TEST_DB_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # Flyway builds the schema; Hibernate only checks that the mapping matches it.
+      # This is what makes the repository tests a genuine check of entity/schema alignment.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # Each run starts from an empty schema so tests never inherit earlier state.
+    clean-disabled: false
+
+logging:
+  level:
+    org.flywaydb: INFO

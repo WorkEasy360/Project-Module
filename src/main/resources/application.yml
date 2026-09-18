@@ -41,6 +41,13 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 
+projectmodule:
+  cors:
+    # Comma-separated origins allowed to call /api/v1/** from a browser (see ApiConfiguration).
+    # Override with PROJECTMODULE_CORS_ALLOWED_ORIGINS in any environment where the frontend is
+    # not served from the default Vite dev/preview ports.
+    allowed-origins: ${PROJECTMODULE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173}
+
 logging:
   level:
     com.projectmodule: INFO

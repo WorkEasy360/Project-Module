@@ -2,25 +2,27 @@ package com.projectmodule;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Smoke test: the Spring application context starts and the component scan is sound.
+ * Smoke test: the full Spring application context starts, with every bean wired.
  *
- * <p>Database autoconfiguration is excluded for now because the skeleton has no entities and
- * no migrations, so there is nothing to persist and no schema to connect to. This keeps the
- * build runnable on any machine and in CI without a database.
+ * <p>Database autoconfiguration was excluded here while the skeleton had no entities and no
+ * migrations, so there was nothing to persist and no schema to connect to. That stopped being
+ * true once the P0 persistence slice landed, and became load-bearing once the Project CRUD
+ * slice added a real bean graph (controller -> application service -> JPA repository) that the
+ * context eagerly instantiates. The exclusion is removed and this now runs against a real
+ * PostgreSQL 17 instance, exactly as originally planned.
  *
- * <p>This exclusion is temporary. It is removed once the first entities and Flyway migrations
- * land, at which point context tests run against a real PostgreSQL instance.
+ * <p>Uses the same real-database gate as {@code ProjectPersistenceTest}: skipped unless
+ * {@code PROJECTMODULE_TEST_DB_URL} is set, so the build stays green on a machine without a
+ * database.
  */
-@SpringBootTest(properties = {
-        "spring.autoconfigure.exclude="
-                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.jdbc.DataSourceTransactionManagerAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration"
-})
+@SpringBootTest
+@ActiveProfiles("test")
+@EnabledIfEnvironmentVariable(named = "PROJECTMODULE_TEST_DB_URL", matches = ".+")
 class ProjectModuleApplicationTests {
 
     @Test

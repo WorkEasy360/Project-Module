@@ -10,9 +10,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
  * Translates exceptions into RFC 9457 problem responses.
@@ -61,6 +63,45 @@ public class GlobalExceptionHandler {
 
         return problem(HttpStatus.BAD_REQUEST, ErrorType.VALIDATION_FAILED,
                 "One or more fields are invalid", violations);
+    }
+
+    /**
+     * Handles a query/path parameter that cannot be converted to its declared type — most
+     * commonly an invalid enum value in a Filters query parameter (e.g. {@code ?status=NOT_A_STATUS}),
+     * per {@code docs/project/14-FILTERS-SPEC.md} §14. Without this handler, Spring's own default
+     * 400 response would leak through in Spring's generic shape rather than this module's
+     * {@code ProblemDetail} — the same {@link ErrorType#VALIDATION_FAILED} shape
+     * {@link #handleMethodArgumentNotValid} already reports for an invalid request body field.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleMethodArgumentTypeMismatch(MethodArgumentTypeMismatchException exception) {
+        String requiredType = exception.getRequiredType() == null
+                ? "the expected type" : exception.getRequiredType().getSimpleName();
+        FieldViolation violation = new FieldViolation(
+                exception.getName(), "must be a valid " + requiredType);
+
+        log.warn("validation-failed [{}]: invalid value for parameter '{}'", correlationId(), exception.getName());
+
+        return problem(HttpStatus.BAD_REQUEST, ErrorType.VALIDATION_FAILED,
+                "One or more fields are invalid", List.of(violation));
+    }
+
+    /**
+     * Handles a genuine optimistic-lock failure detected by Hibernate's own version check at
+     * flush time.
+     *
+     * <p>The primary conflict check is the application-layer comparison against the client's
+     * supplied version, which raises {@link com.projectmodule.common.exception.ConflictException}
+     * and is handled above. This is the narrower, secondary case: two requests both pass that
+     * check because they read the same version before either committed. It is the same kind of
+     * conflict and is reported the same way.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ProblemDetail handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException exception) {
+        log.warn("conflict [{}]: concurrent modification detected", correlationId());
+
+        return problem(HttpStatus.CONFLICT, ErrorType.CONFLICT,
+                "The resource was modified concurrently; reload and try again", List.of());
     }
 
     /** Last resort. The cause is logged in full and withheld from the response. */
