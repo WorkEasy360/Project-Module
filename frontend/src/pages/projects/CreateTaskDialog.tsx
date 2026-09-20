@@ -17,14 +17,17 @@ export function CreateTaskDialog({
   projectId,
   onClose,
   onCreated,
+  initialDueDate = '',
 }: {
   projectId: string
   onClose: () => void
   onCreated: (task: Task) => void
+  /** Pre-fills the due date (used by the calendar when adding a task on a selected day). */
+  initialDueDate?: string
 }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [dueDate, setDueDate] = useState('')
+  const [dueDate, setDueDate] = useState(initialDueDate)
   const [assigneeId, setAssigneeId] = useState('')
   const [showMore, setShowMore] = useState(false)
   const [error, setError] = useState<string | null>(null)

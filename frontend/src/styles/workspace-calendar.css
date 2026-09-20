@@ -1,0 +1,228 @@
+/* ---------- Workspace Calendar ----------
+   Page-level styles on top of calendar.css (which the page reuses for the grid, chips, cards,
+   summary and side panel via the `.cal` root class). Only tokens are used for colour so the dark
+   theme works without extra rules. */
+
+.wcal {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+.wcal .page-header {
+  margin-bottom: 14px;
+}
+.wcal .page-header-title p {
+  max-width: 62ch;
+}
+.wcal .page-actions {
+  align-items: center;
+}
+
+/* ----- Toolbar: kind chips, project select, legend ----- */
+
+.wcal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.wcal-kinds {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.wcal-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+.wcal-kind svg {
+  color: var(--cal-accent);
+}
+.wcal-kind:hover {
+  border-color: var(--color-border-strong);
+}
+.wcal-kind.active {
+  background: var(--cal-accent-bg);
+  border-color: transparent;
+  color: var(--color-text);
+  box-shadow: inset 0 0 0 1px var(--cal-accent);
+}
+.wcal-kind:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-bg);
+}
+.wcal-kind-count {
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  text-align: center;
+  line-height: 18px;
+}
+.wcal-kind.active .wcal-kind-count {
+  background: var(--color-surface);
+  color: var(--cal-accent);
+}
+.wcal-project {
+  width: auto;
+  max-width: 240px;
+  height: 34px;
+  padding: 0 30px 0 12px;
+  font-size: 13px;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-text-muted) 50%),
+    linear-gradient(135deg, var(--color-text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 14px,
+    calc(100% - 10px) 14px;
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+}
+.wcal-legend {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.wcal-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.wcal-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--cal-accent);
+  box-shadow: 0 0 0 2px var(--cal-accent-bg);
+}
+
+/* ----- Notices (shared markup from WorkspaceNotices) ----- */
+
+.wcal .ws-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: -6px 0 12px;
+  font-size: 12.5px;
+}
+.wcal .ws-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.wcal .ws-notice-icon {
+  flex-shrink: 0;
+}
+.wcal .ws-notice-text {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.wcal .ws-notice-detail {
+  opacity: 0.8;
+}
+
+/* ----- Side panel & empty ----- */
+
+.wcal-side-add {
+  margin-top: 10px;
+  width: 100%;
+  justify-content: center;
+  color: var(--color-primary);
+}
+.wcal-empty {
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--cal-elev-1), var(--cal-highlight);
+}
+.wcal-pick-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+/* The project label inside event cards (CalendarEvent renders it only when present). */
+.wcal .cal-card-project {
+  color: var(--color-primary);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 160px;
+}
+
+/* ----- Responsive (calendar.css handles the grid itself) ----- */
+
+@media (max-width: 1024px) {
+  .wcal-legend {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 768px) {
+  .wcal .page-header {
+    margin-bottom: 12px;
+  }
+  .wcal .page-actions {
+    width: 100%;
+  }
+  .wcal .page-actions .cal-controls {
+    width: 100%;
+  }
+  .wcal-project {
+    max-width: none;
+    flex: 1 1 100%;
+  }
+  .wcal-kinds {
+    width: 100%;
+  }
+  .wcal-kind {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .wcal-toolbar {
+    gap: 8px;
+  }
+  .wcal-kind {
+    height: 36px;
+    padding: 0 10px;
+    font-size: 12.5px;
+  }
+  .wcal-legend {
+    gap: 4px 10px;
+    font-size: 11.5px;
+  }
+  .wcal .cal-card-project {
+    max-width: 120px;
+  }
+}

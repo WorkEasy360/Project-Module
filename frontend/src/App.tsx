@@ -1,6 +1,8 @@
 import { Navigate, Route, HashRouter, Routes } from 'react-router-dom'
 import { IdentityProvider } from './context/IdentityContext'
+import { ThemeProvider } from './context/ThemeContext'
 import { AppLayout } from './components/layout/AppLayout'
+import { SignInPage } from './pages/auth/SignInPage'
 import { DashboardPage } from './pages/dashboard/DashboardPage'
 import { ProjectsListPage } from './pages/projects/ProjectsListPage'
 import { ProjectWorkspace } from './pages/projects/ProjectWorkspace'
@@ -30,54 +32,71 @@ import { AutomationsTab } from './pages/projects/tabs/AutomationsTab'
 import { AutomationRunsPage } from './pages/projects/tabs/AutomationRunsPage'
 import { AITab } from './pages/projects/tabs/AITab'
 import { TemplatesPage } from './pages/templates/TemplatesPage'
+import { MyTasksPage } from './pages/workspace/MyTasksPage'
+import { WorkspaceCalendarPage } from './pages/workspace/WorkspaceCalendarPage'
+import { TeamPage } from './pages/workspace/TeamPage'
+import { WorkspaceReportsPage } from './pages/workspace/WorkspaceReportsPage'
+import { WorkspaceAutomationsPage } from './pages/workspace/WorkspaceAutomationsPage'
+import { SettingsPage } from './pages/workspace/SettingsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
 import { AdvancedFeaturesPage } from './pages/features/AdvancedFeaturesPage'
 
-export default function App() {
+function App() {
   return (
-    <IdentityProvider>
-      <HashRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="projects" element={<ProjectsListPage />} />
-            <Route path="templates" element={<TemplatesPage />} />
+    <ThemeProvider>
+      <IdentityProvider>
+        <HashRouter>
+          <Routes>
+            <Route path="sign-in" element={<SignInPage />} />
+            <Route element={<AppLayout />}>
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              <Route path="dashboard" element={<DashboardPage />} />
+              <Route path="projects" element={<ProjectsListPage />} />
+              <Route path="tasks" element={<MyTasksPage />} />
+              <Route path="calendar" element={<WorkspaceCalendarPage />} />
+              <Route path="team" element={<TeamPage />} />
+              <Route path="reports" element={<WorkspaceReportsPage />} />
+              <Route path="templates" element={<TemplatesPage />} />
+              <Route path="automations" element={<WorkspaceAutomationsPage />} />
+              <Route path="settings" element={<SettingsPage />} />
 
-            <Route path="projects/:projectId" element={<ProjectWorkspace />}>
-              <Route index element={<Navigate to="overview" replace />} />
-              <Route path="overview" element={<OverviewTab />} />
-              <Route path="members" element={<MembersTab />} />
-              <Route path="phases" element={<PhasesTab />} />
-              <Route path="milestones" element={<MilestonesTab />} />
-              <Route path="task-lists" element={<TaskListsTab />} />
-              <Route path="tasks" element={<TasksTab />} />
-              <Route path="tasks/:taskId" element={<TaskDetailPage />} />
-              <Route path="kanban" element={<KanbanTab />} />
-              <Route path="calendar" element={<CalendarTab />} />
-              <Route path="timeline" element={<TimelineTab />} />
-              <Route path="gantt" element={<GanttTab />} />
-              <Route path="risks" element={<RisksTab />} />
-              <Route path="issues" element={<IssuesTab />} />
-              <Route path="decisions" element={<DecisionsTab />} />
-              <Route path="dependencies" element={<DependenciesTab />} />
-              <Route path="comments" element={<CommentsTab />} />
-              <Route path="activity" element={<ActivityTab />} />
-              <Route path="custom-fields" element={<CustomFieldsTab />} />
-              <Route path="search" element={<SearchTab />} />
-              <Route path="health" element={<HealthTab />} />
-              <Route path="delayed" element={<DelayedTab />} />
-              <Route path="reports" element={<ReportsTab />} />
-              <Route path="automations" element={<AutomationsTab />} />
-              <Route path="automations/:automationId/runs" element={<AutomationRunsPage />} />
-              <Route path="ai" element={<AITab />} />
-              <Route path="more" element={<AdvancedFeaturesPage />} />
+              <Route path="projects/:projectId" element={<ProjectWorkspace />}>
+                <Route index element={<Navigate to="overview" replace />} />
+                <Route path="overview" element={<OverviewTab />} />
+                <Route path="members" element={<MembersTab />} />
+                <Route path="phases" element={<PhasesTab />} />
+                <Route path="milestones" element={<MilestonesTab />} />
+                <Route path="task-lists" element={<TaskListsTab />} />
+                <Route path="tasks" element={<TasksTab />} />
+                <Route path="tasks/:taskId" element={<TaskDetailPage />} />
+                <Route path="kanban" element={<KanbanTab />} />
+                <Route path="calendar" element={<CalendarTab />} />
+                <Route path="timeline" element={<TimelineTab />} />
+                <Route path="gantt" element={<GanttTab />} />
+                <Route path="risks" element={<RisksTab />} />
+                <Route path="issues" element={<IssuesTab />} />
+                <Route path="decisions" element={<DecisionsTab />} />
+                <Route path="dependencies" element={<DependenciesTab />} />
+                <Route path="comments" element={<CommentsTab />} />
+                <Route path="activity" element={<ActivityTab />} />
+                <Route path="custom-fields" element={<CustomFieldsTab />} />
+                <Route path="search" element={<SearchTab />} />
+                <Route path="health" element={<HealthTab />} />
+                <Route path="delayed" element={<DelayedTab />} />
+                <Route path="reports" element={<ReportsTab />} />
+                <Route path="automations" element={<AutomationsTab />} />
+                <Route path="automations/:automationId/runs" element={<AutomationRunsPage />} />
+                <Route path="ai" element={<AITab />} />
+                <Route path="more" element={<AdvancedFeaturesPage />} />
+              </Route>
+
+              <Route path="*" element={<NotFoundPage />} />
             </Route>
-
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
-      </HashRouter>
-    </IdentityProvider>
+          </Routes>
+        </HashRouter>
+      </IdentityProvider>
+    </ThemeProvider>
   )
 }
+
+export default App

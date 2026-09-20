@@ -20,8 +20,11 @@ describe('feature registry', () => {
     }
   })
 
-  it('keeps the primary navigation small: at most 5 core features per scope', () => {
-    expect(coreFeatures('workspace').length).toBeLessThanOrEqual(5)
+  it('keeps the primary navigation bounded: the 9-item workspace sidebar of the reference design, at most 5 core project tabs', () => {
+    // Workspace: Home, Projects, My Tasks, Calendar, My Team, Reports, Templates, Automations, Settings.
+    expect(coreFeatures('workspace').map((f) => f.name)).toEqual([
+      'Home', 'Projects', 'My Tasks', 'Calendar', 'My Team', 'Reports', 'Templates', 'Automations', 'Settings',
+    ])
     expect(coreFeatures('project').length).toBeLessThanOrEqual(5)
   })
 

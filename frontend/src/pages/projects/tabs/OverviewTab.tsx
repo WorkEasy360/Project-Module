@@ -6,16 +6,17 @@ import { healthApi } from '../../../api/health'
 import { reportsApi } from '../../../api/reports'
 import { membersApi } from '../../../api/members'
 import { tasksApi } from '../../../api/tasks'
+import { delayDetectionApi } from '../../../api/delayDetection'
 import { ErrorState } from '../../../components/common/ErrorState'
 import { Skeleton, StatGridSkeleton } from '../../../components/common/Skeleton'
 import { Icon } from '../../../components/common/Icon'
-import { Badge, ProjectStatusBadge, PriorityBadge, ArchivedBadge, TaskStatusBadge } from '../../../components/common/Badge'
+import { Badge, ArchivedBadge, TaskStatusBadge } from '../../../components/common/Badge'
 import { formatDate } from '../../../utils/format'
 import { EditProjectDialog } from '../EditProjectDialog'
 import { ArchiveProjectDialog } from '../ArchiveProjectDialog'
 import { CreateTaskDialog } from '../CreateTaskDialog'
 import { RequestRecommendationDialog } from './AITab'
-import type { ProjectHealth } from '../../../types/work'
+import type { DelayedItem, ProjectHealth, Task } from '../../../types/work'
 
 /**
  * The first screen after opening a project. Answers, in order: where does this project stand,
@@ -33,12 +34,15 @@ export function OverviewTab() {
   const health = useAsyncData(() => healthApi.get(project.id), [project.id])
   const summary = useAsyncData(() => reportsApi.summary(project.id), [project.id])
   const members = useAsyncData(() => membersApi.list(project.id), [project.id])
+  // Stored OVERDUE/BLOCKED tasks plus the backend's delayed items (due date passed, not completed —
+  // the same rule the health card's "Overdue items" count uses), so the two cards always agree.
   const attention = useAsyncData(
     () =>
       Promise.all([
         tasksApi.list(project.id, { status: 'OVERDUE', sortBy: 'DUE_DATE', sortDir: 'ASC' }),
         tasksApi.list(project.id, { status: 'BLOCKED', sortBy: 'CREATED_AT', sortDir: 'DESC' }),
-      ]).then(([overdue, blocked]) => [...overdue, ...blocked].slice(0, 6)),
+        delayDetectionApi.get(project.id),
+      ]).then(([overdue, blocked, delayed]) => mergeAttention([...overdue, ...blocked], delayed.items).slice(0, 8)),
     [project.id],
   )
 
@@ -50,10 +54,9 @@ export function OverviewTab() {
     <div className="overview">
       <header className="overview-header">
         <div className="overview-title">
-          <h1>{project.name}</h1>
+          {/* Name, status and priority live in the project header card above the tabs. */}
+          <h1>Overview</h1>
           <div className="overview-badges">
-            <ProjectStatusBadge status={project.status} />
-            <PriorityBadge priority={project.priority} />
             {project.archived && <ArchivedBadge />}
             {health.data && <HealthBadge health={health.data} />}
           </div>
@@ -81,11 +84,6 @@ export function OverviewTab() {
             <Link className="btn" to="../members" relative="path">
               <Icon name="member" size={15} /> Add Member
             </Link>
-          )}
-          {can('EDIT_PROJECT') && !project.archived && (
-            <button className="btn btn-ghost" onClick={() => setEditOpen(true)}>
-              Edit
-            </button>
           )}
         </div>
       </header>
@@ -150,13 +148,15 @@ export function OverviewTab() {
           )}
           {attention.data && attention.data.length > 0 && (
             <ul className="list-plain">
-              {attention.data.map((t) => (
-                <li key={t.id} className="work-item">
-                  <Link to={`../tasks/${t.id}`} relative="path">
-                    {t.name}
+              {attention.data.map((row) => (
+                <li key={`${row.kind}-${row.id}`} className="work-item">
+                  <Link to={row.to} relative="path">
+                    {row.name}
                   </Link>
                   <span>
-                    <TaskStatusBadge status={t.status} /> {t.dueDate && <span className="text-faint">due {formatDate(t.dueDate)}</span>}
+                    {row.status ? <TaskStatusBadge status={row.status} /> : <Badge tone="neutral">{row.kind}</Badge>}{' '}
+                    {row.pastDue && <span className="text-danger">past due</span>}{' '}
+                    {row.dueDate && <span className="text-faint">due {formatDate(row.dueDate)}</span>}
                   </span>
                 </li>
               ))}
@@ -227,8 +227,9 @@ export function OverviewTab() {
 }
 
 function HealthBadge({ health }: { health: ProjectHealth }) {
-  const critical = health.overdueItemCount + health.brokenDependencyCount
-  const warning = health.blockedTaskCount + health.unresolvedRiskCount + health.unresolvedIssueCount
+  // Same severity mapping as the dashboard's healthLevel(): blocked is red everywhere.
+  const critical = health.overdueItemCount + health.blockedTaskCount + health.brokenDependencyCount
+  const warning = health.unresolvedRiskCount + health.unresolvedIssueCount
   if (critical > 0) return <Badge tone="danger">Needs attention</Badge>
   if (warning > 0) return <Badge tone="warning">Watch</Badge>
   return <Badge tone="success">On track</Badge>
@@ -237,7 +238,7 @@ function HealthBadge({ health }: { health: ProjectHealth }) {
 function AttentionList({ health, projectId }: { health: ProjectHealth; projectId: string }) {
   const rows: { label: string; value: number; tone: 'danger' | 'warning'; to: string }[] = [
     { label: 'Overdue items', value: health.overdueItemCount, tone: 'danger', to: 'delayed' },
-    { label: 'Blocked tasks', value: health.blockedTaskCount, tone: 'warning', to: 'tasks' },
+    { label: 'Tasks blocked by a dependency', value: health.blockedTaskCount, tone: 'danger', to: 'dependencies' },
     { label: 'Open risks', value: health.unresolvedRiskCount, tone: 'warning', to: 'risks' },
     { label: 'Open issues', value: health.unresolvedIssueCount, tone: 'warning', to: 'issues' },
     { label: 'Broken task relationships', value: health.brokenDependencyCount, tone: 'danger', to: 'dependencies' },
@@ -260,4 +261,46 @@ function AttentionList({ health, projectId }: { health: ProjectHealth; projectId
       ))}
     </ul>
   )
+}
+
+interface AttentionRow {
+  kind: 'Task' | 'Milestone' | 'Phase'
+  id: string
+  name: string
+  /** Stored task status (tasks only). Never rewritten — a Blocked task stays Blocked. */
+  status: Task['status'] | null
+  dueDate: string | null
+  pastDue: boolean
+  to: string
+}
+
+/**
+ * One list from two real sources: tasks whose stored status is OVERDUE/BLOCKED, and the delayed
+ * items the backend derives (due date passed, not completed). A task in both appears once.
+ */
+export function mergeAttention(tasks: Task[], delayed: DelayedItem[]): AttentionRow[] {
+  const rows: AttentionRow[] = tasks.map((t) => ({
+    kind: 'Task',
+    id: t.id,
+    name: t.name,
+    status: t.status,
+    dueDate: t.dueDate,
+    pastDue: delayed.some((d) => d.entityType === 'TASK' && d.id === t.id),
+    to: `../tasks/${t.id}`,
+  }))
+  const seen = new Set(rows.map((r) => r.id))
+  for (const d of delayed) {
+    if (seen.has(d.id)) continue
+    const kind: AttentionRow['kind'] = d.entityType === 'MILESTONE' ? 'Milestone' : d.entityType === 'PHASE' ? 'Phase' : 'Task'
+    rows.push({
+      kind,
+      id: d.id,
+      name: d.name,
+      status: kind === 'Task' ? 'TODO' : null,
+      dueDate: d.dueDate,
+      pastDue: true,
+      to: kind === 'Task' ? `../tasks/${d.id}` : kind === 'Milestone' ? '../milestones' : '../phases',
+    })
+  }
+  return rows
 }

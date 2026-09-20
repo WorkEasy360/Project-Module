@@ -27,10 +27,13 @@ export function Sidebar() {
         inert={isMobile && !visible ? true : undefined}
       >
         <div className="sidebar-brand">
-          <span className="sidebar-brand-mark" aria-hidden="true">
-            PM
-          </span>
-          {!iconOnly && <span className="sidebar-brand-name">Project Module</span>}
+          <BrandMark />
+          {!iconOnly && (
+            <span className="sidebar-brand-text">
+              <span className="sidebar-brand-name">WorkEasy360</span>
+              <span className="sidebar-brand-tagline">Plan · Collaborate · Achieve</span>
+            </span>
+          )}
         </div>
         <nav className="sidebar-nav" aria-label="Primary">
           <NavGroup title="Workspace" items={workspaceNav()} iconOnly={iconOnly} onNavigate={closeMobile} />
@@ -48,6 +51,28 @@ export function Sidebar() {
         </nav>
       </aside>
     </>
+  )
+}
+
+/** The WorkEasy360 loop mark, drawn inline so it scales crisply and follows the theme. */
+export function BrandMark({ size = 30 }: { size?: number }) {
+  return (
+    <svg className="brand-mark" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id="we-brand" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#6366f1" />
+          <stop offset="1" stopColor="#a855f7" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M8 12c0-2.8 2.2-5 5-5s5 2.2 5 5v16c0 2.8 2.2 5 5 5s5-2.2 5-5V12c0-2.8 2.2-5 5-5"
+        fill="none"
+        stroke="url(#we-brand)"
+        strokeWidth="5.5"
+        strokeLinecap="round"
+      />
+      <circle cx="33" cy="12" r="4.5" fill="url(#we-brand)" />
+    </svg>
   )
 }
 

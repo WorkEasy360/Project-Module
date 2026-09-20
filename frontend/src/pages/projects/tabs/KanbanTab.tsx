@@ -56,7 +56,7 @@ export function KanbanTab() {
         {data.columns.map((column) => (
           <div
             key={column.status}
-            className={`kanban-column${dropTarget === column.status ? ' drop-target' : ''}`}
+            className={`kanban-column kanban-status-${column.status.toLowerCase()}${dropTarget === column.status ? ' drop-target' : ''}`}
             onDragOver={(e) => {
               e.preventDefault()
               setDropTarget(column.status)

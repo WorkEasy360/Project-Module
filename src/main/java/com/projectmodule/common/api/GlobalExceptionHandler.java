@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -84,6 +85,26 @@ public class GlobalExceptionHandler {
 
         return problem(HttpStatus.BAD_REQUEST, ErrorType.VALIDATION_FAILED,
                 "One or more fields are invalid", List.of(violation));
+    }
+
+    /**
+     * Handles a request body that cannot be read into its declared type — malformed JSON, an
+     * enum value that does not exist (e.g. {@code "status": "IN_PROGRESS"}) or an unparseable
+     * date (e.g. {@code "dueDate": "2026-13-45"}).
+     *
+     * <p>Without this handler such a request fell through to {@link #handleUnexpected} and was
+     * reported as a 500 although the fault is entirely the caller's. It is the body-side
+     * counterpart of {@link #handleMethodArgumentTypeMismatch}: same
+     * {@link ErrorType#VALIDATION_FAILED} shape as every other invalid input. Jackson's message
+     * (which can echo the offending value and internal class names) is deliberately not copied
+     * into the response.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ProblemDetail handleMessageNotReadable(HttpMessageNotReadableException exception) {
+        log.warn("validation-failed [{}]: request body could not be read", correlationId());
+
+        return problem(HttpStatus.BAD_REQUEST, ErrorType.VALIDATION_FAILED,
+                "Request body is malformed or contains an invalid value", List.of());
     }
 
     /**

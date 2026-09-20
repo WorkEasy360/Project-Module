@@ -1,7 +1,16 @@
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/**
+ * Formats a backend date. Date-only values (LocalDate, "YYYY-MM-DD") are calendar dates with no
+ * timezone, so they are parsed as *local* dates — `new Date("2026-09-10")` would treat them as
+ * UTC midnight and show the previous day for users west of UTC.
+ */
 export function formatDate(value: string | null | undefined): string {
   if (!value) return '—'
   try {
-    return new Date(value).toLocaleDateString(undefined, {
+    const m = DATE_ONLY.exec(value)
+    const date = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(value)
+    return date.toLocaleDateString(undefined, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

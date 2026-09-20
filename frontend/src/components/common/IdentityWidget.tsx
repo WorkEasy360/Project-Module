@@ -9,8 +9,9 @@ function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id
 }
 
+/** Header identity control: avatar + short ids; opens the identity dialog (change / sign out). */
 export function IdentityWidget() {
-  const { identity, setIdentity, isPromptOpen, openPrompt, closePrompt } = useIdentity()
+  const { identity, setIdentity, clearIdentity, isPromptOpen, openPrompt, closePrompt } = useIdentity()
 
   return (
     <>
@@ -18,18 +19,29 @@ export function IdentityWidget() {
         type="button"
         className={`identity-trigger${identity ? ' configured' : ''}`}
         onClick={openPrompt}
-        title={identity ? 'Change your identity headers' : 'Set your identity to use the app'}
+        title={identity ? 'Change your identity headers or sign out' : 'Set your identity to use the app'}
       >
-        <Icon name="user" size={16} />
         {identity ? (
-          <span className="identity-badge">
-            {shortId(identity.userId)} <span className="text-faint">· org {shortId(identity.orgId)}</span>
-          </span>
+          <>
+            <span className="identity-avatar" aria-hidden="true">
+              {identity.userId.slice(0, 2).toUpperCase()}
+            </span>
+            <span className="identity-text">
+              <span className="identity-name">{shortId(identity.userId)}</span>
+              <span className="identity-sub">org {shortId(identity.orgId)}</span>
+            </span>
+            <Icon name="chevronDown" size={14} />
+          </>
         ) : (
-          <span>Set identity</span>
+          <>
+            <Icon name="user" size={16} />
+            <span>Set identity</span>
+          </>
         )}
       </button>
-      {isPromptOpen && <IdentityModal onClose={closePrompt} onSave={setIdentity} />}
+      {isPromptOpen && (
+        <IdentityModal onClose={closePrompt} onSave={setIdentity} onSignOut={identity ? clearIdentity : null} />
+      )}
     </>
   )
 }
@@ -37,9 +49,11 @@ export function IdentityWidget() {
 function IdentityModal({
   onClose,
   onSave,
+  onSignOut,
 }: {
   onClose: () => void
   onSave: (identity: { userId: string; orgId: string }) => void
+  onSignOut: (() => void) | null
 }) {
   const { identity } = useIdentity()
   const [userId, setUserId] = useState(identity?.userId ?? '')
@@ -88,13 +102,29 @@ function IdentityModal({
             required
           />
         </div>
-        <div className="form-actions">
-          <button type="button" className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary">
-            Save
-          </button>
+        <div className="form-actions" style={{ justifyContent: 'space-between' }}>
+          {onSignOut ? (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                onSignOut()
+                onClose()
+              }}
+            >
+              <Icon name="logout" size={15} /> Sign out
+            </button>
+          ) : (
+            <span />
+          )}
+          <span style={{ display: 'inline-flex', gap: 8 }}>
+            <button type="button" className="btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button type="submit" className="btn btn-primary">
+              Save
+            </button>
+          </span>
         </div>
       </form>
     </Modal>

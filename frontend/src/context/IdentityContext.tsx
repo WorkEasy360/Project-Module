@@ -11,7 +11,7 @@ import { type Identity, getIdentity, setIdentity, subscribeIdentity } from './id
 interface IdentityContextValue {
   identity: Identity | null
   isConfigured: boolean
-  setIdentity: (identity: Identity) => void
+  setIdentity: (identity: Identity, remember?: boolean) => void
   clearIdentity: () => void
   /** Shared so both the header widget and the setup banner open the same dialog. */
   isPromptOpen: boolean
@@ -25,7 +25,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const identity = useSyncExternalStore(subscribeIdentity, getIdentity, () => null)
   const [isPromptOpen, setPromptOpen] = useState(false)
 
-  const update = useCallback((next: Identity) => setIdentity(next), [])
+  const update = useCallback((next: Identity, remember = true) => setIdentity(next, remember), [])
   const clear = useCallback(() => setIdentity(null), [])
   const openPrompt = useCallback(() => setPromptOpen(true), [])
   const closePrompt = useCallback(() => setPromptOpen(false), [])

@@ -6,7 +6,7 @@ import { ErrorState } from '../../../components/common/ErrorState'
 
 const INDICATORS: { key: keyof import('../../../types/work').ProjectHealth; label: string; tone: 'danger' | 'warning' }[] = [
   { key: 'overdueItemCount', label: 'Overdue items (tasks, milestones, phases past due)', tone: 'danger' },
-  { key: 'blockedTaskCount', label: 'Blocked tasks', tone: 'warning' },
+  { key: 'blockedTaskCount', label: 'Tasks blocked by an unfinished dependency', tone: 'danger' },
   { key: 'unresolvedRiskCount', label: 'Unresolved risks', tone: 'warning' },
   { key: 'unresolvedIssueCount', label: 'Unresolved issues', tone: 'warning' },
   { key: 'brokenDependencyCount', label: 'Broken dependencies', tone: 'danger' },

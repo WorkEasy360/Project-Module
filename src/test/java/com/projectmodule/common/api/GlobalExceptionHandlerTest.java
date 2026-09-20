@@ -31,6 +31,8 @@ import org.mockito.quality.Strictness;
 import org.springframework.core.MethodParameter;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @ExtendWith(MockitoExtension.class)
@@ -133,6 +135,26 @@ class GlobalExceptionHandlerTest {
         List<FieldViolation> violations = (List<FieldViolation>) problem.getProperties().get("errors");
         assertThat(violations).hasSize(1);
         assertThat(violations.get(0).field()).isEqualTo("status");
+    }
+
+    /**
+     * Regression: an unknown enum value or unparseable date in a request body used to fall
+     * through to the catch-all handler and surface as a 500. It is the caller's fault and must
+     * be a 400 in the standard shape, without echoing Jackson's internal message.
+     */
+    @Test
+    @DisplayName("reports an unreadable request body (unknown enum, bad date) as 400 validation-failed")
+    void reportsUnreadableBodyAsValidationFailure() {
+        HttpMessageNotReadableException exception = new HttpMessageNotReadableException(
+                "JSON parse error: Cannot deserialize value of type `com.projectmodule.work.domain.TaskStatus` from String \"IN_PROGRESS\"",
+                new MockHttpInputMessage(new byte[0]));
+
+        ProblemDetail problem = handler.handleMessageNotReadable(exception);
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problem.getType()).hasToString("https://errors.projectmodule/validation-failed");
+        assertThat(problem.getDetail()).doesNotContain("com.projectmodule");
+        assertThat(problem.getProperties()).containsEntry("traceId", CORRELATION_ID);
     }
 
     @SuppressWarnings("unused")

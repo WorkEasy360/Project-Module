@@ -203,6 +203,29 @@ class TaskControllerTest {
                 .andExpect(jsonPath("$.type").value("https://errors.projectmodule/not-found"));
     }
 
+    /**
+     * Regression: a status value that does not exist (or an unparseable date) in the body used
+     * to surface as a 500 because Jackson's {@code HttpMessageNotReadableException} had no
+     * handler. It is a caller error and must be the standard 400 validation-failed shape.
+     */
+    @Test
+    @DisplayName("PATCH with an unknown status value or bad date returns the standard validation-failed error, not 500")
+    void unreadableBodyReturns400() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(patch("/api/v1/tasks/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_PROGRESS\",\"version\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("https://errors.projectmodule/validation-failed"));
+
+        mockMvc.perform(patch("/api/v1/tasks/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"dueDate\":\"2026-13-45\",\"version\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value("https://errors.projectmodule/validation-failed"));
+    }
+
     @Test
     @DisplayName("PATCH updates a task")
     void updatesTask() throws Exception {

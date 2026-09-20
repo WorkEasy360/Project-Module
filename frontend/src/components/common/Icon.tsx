@@ -41,8 +41,74 @@ export type IconName =
   | 'warning'
   | 'refresh'
   | 'inbox'
+  | 'settings'
+  | 'sun'
+  | 'moon'
+  | 'check'
+  | 'sparkles'
+  | 'logout'
+  | 'team'
+  | 'arrowRight'
+  | 'clock'
+  | 'flag'
+  | 'eye'
+  | 'eyeOff'
 
 const PATHS: Record<IconName, React.ReactNode> = {
+  settings: (
+    <>
+      <circle cx="10" cy="10" r="2.6" />
+      <path d="M10 2.8v2M10 15.2v2M2.8 10h2M15.2 10h2M4.9 4.9l1.4 1.4M13.7 13.7l1.4 1.4M4.9 15.1l1.4-1.4M13.7 6.3l1.4-1.4" />
+    </>
+  ),
+  sun: (
+    <>
+      <circle cx="10" cy="10" r="3.4" />
+      <path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" />
+    </>
+  ),
+  moon: <path d="M16.5 12.2A7 7 0 0 1 7.8 3.5a7 7 0 1 0 8.7 8.7z" />,
+  check: <path d="M4 10.5l4 4 8-9" />,
+  sparkles: (
+    <>
+      <path d="M10 3l1.6 4.4L16 9l-4.4 1.6L10 15l-1.6-4.4L4 9l4.4-1.6z" />
+      <path d="M15.5 13.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+    </>
+  ),
+  logout: (
+    <>
+      <path d="M8 3.5H4.5A1.5 1.5 0 0 0 3 5v10a1.5 1.5 0 0 0 1.5 1.5H8" />
+      <path d="M12.5 6.5L16 10l-3.5 3.5M16 10H7.5" />
+    </>
+  ),
+  team: (
+    <>
+      <circle cx="7.5" cy="7" r="2.8" />
+      <circle cx="13.5" cy="8" r="2.2" />
+      <path d="M2.5 16.5c0-3 2.2-5 5-5s5 2 5 5" />
+      <path d="M13.2 12c2.4 0 4.3 1.8 4.3 4.5" />
+    </>
+  ),
+  arrowRight: <path d="M3.5 10h13M11.5 5l5 5-5 5" />,
+  clock: (
+    <>
+      <circle cx="10" cy="10" r="7" />
+      <path d="M10 6v4.3l2.8 1.7" />
+    </>
+  ),
+  flag: <path d="M5 17.5V3.5h9.5l-1.5 3.5 1.5 3.5H5" />,
+  eye: (
+    <>
+      <path d="M2 10s3-5.5 8-5.5 8 5.5 8 5.5-3 5.5-8 5.5S2 10 2 10z" />
+      <circle cx="10" cy="10" r="2.4" />
+    </>
+  ),
+  eyeOff: (
+    <>
+      <path d="M3 3l14 14M8.3 8.4a2.4 2.4 0 0 0 3.3 3.3" />
+      <path d="M5.2 6.2C3.3 7.6 2 10 2 10s3 5.5 8 5.5c1.5 0 2.8-.5 4-1.2M8.4 4.8c.5-.2 1-.3 1.6-.3 5 0 8 5.5 8 5.5s-.7 1.3-2 2.6" />
+    </>
+  ),
   dashboard: (
     <>
       <rect x="3" y="3" width="6.5" height="6.5" rx="1.2" />
