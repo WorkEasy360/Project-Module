@@ -30,4 +30,4 @@ jobs:
         environment_name: Project-Module-env
         version_label: "v${{ github.run_number }}"
         region: eu-north-1
-        deployment_package: target/*.jar
+        deployment_package: target/project-module-0.0.1-SNAPSHOT.jar
