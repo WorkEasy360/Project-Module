@@ -29,11 +29,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
@@ -154,6 +156,23 @@ class GlobalExceptionHandlerTest {
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problem.getType()).hasToString("https://errors.projectmodule/validation-failed");
         assertThat(problem.getDetail()).doesNotContain("com.projectmodule");
+        assertThat(problem.getProperties()).containsEntry("traceId", CORRELATION_ID);
+    }
+
+    /**
+     * Regression: an unmapped path (Spring raises {@link NoResourceFoundException}) used to fall
+     * through to the catch-all handler and surface as a 500, which reported a healthy server as
+     * broken and made deployment health checks on {@code /} fail. It must be a 404.
+     */
+    @Test
+    @DisplayName("reports an unmapped path as 404 not-found, never as a 500")
+    void reportsUnmappedPathAsNotFound() {
+        ProblemDetail problem = handler.handleNoHandlerFound(
+                new NoResourceFoundException(HttpMethod.GET, "/"));
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        assertThat(problem.getType()).hasToString("https://errors.projectmodule/not-found");
+        assertThat(problem.getDetail()).isEqualTo("No endpoint exists at this path");
         assertThat(problem.getProperties()).containsEntry("traceId", CORRELATION_ID);
     }
 

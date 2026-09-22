@@ -1,0 +1,4 @@
+# Startup failure diagnostics. A FailureAnalyzer runs only after startup has already failed,
+# so nothing here affects a running application.
+org.springframework.boot.diagnostics.FailureAnalyzer=\
+com.projectmodule.config.DataSourceConfigurationFailureAnalyzer

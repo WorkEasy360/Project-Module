@@ -16,6 +16,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 /**
  * Translates exceptions into RFC 9457 problem responses.
@@ -123,6 +125,25 @@ public class GlobalExceptionHandler {
 
         return problem(HttpStatus.CONFLICT, ErrorType.CONFLICT,
                 "The resource was modified concurrently; reload and try again", List.of());
+    }
+
+    /**
+     * Handles a request for a path this module does not map.
+     *
+     * <p>Spring reports an unmapped path by raising {@link NoResourceFoundException} (or
+     * {@link NoHandlerFoundException}). Without this handler those exceptions reach
+     * {@link #handleUnexpected} — the catch-all below — and a plain "this URL does not exist"
+     * is reported as a 500 Internal Server Error. That is wrong twice over: it tells a caller
+     * the server is broken when it is healthy, and a deployment health check that probes
+     * {@code /} sees a 5xx and marks a working environment unhealthy. A missing route is a
+     * caller error, so it is answered as a 404 in the same shape as every other error here.
+     */
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
+    public ProblemDetail handleNoHandlerFound(Exception exception) {
+        log.warn("not-found [{}]: no endpoint is mapped to the requested path", correlationId());
+
+        return problem(HttpStatus.NOT_FOUND, ErrorType.NOT_FOUND,
+                "No endpoint exists at this path", List.of());
     }
 
     /** Last resort. The cause is logged in full and withheld from the response. */
