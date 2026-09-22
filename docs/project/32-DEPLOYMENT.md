@@ -9,7 +9,14 @@ settings the application requires, and how the local and cloud databases are kep
 
 1. Checks out the repository, installs Corretto 21.
 2. `mvn clean package -DskipTests` → produces `target/project-module-0.0.1-SNAPSHOT.jar`.
+   That one command now also builds the React frontend: `frontend-maven-plugin` downloads the
+   pinned Node, runs `npm ci` against `frontend/package-lock.json` and then `npm run build`
+   (which is `tsc -b && vite build`). The built files are copied to `target/classes/static` and
+   travel inside the jar. A type error or a failed bundle fails Maven, which fails the workflow.
 3. `einaregilsson/beanstalk-deploy@v21` uploads that jar to Elastic Beanstalk.
+
+The workflow file itself needed no change for this: the frontend build hangs off the Maven
+lifecycle, and the artifact path was already the literal jar name.
 
 | Setting | Value |
 |---|---|
@@ -22,8 +29,10 @@ settings the application requires, and how the local and cloud databases are kep
 The artifact path is a literal filename because the deploy action does not expand wildcards.
 If `pom.xml`'s `artifactId` or `version` ever changes, this path must change with it.
 
-Only the **backend** is deployed. The React frontend in `frontend/` is not built or published by
-this workflow; it currently has no deployment target.
+**One deployment serves both.** The jar contains the API and the UI, so the environment URL
+serves the application and `/api/v1/**` on the same origin. The backend remains API-only in its
+architecture: it has no view layer, no session and no server-rendered pages, and simply serves
+the built files as static resources from the classpath.
 
 ## Required environment properties
 
@@ -36,7 +45,7 @@ port 5000, so `SERVER_PORT` must be `5000` (Spring maps it to `server.port`).
 | `PROJECTMODULE_DB_URL` | `jdbc:postgresql://<rds-endpoint>:5432/<database>` |
 | `PROJECTMODULE_DB_USERNAME` | RDS master user |
 | `PROJECTMODULE_DB_PASSWORD` | RDS master password (set in the environment only) |
-| `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | Comma-separated origins of the deployed frontend. Defaults to the local Vite ports only, so browser calls from a deployed frontend fail until this is set. |
+| `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | **Not needed for this deployment.** The UI is served from the same origin as the API, so the browser makes no cross-origin request and no CORS exchange occurs. The default (the local Vite ports) exists for `npm run dev`. Set this only if a frontend is ever hosted on a different origin. |
 
 `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` are also
 honoured and take precedence over the names above. This was verified by starting the jar with
@@ -70,15 +79,17 @@ that with the list of settings to provide. It runs only after a startup failure.
 
 ## Endpoints worth knowing
 
-This is an API-only service. It maps nothing at `/`, so a browser visiting the environment URL
-correctly receives `404 No endpoint exists at this path` — that is a healthy server, not a broken
-one. Use these instead:
+The environment URL now opens the application. The API is unchanged and shares the origin.
 
 | Path | Expected |
 |---|---|
+| `/` | The React application (`200 text/html`). |
+| `/assets/...` | The hashed JavaScript and CSS bundles the entry page references. |
 | `/actuator/health` | `200 {"status":"UP"}`. Reports `DOWN` if the database is unreachable, so it is a real health signal. |
 | `/api/v1/dashboard` | `401` without identity headers, `200` with `X-User-Id` and `X-Org-Id`. A `200` here proves the database is connected. |
 | `/swagger-ui.html` | API documentation. |
+| `/api/v1/<anything unmapped>` | `404` as a problem document, never the application HTML. |
+| `/<anything unmapped>` | `404` as a problem document. The UI uses `HashRouter`, so its routes live in the fragment (`/#/projects`) and the browser never asks the server for them. There is deliberately no catch-all rewriting unknown paths to `index.html`, because that would turn genuine API and server errors into a silent HTML page. |
 
 **Recommended, not yet applied:** Elastic Beanstalk's default health check path is `/`. Pointing
 it at `/actuator/health` (console → Configuration → Monitoring → Health check path) makes the
@@ -87,10 +98,48 @@ configuration, so it is left to an operator to apply.
 
 ## Frontend
 
-`frontend/src/api/client.ts` reads `VITE_API_BASE_URL` and falls back to `http://localhost:8080`.
-A production build made without that variable will call localhost and fail. Set it at build time
-to the backend's public URL. Do not put secrets in `VITE_` variables; they are embedded in the
-browser bundle. The app uses `HashRouter`, so deep links need no server-side rewrite rules.
+`frontend/src/api/client.ts` resolves the API address at build time:
 
-Once a frontend origin exists, add it to `PROJECTMODULE_CORS_ALLOWED_ORIGINS` on the backend
-environment, and keep both on HTTPS or both on HTTP — a browser blocks HTTPS pages calling HTTP.
+| Build | API base | Why |
+|---|---|---|
+| production (`vite build`) | empty, so requests go to `/api/v1/...` | Same origin as the page that served the app. No CORS, and no hostname baked into the bundle. |
+| development (`npm run dev`) | `http://localhost:8080` | The Vite server is a different origin from the backend; the CORS default already allows it. |
+| either, with `VITE_API_BASE_URL` | that value | For hosting the UI apart from the API. |
+
+No AWS hostname appears anywhere in the source. `VITE_` variables are embedded in the browser
+bundle, so they may hold a public address but never a secret.
+
+The production build emits no source maps, and only `index.html`, `favicon.svg` and the hashed
+`assets/` bundles are copied into the jar — no `.env`, config or source file is packaged.
+
+## Local development
+
+Two ways to run it:
+
+- **Two processes (fast feedback):** `mvnw spring-boot:run` with the `local` profile, and
+  `npm run dev` in `frontend/`. The UI is on :5173 and calls the backend on :8080 across origins,
+  which the CORS default permits. This is unchanged by the packaging work.
+- **One process (as deployed):** `mvnw clean package` then run the jar, and open
+  <http://localhost:8080/>. Same-origin, exactly like the deployed environment.
+
+`-DskipFrontend=true` skips the frontend build for a quicker backend-only loop. The resulting
+application has no UI, and the tests that serve it skip rather than pass vacuously.
+
+## What this does not change
+
+- **No authentication was added.** Serving the UI from the same origin grants nothing. Every API
+  request is still authorised by the `X-User-Id` / `X-Org-Id` pair that an upstream gateway is
+  expected to supply, and those headers remain identity context, not proof of authentication.
+  Membership and cross-organisation checks are untouched.
+- **The AI provider is still unavailable.** `UnavailableAIProviderAdapter` throws
+  `IntegrationUnavailableException`, so AI requests return `503 integration-unavailable` rather
+  than inventing an answer. Nothing in this packaging changes that.
+- **No AWS resource, credential or environment variable was created or altered.**
+
+## Remaining manual steps
+
+- The environment serves **HTTP, not HTTPS**. Identity headers, and now the whole UI, travel in
+  clear text. Adding TLS needs a certificate and a load balancer, which costs money.
+- The RDS instance accepts connections on 5432 from the public internet. It should be restricted
+  to the Elastic Beanstalk instances' security group.
+- The health check path recommendation below still applies.

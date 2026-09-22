@@ -11,6 +11,11 @@ A project-management module made of a Spring Boot REST API and a React single-pa
 The backend is the single source of truth for validation, authorization, business rules and
 persistence. The frontend is a plain client of `/api/v1` and holds no business logic.
 
+The Maven build compiles the frontend and packages it inside the jar under `/static`, so one
+deployed application serves both the UI and the API from a single URL. The backend itself stays
+API-only: it gains no view layer, no session and no server-rendered pages — it simply serves the
+built files as static resources.
+
 ## Prerequisites
 
 - Java 21 (JDK) and the bundled Maven wrapper (`./mvnw` / `mvnw.cmd`)
@@ -47,7 +52,7 @@ OpenAPI UI: `http://localhost:8080/swagger-ui.html`.
 | `PROJECTMODULE_DB_URL` | yes (default profile) | JDBC URL, e.g. `jdbc:postgresql://host:5432/projectmodule` |
 | `PROJECTMODULE_DB_USERNAME` | yes (default profile) | Database user |
 | `PROJECTMODULE_DB_PASSWORD` | yes | Database password — never commit it |
-| `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed to call the API. Defaults to the Vite dev/preview ports (`http://localhost:5173,http://localhost:4173`). Set it to the deployed frontend origin in production. |
+| `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed to call the API. Defaults to the Vite dev/preview ports (`http://localhost:5173,http://localhost:4173`), which is what the `npm run dev` workflow needs. A packaged deployment serves the UI from the same origin as the API, so it needs no CORS and no value here. Set it only when a frontend is hosted on a different origin. |
 | `SPRING_PROFILES_ACTIVE` | no | `local` for the developer profile above |
 
 ### Backend tests
@@ -67,11 +72,29 @@ $env:PROJECTMODULE_TEST_DB_PASSWORD = "<password>"
 ```bash
 cd frontend
 npm install
-cp .env.example .env          # VITE_API_BASE_URL, defaults to http://localhost:8080
 npm run dev                   # http://localhost:5173 (fixed port; see vite.config.ts)
 npm test                      # Vitest
 npm run build                 # type-check + production build into frontend/dist
 ```
+
+Run the backend at the same time. A development build calls `http://localhost:8080` by default,
+so no `.env` is needed; the backend's CORS allowlist already permits the Vite port. Copy
+`.env.example` to `.env` and set `VITE_API_BASE_URL` only to point the dev server at a different
+backend. That file is ignored by Git and must never hold a secret, because everything in a
+`VITE_` variable is embedded in the browser bundle.
+
+### Running it the way it is deployed
+
+```powershell
+.mvnw.cmd clean package                      # builds the frontend and packages it in the jar
+$env:SPRING_PROFILES_ACTIVE = "local"
+$env:PROJECTMODULE_DB_PASSWORD = "<your local postgres password>"
+java -jar targetproject-module-0.0.1-SNAPSHOT.jar
+```
+
+Then open <http://localhost:8080/> — the UI and the API are on one origin, exactly as in the
+deployed environment. Add `-DskipFrontend=true` for a faster backend-only build; the packaged
+application then has no UI and the tests that serve it are skipped rather than passing vacuously.
 
 The app has no login screen by design: the backend expects an upstream gateway to supply
 `X-User-Id` and `X-Org-Id` headers. The frontend asks for those two UUIDs once ("Set identity",

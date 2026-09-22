@@ -1,7 +1,24 @@
 import { getIdentity } from '../context/identityStore'
 import type { ProblemDetail } from '../types/common'
 
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '')
+/**
+ * Where the API lives, resolved at build time.
+ *
+ * In a production build the UI is packaged inside the Spring Boot jar and served from the same
+ * origin as the API, so an empty base is correct: requests go to `/api/v1/...` on whatever host
+ * served the page, and no CORS exchange is involved.
+ *
+ * In development the Vite server (:5173) is a different origin from the backend (:8080), so the
+ * absolute address is needed; the backend's CORS allowlist already permits that origin.
+ *
+ * `VITE_API_BASE_URL` overrides both, for the case where the UI is hosted apart from the API.
+ * It holds a public address only — never a secret, because it is embedded in the browser bundle.
+ */
+export const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? 'http://localhost:8080' : '')
+).replace(/\/$/, '')
+
+const BASE_URL = API_BASE_URL
 const API_PREFIX = '/api/v1'
 
 /**

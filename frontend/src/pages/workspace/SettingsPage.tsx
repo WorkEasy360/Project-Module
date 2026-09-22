@@ -10,8 +10,10 @@ import { Icon, type IconName } from '../../components/common/Icon'
 import { Badge, type BadgeTone } from '../../components/common/Badge'
 import { FEATURES, groupByCategory, type FeatureDefinition, type ReleaseState } from '../../features/registry'
 import { humanizeToken } from '../../utils/format'
+import { API_BASE_URL } from '../../api/client'
 
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080').replace(/\/$/, '')
+/** Empty means the API is served from the same origin as this page (the packaged deployment). */
+const API_BASE_LABEL = API_BASE_URL === '' ? 'Same origin as this page' : API_BASE_URL
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; icon: IconName; hint: string }[] = [
   { value: 'system', label: 'System', icon: 'settings', hint: 'Follows your OS setting' },
@@ -255,9 +257,9 @@ function AboutSection() {
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>API base URL</strong>
-          <span>From VITE_API_BASE_URL at build time</span>
+          <span>Resolved at build time; VITE_API_BASE_URL overrides it</span>
         </div>
-        <code className="ws-code">{API_BASE_URL}</code>
+        <code className="ws-code">{API_BASE_LABEL}</code>
       </div>
       <div className="ws-row">
         <div className="ws-row-label">

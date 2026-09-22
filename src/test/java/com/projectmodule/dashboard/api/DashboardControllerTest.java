@@ -5,7 +5,9 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.projectmodule.common.api.GlobalExceptionHandler;
 import com.projectmodule.common.context.RequestContext;
+import com.projectmodule.common.exception.MissingIdentityException;
 import com.projectmodule.config.ApiConfiguration;
 import com.projectmodule.dashboard.api.dto.DashboardResponse;
 import com.projectmodule.dashboard.application.DashboardApplicationService;
@@ -26,7 +28,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * {@code DashboardApplicationServiceTest}.
  */
 @WebMvcTest(DashboardController.class)
-@Import(ApiConfiguration.class)
+@Import({ApiConfiguration.class, GlobalExceptionHandler.class})
 class DashboardControllerTest {
 
     @Autowired
@@ -64,5 +66,28 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.byStatus.PLANNING").value(0))
                 .andExpect(jsonPath("$.byPriority.HIGH").value(2))
                 .andExpect(jsonPath("$.byPriority.LOW").value(0));
+    }
+
+    /**
+     * The identity contract, end to end through the web layer.
+     *
+     * <p>A caller that supplies no organization must be refused. Both halves of this were already
+     * covered separately — {@code DashboardApplicationServiceTest} proves the service raises
+     * {@link MissingIdentityException} when the context carries no organization, and
+     * {@code GlobalExceptionHandlerTest} proves that exception maps to 401 {@code identity-missing}
+     * — but nothing proved they compose into a 401 at the endpoint. This pins that down, so a
+     * future change to the advice, the filter order or the controller cannot silently turn an
+     * unidentified request into a successful one.
+     */
+    @Test
+    @DisplayName("GET without an organization in context is refused with 401 identity-missing")
+    void refusesRequestWithoutIdentity() throws Exception {
+        when(dashboardApplicationService.getDashboard(requestContext))
+                .thenThrow(new MissingIdentityException("No organization was supplied with this request"));
+
+        mockMvc.perform(get("/api/v1/dashboard"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.type").value("https://errors.projectmodule/identity-missing"))
+                .andExpect(jsonPath("$.detail").value("No organization was supplied with this request"));
     }
 }
