@@ -1,3 +1,17 @@
+server:
+  # This application runs behind two proxies in the deployed environment: Cloudflare terminates
+  # TLS for workeasy360.com, and Elastic Beanstalk's nginx forwards to the jar on port 5000.
+  # Without this, the application believes its own address is the internal http://<host>:5000,
+  # so it treats a SAME-ORIGIN browser request from https://ops.workeasy360.com as cross-origin
+  # and rejects it with "Invalid CORS request". Browsers omit the Origin header on a same-origin
+  # GET but always send it on POST/PATCH/DELETE, which is why reads succeeded while saves failed.
+  #
+  # `framework` installs Spring's ForwardedHeaderFilter, which rebuilds the request's scheme,
+  # host and port from the X-Forwarded-* headers the proxies set. Same-origin requests are then
+  # recognised as such and skip CORS entirely, and generated absolute URLs (the Location header
+  # returned on 201 Created) point at the public address rather than the internal one.
+  forward-headers-strategy: framework
+
 spring:
   application:
     name: project-module
@@ -44,9 +58,18 @@ springdoc:
 projectmodule:
   cors:
     # Comma-separated origins allowed to call /api/v1/** from a browser (see ApiConfiguration).
-    # Override with PROJECTMODULE_CORS_ALLOWED_ORIGINS in any environment where the frontend is
-    # not served from the default Vite dev/preview ports.
-    allowed-origins: ${PROJECTMODULE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173}
+    #
+    # The first two are the Vite dev/preview ports, for `npm run dev` against a local backend.
+    # The two workeasy360.com origins are the deployed site. Those are listed here, rather than
+    # left to an environment variable, so that a deployment needs no manual console step — an
+    # origin is a public address, never a secret. The forward-headers setting above means a
+    # browser on ops.workeasy360.com is normally recognised as same-origin and never consults
+    # this list; it remains as the explicit allowance for a genuinely cross-origin caller, such
+    # as the apex domain calling this API.
+    #
+    # Override with PROJECTMODULE_CORS_ALLOWED_ORIGINS to replace the whole list. Never use a
+    # wildcard: every request carries caller-identity headers.
+    allowed-origins: ${PROJECTMODULE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173,https://workeasy360.com,https://ops.workeasy360.com}
 
 logging:
   level:

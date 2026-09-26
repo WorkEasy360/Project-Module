@@ -28,7 +28,9 @@ public class ApiConfiguration implements WebMvcConfigurer {
      * configurable (never a wildcard, since requests carry the caller-identity headers below) and
      * default to the frontend's Vite dev/preview ports for local development.
      */
-    @Value("${projectmodule.cors.allowed-origins:http://localhost:5173,http://localhost:4173}")
+    @Value("${projectmodule.cors.allowed-origins:"
+            + "http://localhost:5173,http://localhost:4173,"
+            + "https://workeasy360.com,https://ops.workeasy360.com}")
     private String[] allowedOrigins;
 
     @Override
