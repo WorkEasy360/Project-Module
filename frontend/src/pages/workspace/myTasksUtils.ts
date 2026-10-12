@@ -101,7 +101,7 @@ export interface MyTasksFilters {
   query: string
   projectId: string
   status: TaskStatus | ''
-  /** Only tasks whose assigneeId equals the current identity. Ignored when there is no identity. */
+  /** Only tasks whose assigneeId equals the signed-in user. Ignored when nobody is signed in. */
   mineOnly: boolean
   /** Completed tasks are hidden by default; an explicit status filter of COMPLETED always wins. */
   showCompleted: boolean
@@ -138,7 +138,7 @@ export function scopeTasks(items: WorkspaceTask[], mineOnly: boolean, userId: st
 }
 
 export interface MyTasksSummary {
-  /** Open (not completed) tasks assigned to the current identity; 0 without an identity. */
+  /** Open (not completed) tasks assigned to the signed-in user; 0 without a signed-in user. */
   assignedToMe: number
   overdue: number
   dueThisWeek: number
@@ -199,7 +199,7 @@ export function sortTasks(items: WorkspaceTask[], sort: MyTasksSort): WorkspaceT
   }
 }
 
-/** Applies every filter (including the identity scope) and the sort to the flattened list. */
+/** Applies every filter (including the signed-in-user scope) and the sort to the flattened list. */
 export function applyTaskFilters(
   items: WorkspaceTask[],
   f: MyTasksFilters,

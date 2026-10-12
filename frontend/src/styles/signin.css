@@ -280,7 +280,8 @@
 .si-foot {
   margin: 14px 0 0;
   font-size: 11.5px;
-  color: var(--color-text-faint);
+  /* muted, not faint: faint is below the 4.5:1 text contrast on the card */
+  color: var(--color-text-muted);
   text-align: center;
 }
 
@@ -380,4 +381,63 @@
   .si-scene {
     display: none;
   }
+}
+
+/* ---------- Sign in with Workeasy360 ---------- */
+
+.si-sso {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+.si-sso-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+.si-sso-text {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0 0 4px;
+}
+a.si-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+/* Single-card screens (access ended) */
+.si-page.si-page-single {
+  grid-template-columns: 1fr;
+}
+.si-access-title {
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  text-align: center;
+}
+.si-access-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* Neutral screen while the session is being checked, and the read-only notice */
+.app-loading {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.app-access-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 24px 0;
 }

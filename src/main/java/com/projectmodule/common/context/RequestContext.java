@@ -8,9 +8,9 @@ import java.util.Optional;
 /**
  * The identity and tracing information attached to a unit of work.
  *
- * <p>This module does not authenticate. It consumes an identity that an upstream gateway has
- * already authenticated, and exposes it here. Authentication, credential handling and session
- * management all belong to another module.
+ * <p>The identity is the signed-in session's: the user and organization that Workeasy360 vouched
+ * for at sign-in ({@code com.projectmodule.security}). Nothing a request carries - a header, a
+ * parameter, a body - can change it.
  *
  * <p>The same abstraction is used by the AI and automation paths, so every layer below sees
  * one uniform notion of "who is asking" regardless of how the work arrived.

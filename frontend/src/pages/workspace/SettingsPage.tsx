@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import '../../styles/workspace.css'
-import { useIdentity } from '../../context/IdentityContext'
+import { useSession } from '../../context/SessionContext'
+import { useSignOutActions } from '../../hooks/useSignOutActions'
 import { useTheme } from '../../context/ThemeContext'
 import { useSidebar } from '../../context/SidebarContext'
 import type { ThemePreference } from '../../context/themeStore'
@@ -28,17 +29,17 @@ const RELEASE_TONE: Record<ReleaseState, BadgeTone> = {
 }
 
 /**
- * Settings: only things this frontend really controls. Identity is the X-User-Id / X-Org-Id
- * header pair (there is no login or profile API), theme and sidebar state are per-browser
- * preferences, and the feature list is the registry the navigation is built from. Nothing here
- * is a fake preference: the backend has no notification, profile or account settings.
+ * Settings: only things this frontend really controls. The account is read-only (it comes from the
+ * Workeasy360 sign-in), theme and sidebar state are per-browser preferences, and the feature list
+ * is the registry the navigation is built from. Nothing here is a fake preference: the backend has
+ * no notification, profile or account settings.
  */
 export function SettingsPage() {
   return (
     <div className="ws-page rise-in">
-      <PageHeader title="Settings" description="Your identity, appearance and workspace preferences." />
+      <PageHeader title="Settings" description="Your account, appearance and workspace preferences." />
       <div className="ws-settings">
-        <IdentitySection />
+        <AccountSection />
         <AppearanceSection />
         <NavigationSection />
         <AboutSection />
@@ -79,35 +80,55 @@ function Section({
   )
 }
 
-function IdentitySection() {
-  const { identity, openPrompt, clearIdentity } = useIdentity()
+function AccountSection() {
+  const { user, organization } = useSession()
+  const { busy, error, workeasy360SignOut, signOut, signOutEverywhere } = useSignOutActions()
   return (
-    <Section id="identity" icon="user" title="Identity" description="Who the API sees you as.">
+    <Section id="account" icon="user" title="Account" description="Who you are signed in as.">
+      <div className="ws-row">
+        <div className="ws-row-label">
+          <strong>Name</strong>
+          <span>From your Workeasy360 account</span>
+        </div>
+        {user?.name ? <span>{user.name}</span> : <span className="text-faint">Not shared</span>}
+      </div>
+      <div className="ws-row">
+        <div className="ws-row-label">
+          <strong>Email</strong>
+          <span>From your Workeasy360 account</span>
+        </div>
+        {user?.email ? <span>{user.email}</span> : <span className="text-faint">Not shared</span>}
+      </div>
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>User ID</strong>
-          <span>Sent as the X-User-Id header</span>
+          <span>Read-only</span>
         </div>
-        <CopyValue label="user ID" value={identity?.userId ?? null} />
+        <CopyValue label="user ID" value={user?.id ?? null} />
       </div>
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>Organization ID</strong>
-          <span>Sent as the X-Org-Id header</span>
+          <span>Read-only</span>
         </div>
-        <CopyValue label="organization ID" value={identity?.orgId ?? null} />
+        <CopyValue label="organization ID" value={organization?.id ?? null} />
       </div>
       <p className="ws-hint">
-        This app has no login of its own. These two identifiers are sent with every request as the X-User-Id and
-        X-Org-Id headers and are stored only in this browser; the backend decides what they may do.
+        You sign in to Easy Project with Workeasy360. Your account and organization come from that sign-in and
+        cannot be changed here; the server decides what you may do.
       </p>
+      {error && (
+        <div className="banner banner-error" role="alert">
+          {error}
+        </div>
+      )}
       <div className="page-actions">
-        <button type="button" className="btn" onClick={openPrompt}>
-          {identity ? 'Change identity' : 'Set identity'}
+        <button type="button" className="btn btn-danger" onClick={signOut} disabled={busy}>
+          <Icon name="logout" size={15} /> Sign out of Easy Project
         </button>
-        {identity && (
-          <button type="button" className="btn btn-danger" onClick={clearIdentity}>
-            <Icon name="logout" size={15} /> Sign out
+        {workeasy360SignOut && (
+          <button type="button" className="btn btn-danger" onClick={signOutEverywhere} disabled={busy}>
+            <Icon name="logout" size={15} /> Sign out of Easy Project and Workeasy360
           </button>
         )}
       </div>
@@ -257,14 +278,14 @@ function AboutSection() {
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>API base URL</strong>
-          <span>Resolved at build time; VITE_API_BASE_URL overrides it</span>
+          <span>Same origin by default; VITE_API_BASE_URL overrides it</span>
         </div>
         <code className="ws-code">{API_BASE_LABEL}</code>
       </div>
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>Stored in this browser</strong>
-          <span>Identity headers, theme and sidebar preference — nothing else</span>
+          <span>Theme and sidebar preference — nothing else. Your sign-in is a secure cookie set by the server.</span>
         </div>
       </div>
       <p className="ws-hint">

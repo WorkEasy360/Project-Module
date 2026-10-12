@@ -3,8 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { DashboardPage } from './DashboardPage'
-import { IdentityProvider } from '../../context/IdentityContext'
-import { setIdentity } from '../../context/identityStore'
+import { SessionProvider } from '../../context/SessionContext'
+import { signInAs } from '../../test/session'
 import { dashboardApi } from '../../api/dashboard'
 import { projectsApi } from '../../api/projects'
 import { healthApi } from '../../api/health'
@@ -72,9 +72,9 @@ const rec = (over: Partial<AIRecommendation>): AIRecommendation => ({
 function renderHome() {
   return render(
     <MemoryRouter>
-      <IdentityProvider>
+      <SessionProvider autoLoad={false}>
         <DashboardPage />
-      </IdentityProvider>
+      </SessionProvider>
     </MemoryRouter>,
   )
 }
@@ -82,7 +82,7 @@ describe('DashboardPage (reference layout)', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 8, 19, 9))
-    setIdentity({ userId: ME, orgId: '99999999-2222-4333-8444-555555555555' })
+    signInAs(ME)
     vi.mocked(dashboardApi.get).mockImplementation(() => Promise.resolve(summary))
     vi.mocked(projectsApi.list).mockImplementation(() => Promise.resolve({ content: [...projects], page: 0, size: 10, totalElements: 3, totalPages: 1 }))
     vi.mocked(healthApi.get).mockImplementation((id: string) => Promise.resolve(healthById[id]))

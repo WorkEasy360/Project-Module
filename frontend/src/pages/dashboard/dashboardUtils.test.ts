@@ -95,7 +95,7 @@ describe('attention tasks', () => {
 })
 
 describe('my tasks, progress, milestones, donut', () => {
-  it('counts only the current identity’s tasks, using the same overdue rule and a 7-day window', () => {
+  it('counts only the signed-in user’s tasks, using the same overdue rule and a 7-day window', () => {
     const items = [
       loaded('P', 'ACTIVE', 'LOW', [
         task({ id: '1', assigneeId: 'me', dueDate: '2026-09-10' }),

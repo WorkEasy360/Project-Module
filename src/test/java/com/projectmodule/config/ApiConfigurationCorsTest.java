@@ -19,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -34,6 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * hand-rolled substitute.
  */
 @WebMvcTest(DashboardController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @Import(ApiConfiguration.class)
 class ApiConfigurationCorsTest {
 
@@ -84,7 +86,7 @@ class ApiConfigurationCorsTest {
 
     /**
      * The exact exchange a browser performs before "save project": a preflight for a POST that
-     * carries a JSON body and the caller-identity headers. This is the request that was being
+     * carries a JSON body and the correlation id. This is the request that was being
      * refused, so it is asserted end to end rather than only the simple-request case above.
      */
     @Test
@@ -94,7 +96,7 @@ class ApiConfigurationCorsTest {
                         .header(HttpHeaders.ORIGIN, "https://ops.workeasy360.com")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
-                                "content-type,x-user-id,x-org-id,x-correlation-id"))
+                                "content-type,x-correlation-id"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "https://ops.workeasy360.com"))
                 .andExpect(header().stringValues("Access-Control-Allow-Methods",
@@ -102,11 +104,10 @@ class ApiConfigurationCorsTest {
     }
 
     /**
-     * Credentials stay off. This API is authorised by the X-User-Id / X-Org-Id headers the
-     * upstream gateway supplies, not by cookies or HTTP authentication, and the browser client
-     * never sets {@code credentials: 'include'}. Switching credentials on would tell browsers to
-     * attach cookies to cross-origin calls, widening exposure for no functional gain, so its
-     * absence is asserted rather than left to chance.
+     * Credentials stay off. The API is authorised by the sign-in session cookie, which is
+     * same-origin only: the browser client uses {@code credentials: 'same-origin'}, never
+     * {@code 'include'}. Switching credentials on would tell browsers to attach the session cookie
+     * to cross-origin calls, so its absence is asserted rather than left to chance.
      */
     @Test
     @DisplayName("credentialed cross-origin requests are not enabled")
@@ -117,6 +118,23 @@ class ApiConfigurationCorsTest {
         mockMvc.perform(get("/api/v1/dashboard").header(HttpHeaders.ORIGIN, "https://ops.workeasy360.com"))
                 .andExpect(status().isOk())
                 .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
+    }
+
+    /**
+     * The retired identity headers are no longer something a browser may send cross-origin: they
+     * identify nobody any more, and the preflight must not advertise them.
+     */
+    @Test
+    @DisplayName("the retired X-User-Id / X-Org-Id headers are not allowed in a preflight")
+    void doesNotAllowIdentityHeaders() throws Exception {
+        mockMvc.perform(options("/api/v1/projects")
+                        .header(HttpHeaders.ORIGIN, "https://ops.workeasy360.com")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "content-type,x-user-id,x-org-id"))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsStringIgnoringCase("x-user-id"))))
+                .andExpect(header().string("Access-Control-Allow-Headers",
+                        org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsStringIgnoringCase("x-org-id"))));
     }
 
     private static Map<ProjectStatus, Long> byStatus() {

@@ -3,8 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { WorkspaceCalendarPage } from './WorkspaceCalendarPage'
-import { IdentityProvider } from '../../context/IdentityContext'
-import { setIdentity } from '../../context/identityStore'
+import { SessionProvider } from '../../context/SessionContext'
+import { signInAs } from '../../test/session'
 import { projectsApi } from '../../api/projects'
 import { calendarApi } from '../../api/calendar'
 import { tasksApi } from '../../api/tasks'
@@ -56,9 +56,9 @@ function page(totalElements = 2) {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <IdentityProvider>
+      <SessionProvider autoLoad={false}>
         <WorkspaceCalendarPage />
-      </IdentityProvider>
+      </SessionProvider>
     </MemoryRouter>,
   )
 }
@@ -69,7 +69,7 @@ describe('WorkspaceCalendarPage', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 8, 19, 12))
-    setIdentity({ userId: ME, orgId: '99999999-2222-4333-8444-555555555555' })
+    signInAs(ME)
     vi.mocked(projectsApi.list).mockReset()
     vi.mocked(calendarApi.get).mockReset()
     vi.mocked(tasksApi.list).mockReset()

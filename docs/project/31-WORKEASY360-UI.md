@@ -18,14 +18,17 @@ backend has no such data or capability. Nothing in the UI is simulated.
 
 | Reference | Implementation | Why |
 |---|---|---|
-| Email + password login | User ID + Organization ID (`pages/auth/SignInPage.tsx`) | The backend has no accounts or passwords; every request is authorised by `X-User-Id` / `X-Org-Id` headers |
-| "Success animation on valid login" | Identity is **verified against the backend** (`GET /dashboard` with those headers must succeed) → checkmark animation → workspace | Nothing is stored unless the backend accepts it; 401/403 clears it and shakes the form |
-| "Remember me" | localStorage (device) vs sessionStorage (tab) | `context/identityStore.ts` |
-| Continue with Google / Microsoft | **Omitted** | No SSO integration exists in the backend |
-| Forgot password / Create account | **Omitted** | No such flows exist |
+| Email + password login | **Omitted.** "Already a Workeasy360 user?" with a **Continue with Workeasy360** link (`pages/auth/SignInPage.tsx`) | Easy Project is registered `sso_only`: people sign in with Workeasy360, there is no password here. The link starts `GET /api/auth/workeasy360/start?next=<route>`; the page never starts sign-in by itself. |
+| "Success animation on valid login" | Sign-in happens at Workeasy360 and the browser returns to the app signed in | The session is created by the backend (`docs/workeasy360-sso.md`); failures come back as `/#/sign-in?sso_error=<code>` and are explained on the page. |
+| "Remember me" | **Omitted** | The server-side session has an idle timeout (default 8 hours); nothing identity-related is stored in the browser. |
+| Continue with Google / Microsoft | **Omitted** | Workeasy360 is the one identity provider; it offers whatever sign-in methods the organization allows. |
+| Forgot password / Create account | **Omitted** | No such flows exist here. |
 
-The app shell (`components/layout/AppLayout.tsx`) redirects to `/sign-in` while no identity is
-configured; Settings and the header widget offer "Sign out" (clears the identity).
+The app shell (`components/layout/AppLayout.tsx`) asks `GET /api/auth/session` on load and redirects to
+`/sign-in` while there is no session; the header account menu and Settings offer "Sign out of Easy Project"
+and, when configured, "Sign out of Easy Project and Workeasy360". When Workeasy360 says the organization's
+access has ended the whole app is replaced by one "access has ended" screen (Try again / Sign out); a
+read-only subscription shows a notice and refuses writes.
 
 ## Dashboard (reference: "Home")
 
@@ -58,7 +61,7 @@ per-project APIs over the first page of up to 50 most-recently-updated projects
 | Templates | `/templates` | `GET/POST /templates` |
 | Automations | `/automations` | per-project `GET /projects/{id}/automations`; runs loaded on demand |
 | **Integrations** | **omitted** | No integration API exists |
-| Settings | `/settings` | identity, theme, sidebar, feature registry, API base URL — no fake preferences |
+| Settings | `/settings` | signed-in account, theme, sidebar, feature registry, API base URL — no fake preferences |
 
 ## Project calendar (reference: "add, view, edit events")
 

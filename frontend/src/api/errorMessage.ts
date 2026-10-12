@@ -1,4 +1,5 @@
 import { ApiError, NetworkError } from './client'
+import { accessProblemMessage } from './sessionMessages'
 
 /**
  * Turns any error thrown by the API client into a safe, user-facing message. Never surfaces a
@@ -9,9 +10,16 @@ import { ApiError, NetworkError } from './client'
 export function toUserMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.isUnauthenticated) {
-      return 'Your identity is not set. Please set your User ID and Organization ID.'
+      return 'Your session has ended. Sign in again to continue.'
     }
     if (error.isForbidden) {
+      const code = error.problem?.code
+      if (code === 'csrf_invalid') {
+        return 'Your session security token was out of date. Reload the page and try again.'
+      }
+      if (typeof code === 'string' && code.startsWith('workeasy360_')) {
+        return accessProblemMessage(code, error.problem?.reason ?? null)
+      }
       return error.problem?.detail || "You don't have permission to do this."
     }
     if (error.isConflict) {

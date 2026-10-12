@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../../styles/dashboard.css'
 import { useAsyncData } from '../../hooks/useAsyncData'
-import { useIdentity } from '../../context/IdentityContext'
+import { useSession } from '../../context/SessionContext'
+import { displayName } from '../../context/sessionStore'
 import { dashboardApi } from '../../api/dashboard'
 import { projectsApi } from '../../api/projects'
 import { healthApi } from '../../api/health'
@@ -51,7 +52,7 @@ const CARD_TONES = ['blue', 'purple', 'amber', 'green'] as const
  * and after any action here; there is no polling.
  */
 export function DashboardPage() {
-  const { identity } = useIdentity()
+  const { user } = useSession()
   const [createOpen, setCreateOpen] = useState(false)
   const [sort, setSort] = useState<SortValue>('updatedAt,DESC')
   const [filters, setFilters] = useState(EMPTY_FILTERS)
@@ -89,7 +90,7 @@ export function DashboardPage() {
 
   return (
     <div className="hb">
-      <HeroSection greeting={greetingForHour(new Date().getHours())} name={identity ? identity.userId.slice(0, 8) : null} />
+      <HeroSection greeting={greetingForHour(new Date().getHours())} name={displayName(user)} />
 
       {/* ---------- Summary cards ---------- */}
       <section className="hb-stats rise-in" aria-label="Summary">

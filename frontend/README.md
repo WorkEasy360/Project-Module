@@ -2,7 +2,7 @@
 
 A React single-page app for the Project Management Module backend. It is a plain client of the
 existing `/api/v1` REST API — it holds no business rules, no database access, and no
-authentication of its own. The Spring Boot backend remains the sole authority for validation,
+authentication of its own: people sign in with Workeasy360 and the browser holds a session cookie. The Spring Boot backend remains the sole authority for validation,
 authorization, organization boundaries, and persistence.
 
 ## Stack
@@ -20,7 +20,7 @@ hooks.
 
 ## Prerequisites
 
-- The backend running (see the repository root `README`/`pom.xml`), reachable over HTTP.
+- The backend running (see the repository root `README`/`pom.xml`) on `http://localhost:8080`.
 - Node.js 20+.
 
 ## Install & run
@@ -28,15 +28,14 @@ hooks.
 ```bash
 cd frontend
 npm install
-cp .env.example .env      # then edit VITE_API_BASE_URL if the backend isn't on localhost:8080
-npm run dev                # http://localhost:5173
+npm run dev                # http://localhost:5173 (forwards /api to http://localhost:8080)
 ```
 
 Other scripts:
 
 ```bash
 npm run build      # type-check (tsc -b) + production build to dist/
-npm run preview    # serve the production build locally
+npm run preview    # serve the production build locally (http://localhost:4173, /api proxied too)
 npm test           # run the Vitest suite once
 npm run lint        # oxlint
 ```
@@ -45,32 +44,57 @@ npm run lint        # oxlint
 
 | Variable | Purpose | Default |
 |---|---|---|
-| `VITE_API_BASE_URL` | Origin the backend is served from (the app appends `/api/v1` itself) | `http://localhost:8080` |
+| `VITE_API_BASE_URL` | Optional prefix for API calls. Leave it unset. | empty (same origin) |
 
-See `.env.example`.
+See `.env.example`. If an old `.env` still sets `VITE_API_BASE_URL=http://localhost:8080`, delete that
+line: a cross-origin base cannot carry the sign-in cookie, so sign-in would not work.
 
-## Backend CORS
+## Same origin only: cookies, CSRF and the dev proxy
 
-The backend only accepts cross-origin browser requests from origins listed in
-`projectmodule.cors.allowed-origins` (see `ApiConfiguration` in the backend). It defaults to this
-app's Vite dev (`5173`) and preview (`4173`) ports. If you serve the built frontend from another
-origin, set the backend's `PROJECTMODULE_CORS_ALLOWED_ORIGINS` environment variable to match.
+The UI and the API must be served from **one origin**. The sign-in session is an HttpOnly cookie that
+the browser sends with `credentials: 'same-origin'`, and writes carry a CSRF token. There is no CORS
+setup, and a cross-origin deployment is not supported.
 
-## Identity — there is no login screen
+- **Production:** the Spring Boot jar serves the built UI and the API together.
+- **Development:** `npm run dev` (and `npm run preview`) forward `/api` - and only `/api` - to
+  `http://localhost:8080` through a Vite proxy (`vite.config.ts`). `changeOrigin` is deliberately off,
+  so the `Host` header, the cookies and the sign-in redirects stay on `localhost:5173` (or `:4173`).
+  Open the app on that address, not on `:8080`.
+- **CSRF:** the backend sets a script-readable `XSRF-TOKEN` cookie. `src/api/client.ts` copies it
+  (URL-decoded, read at send time) into an `X-XSRF-TOKEN` header on every POST/PATCH/DELETE, and never
+  on reads. If the cookie is not there yet, the client first calls `GET /api/auth/session` to get it. A
+  403 with `code: csrf_invalid` is shown as "Reload the page and try again".
 
-This backend has no authentication of its own: every request must carry `X-User-Id` and
-`X-Org-Id` headers, which a real deployment's upstream gateway would inject. Since this frontend
-talks to the backend directly, it asks you for those two values once (top-right of the header,
-"Set identity") and resends them on every request. They are stored only in `localStorage` in your
-browser — this is a developer/operator convenience, not an authentication system, and it grants
-nothing by itself: the backend still authorizes (or rejects) every request based on the project
-membership rows for the user id you provide.
+## Sign-in: Workeasy360 sessions
 
-To use the app you need at least one organization id and one user id that the backend already
-knows about (e.g. one you created a project with, or one added as a project member) — the
-frontend cannot create organizations or users; those concepts are entirely external to this
-module (`ExternalUserId` / `OrganizationId` are opaque identifiers here, per the backend's own
-architecture).
+There is no username, password or user-id form. People sign in with Workeasy360:
+
+1. `SessionProvider` asks `GET /api/auth/session` on load. While that is pending `AppLayout` shows a
+   neutral loading state. A `401` means not signed in, and the person is sent to `#/sign-in` together
+   with the route they wanted.
+2. The sign-in page shows **Continue with Workeasy360**, a plain link to
+   `/api/auth/workeasy360/start?next=<route>` (a top-level navigation, never `fetch`, and never followed
+   automatically). The backend redirects to Workeasy360 and, after sign-in, lands the browser on
+   `/#/<route>`.
+3. If sign-in fails the backend returns to `#/sign-in?sso_error=<code>`. Each code has a plain-language
+   message in `src/api/sessionMessages.ts`; an unknown code is shown as `refused`.
+4. **Sign out of Easy Project** calls `POST /api/auth/logout` and returns to the sign-in page. When the
+   session says `workeasy360SignOut: true`, **Sign out of Easy Project and Workeasy360** does the same and
+   then navigates to `/api/auth/workeasy360/logout`. Both are in the header account dialog and in
+   Settings (which also shows the signed-in account and organization id, read-only).
+
+API errors feed the session:
+
+- `401` on any `/api/v1` call ends the session in the UI (back to sign-in).
+- `403` with `workeasy360_access_ended` or `workeasy360_access_unverified` replaces the app with an
+  "Easy Project access has ended" / "Workeasy360 can't confirm access right now" screen, with the reason
+  in plain words and *Try again* / *Sign out* buttons.
+- `403` with `workeasy360_read_only` keeps the app and shows a dismissible notice; the failed write
+  reports its own error as usual.
+- Other `403`s (project permissions) are ordinary errors.
+
+The session's `user.id` is "me" for My Tasks, comment authorship and the project permission check. The
+`X-User-Id` / `X-Org-Id` headers are no longer sent; the server ignores them.
 
 ## Architecture
 
@@ -78,7 +102,7 @@ architecture).
 React UI  →  src/api/*  →  fetch(`${VITE_API_BASE_URL}/api/v1/...`)  →  Spring Boot REST API
 ```
 
-- `src/api/client.ts` — the single fetch wrapper. Attaches identity headers, throws `ApiError`
+- `src/api/client.ts` — the single fetch wrapper. Sends the session cookie and CSRF token, reports 401 and `workeasy360_*` 403 responses to the session store, throws `ApiError`
   (carrying the backend's RFC 9457 `ProblemDetail`) on any non-2xx response, and `NetworkError`
   when the request never reaches the server.
 - `src/api/*.ts` — one thin module per backend controller area (projects, tasks, risks,
@@ -86,7 +110,8 @@ React UI  →  src/api/*  →  fetch(`${VITE_API_BASE_URL}/api/v1/...`)  →  Sp
   called that isn't in the backend's actual controllers.
 - `src/types/*.ts` — TypeScript types mirroring the backend's request/response DTOs and enums
   exactly (field names, nullability, and enum values were read from the Java source, not guessed).
-- `src/context/IdentityContext.tsx` — the dev identity switcher described above.
+- `src/context/sessionStore.ts` / `SessionContext.tsx` — the Workeasy360 session (status, user, organization, access problem) as a tiny external store, so the API client can report into it without importing React.
+- `src/api/session.ts` — session check, logout and the start/logout URLs; `src/api/sessionMessages.ts` — sign-in error and access-ended texts.
 - `src/context/ProjectWorkspaceContext.tsx` — shares the loaded `Project`, the caller's derived
   role, and a `can(permission)` check across every tab of a project workspace. This client-side
   permission check is UX only (hides/disables actions); the backend re-checks authorization on
@@ -101,7 +126,7 @@ React UI  →  src/api/*  →  fetch(`${VITE_API_BASE_URL}/api/v1/...`)  →  Sp
   `/projects/:id/more`): advanced features grouped by category with honest access states.
 - `src/pages/projects/tabs/*` — one file per project screen.
 - `src/components/common/*` — shared building blocks: `DataTable` (loading/empty/error states),
-  `Modal`, `ConfirmDialog`, `Pagination`, status `Badge`s, `IdentityWidget`.
+  `Modal`, `ConfirmDialog`, `Pagination`, status `Badge`s, `AccountMenu`.
 
 ## Routes
 
@@ -175,8 +200,8 @@ Future modules (time tracking, budgets, files, a client portal…) slot in the s
 
 ## Testing
 
-`npm test` runs the Vitest suite: API client behavior (headers, error mapping, conflict/
-unavailable detection), permission derivation, the identity-setup form, table loading/empty/error
+`npm test` runs the Vitest suite: API client behavior (same-origin credentials, CSRF header on writes only, 401/403 handling, error mapping, conflict/
+unavailable detection), permission derivation, the sign-in page and its error messages, the session guard, the access-ended screen and both sign-out flows, table loading/empty/error
 states, project creation validation, automation creation (including that the trigger-event
 dropdown is exactly the backend's catalogue, and the NOTIFY/CHAT_MESSAGE field switch), and the
 AI "provider unavailable" path.

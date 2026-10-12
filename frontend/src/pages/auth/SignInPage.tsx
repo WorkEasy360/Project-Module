@@ -1,65 +1,36 @@
-import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useIdentity } from '../../context/IdentityContext'
-import { dashboardApi } from '../../api/dashboard'
-import { toUserMessage } from '../../api/errorMessage'
+import { Link, Navigate, useLocation, useSearchParams } from 'react-router-dom'
+import { useSession } from '../../context/SessionContext'
+import { useSignOutActions } from '../../hooks/useSignOutActions'
+import { safeNextRoute, workeasy360StartUrl } from '../../api/session'
+import { ssoErrorMessage } from '../../api/sessionMessages'
 import { Icon } from '../../components/common/Icon'
+import { LoadingState } from '../../components/common/LoadingState'
 import { BrandMark } from '../../components/layout/Sidebar'
 import '../../styles/signin.css'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
 /**
- * Sign-in. This backend has no username/password login: every request is authorised by the
- * X-User-Id / X-Org-Id headers a gateway would inject. So "signing in" here means providing
- * those two identifiers, which are then *verified against the real backend* (a dashboard read
- * with those headers must succeed) before the app opens. Nothing is simulated: an identity the
- * backend rejects (401/403) is not stored. There is no third-party SSO because no such backend
- * integration exists.
+ * Sign-in. Easy Project has no passwords or user ids of its own: people sign in with Workeasy360.
+ * "Continue with Workeasy360" is a plain link — a top-level navigation to the backend, which
+ * performs the OIDC redirect — and is never followed automatically; the person always chooses.
+ * The route they were trying to reach (set by `AppLayout`) travels as `next` and the backend
+ * returns them to it. If the sign-in fails, the backend sends the browser back here with
+ * `?sso_error=<code>`, shown below in plain language.
  */
-export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number }) {
-  const { identity, setIdentity, clearIdentity } = useIdentity()
-  const navigate = useNavigate()
+export function SignInPage() {
+  const { status, loadError } = useSession()
+  const signOuts = useSignOutActions()
   const location = useLocation()
+  const [params] = useSearchParams()
   const from = (location.state as { from?: string } | null)?.from
-  const [userId, setUserId] = useState('')
-  const [orgId, setOrgId] = useState('')
-  const [remember, setRemember] = useState(true)
-  const [showIds, setShowIds] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [phase, setPhase] = useState<'idle' | 'checking' | 'success' | 'shake'>('idle')
+  const next = safeNextRoute(from)
+  const ssoError = params.get('sso_error')
 
-  // Already signed in (and not mid-verification): go straight to the workspace.
-  if (identity && phase === 'idle') {
-    return <Navigate to={from && from !== '/sign-in' ? from : '/dashboard'} replace />
-  }
-
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
-    const u = userId.trim()
-    const o = orgId.trim()
-    if (!UUID_RE.test(u) || !UUID_RE.test(o)) {
-      fail('Both IDs must be valid UUIDs (8-4-4-4-12 hexadecimal).')
-      return
-    }
-    setPhase('checking')
-    setError(null)
-    // The API client reads identity from the store, so set it first, then prove it works.
-    setIdentity({ userId: u, orgId: o }, remember)
-    try {
-      await dashboardApi.get()
-      setPhase('success')
-      window.setTimeout(() => navigate(from && from !== '/sign-in' ? from : '/dashboard', { replace: true }), successDelayMs)
-    } catch (err) {
-      clearIdentity()
-      fail(`We couldn't verify this identity with the backend. ${toUserMessage(err)}`)
-    }
-  }
-
-  function fail(message: string) {
-    setError(message)
-    setPhase('shake')
-    window.setTimeout(() => setPhase((p) => (p === 'shake' ? 'idle' : p)), 500)
+  // Signed in and nothing to explain: straight into the app. Signed in *and* a failed sign-in to
+  // report (a launcher sign-in for another organization that did not complete): the person is
+  // still in their previous organization, so say what happened and let them choose.
+  const stillSignedIn = status === 'authenticated'
+  if (stillSignedIn && !ssoError) {
+    return <Navigate to={next} replace />
   }
 
   return (
@@ -81,93 +52,60 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
       </section>
 
       <section className="si-form-wrap" aria-labelledby="si-title">
-        <form className={`si-card${phase === 'shake' ? ' shake' : ''}`} onSubmit={handleSubmit} noValidate>
+        <div className="si-card">
           <h2 id="si-title">Welcome back</h2>
-          <p className="si-form-sub">Sign in to continue to WorkEasy360</p>
+          <p className="si-form-sub">Sign in to continue to Easy Project</p>
 
-          <p className="si-note">
-            This workspace identifies you by your <strong>User ID</strong> and <strong>Organization ID</strong>{' '}
-            (sent as identity headers on every request). There is no password.
-          </p>
-
-          {error && (
+          {ssoError && (
             <div className="banner banner-error" role="alert">
-              {error}
+              {ssoErrorMessage(ssoError)}
+            </div>
+          )}
+          {!ssoError && loadError && (
+            <div className="banner banner-error" role="alert">
+              {loadError}
             </div>
           )}
 
-          <label className="si-field">
-            <span className="si-label">User ID</span>
-            <span className="si-input">
-              <Icon name="user" size={16} />
-              <input
-                type={showIds ? 'text' : 'password'}
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                autoComplete="username"
-                spellCheck={false}
-                required
-              />
-            </span>
-          </label>
-          <label className="si-field">
-            <span className="si-label">Organization ID</span>
-            <span className="si-input">
-              <Icon name="projects" size={16} />
-              <input
-                type={showIds ? 'text' : 'password'}
-                value={orgId}
-                onChange={(e) => setOrgId(e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                spellCheck={false}
-                required
-              />
-              <button
-                type="button"
-                className="si-eye"
-                onClick={() => setShowIds((v) => !v)}
-                aria-label={showIds ? 'Hide identifiers' : 'Show identifiers'}
-              >
-                <Icon name={showIds ? 'eyeOff' : 'eye'} size={16} />
+          {stillSignedIn ? (
+            <div className="si-sso">
+              <h3 className="si-sso-title">You are still signed in</h3>
+              <p className="si-sso-text">
+                The sign-in above did not complete, so you are still in your current organization.
+              </p>
+              <Link className="btn btn-primary si-submit" to={next} replace>
+                Continue in current organization
+              </Link>
+              <button type="button" className="btn si-submit" onClick={signOuts.signOut} disabled={signOuts.busy}>
+                Sign out
               </button>
-            </span>
-          </label>
-
-          <div className="si-row">
-            <label className="checkbox-row">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              Remember me
-            </label>
-            <span className="si-hint">{remember ? 'Kept on this device' : 'This tab only'}</span>
-          </div>
-
-          <button type="submit" className="btn btn-primary si-submit" disabled={phase === 'checking' || phase === 'success'}>
-            {phase === 'checking' ? (
-              <>
-                <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Verifying…
-              </>
-            ) : (
-              <>
-                Continue <Icon name="arrowRight" size={16} />
-              </>
-            )}
-          </button>
+              {signOuts.error && (
+                <div className="banner banner-error" role="alert">
+                  {signOuts.error}
+                </div>
+              )}
+              <a className="si-sso-text" href={workeasy360StartUrl(next)}>
+                Try signing in with Workeasy360 again
+              </a>
+            </div>
+          ) : status === 'loading' ? (
+            <LoadingState label="Checking your sign-in…" />
+          ) : (
+            <div className="si-sso">
+              <h3 className="si-sso-title">Already a Workeasy360 user?</h3>
+              <p className="si-sso-text">
+                Easy Project uses your Workeasy360 account. There is no separate password to remember.
+              </p>
+              <a className="btn btn-primary si-submit" href={workeasy360StartUrl(next)}>
+                Continue with Workeasy360 <Icon name="arrowRight" size={16} />
+              </a>
+            </div>
+          )}
 
           <p className="si-foot">
-            Identity is verified against the backend before you enter. Nothing is stored unless it is accepted.
+            You will go to Workeasy360 to sign in, then come straight back here.
           </p>
-
-          {phase === 'success' && (
-            <div className="si-success" role="status">
-              <span className="si-check">
-                <Icon name="check" size={34} />
-              </span>
-              <strong>Welcome to WorkEasy360</strong>
-              <span>Opening your workspace…</span>
-            </div>
-          )}
-        </form>
+        </div>
       </section>
     </div>
   )

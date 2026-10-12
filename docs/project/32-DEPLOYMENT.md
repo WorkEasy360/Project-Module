@@ -31,8 +31,19 @@ If `pom.xml`'s `artifactId` or `version` ever changes, this path must change wit
 
 **One deployment serves both.** The jar contains the API and the UI, so the environment URL
 serves the application and `/api/v1/**` on the same origin. The backend remains API-only in its
-architecture: it has no view layer, no session and no server-rendered pages, and simply serves
-the built files as static resources from the classpath.
+architecture: it has no view layer and no server-rendered pages, and simply serves the built files as
+static resources from the classpath. It does hold a server-side **session** for the person signed in with
+Workeasy360 (see `docs/workeasy360-sso.md`).
+
+## One instance, and what a deploy does
+
+Sessions and pending sign-ins are held in memory by the instance that created them. Run **a single instance**
+(as this environment does), or enable **sticky sessions** on the load balancer if you ever scale out; a request
+that reaches a different instance has no session and a sign-in callback that reaches a different instance
+finds no pending flow (`expired`). Every deploy or restart therefore **signs everyone out**: they see the
+sign-in page and one click on "Continue with Workeasy360" brings them back, without another password
+(Workeasy360's own session continues). See `docs/workeasy360-sso.md`, "Sessions, deployment shape and edge
+protection", which also asks for rate limiting of `/api/auth/**` at Cloudflare.
 
 ## Required environment properties
 
@@ -45,6 +56,13 @@ port 5000, so `SERVER_PORT` must be `5000` (Spring maps it to `server.port`).
 | `PROJECTMODULE_DB_URL` | `jdbc:postgresql://<rds-endpoint>:5432/<database>` |
 | `PROJECTMODULE_DB_USERNAME` | RDS master user |
 | `PROJECTMODULE_DB_PASSWORD` | RDS master password (set in the environment only) |
+| `WORKEASY360_ISSUER` | **Required.** Workeasy360's issuer, e.g. `https://app.workeasy360.com`. The jar **refuses to start** without it and the four settings below. |
+| `WORKEASY360_CLIENT_ID` | **Required.** The client id printed by `manage.py connect_product_sso --product easy_project ...`. |
+| `WORKEASY360_REDIRECT_URI` | **Required.** `https://ops.workeasy360.com/api/auth/callback/workeasy360`, exactly as registered. |
+| `WORKEASY360_KEY_ID` | **Required.** The credential id printed at registration. |
+| `WORKEASY360_PRIVATE_KEY_FILE` / `WORKEASY360_PRIVATE_KEY` | **Required (one of them).** The PEM private key matching the registered public key; the variable form accepts literal backslash-n for newlines. Keep it out of the repository and the workflow. |
+| `WORKEASY360_POST_LOGOUT_REDIRECT_URI` | Optional. `https://ops.workeasy360.com/`; enables "Sign out of Easy Project and Workeasy360". |
+| `PROJECTMODULE_SESSION_IDLE_TIMEOUT` | Optional. Session idle timeout, default `8h`. |
 | `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | **Not needed for this deployment.** The UI is served from the same origin as the API, so the browser makes no cross-origin request and no CORS exchange occurs. The default (the local Vite ports) exists for `npm run dev`. Set this only if a frontend is ever hosted on a different origin. |
 
 `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` are also
@@ -86,8 +104,10 @@ The environment URL now opens the application. The API is unchanged and shares t
 | `/` | The React application (`200 text/html`). |
 | `/assets/...` | The hashed JavaScript and CSS bundles the entry page references. |
 | `/actuator/health` | `200 {"status":"UP"}`. Reports `DOWN` if the database is unreachable, so it is a real health signal. |
-| `/api/v1/dashboard` | `401` without identity headers, `200` with `X-User-Id` and `X-Org-Id`. A `200` here proves the database is connected. |
-| `/swagger-ui.html` | API documentation. |
+| `/api/v1/dashboard` | `401` without a sign-in session (the old `X-User-Id` / `X-Org-Id` headers are ignored); `200` for a signed-in person. |
+| `/api/auth/session` | `401` without a session; `200` with who is signed in. |
+| `/api/auth/workeasy360/start` | `302` to Workeasy360 (or to `/#/sign-in?sso_error=unavailable` when it cannot be reached). |
+| `/swagger-ui.html` | API documentation (needs a signed-in session in the same browser). |
 | `/api/v1/<anything unmapped>` | `404` as a problem document, never the application HTML. |
 | `/<anything unmapped>` | `404` as a problem document. The UI uses `HashRouter`, so its routes live in the fragment (`/#/projects`) and the browser never asks the server for them. There is deliberately no catch-all rewriting unknown paths to `index.html`, because that would turn genuine API and server errors into a silent HTML page. |
 
@@ -103,7 +123,7 @@ configuration, so it is left to an operator to apply.
 | Build | API base | Why |
 |---|---|---|
 | production (`vite build`) | empty, so requests go to `/api/v1/...` | Same origin as the page that served the app. No CORS, and no hostname baked into the bundle. |
-| development (`npm run dev`) | `http://localhost:8080` | The Vite server is a different origin from the backend; the CORS default already allows it. |
+| development (`npm run dev`) | empty; the Vite server proxies `/api` to `http://localhost:8080` | Keeps the browser on one origin so the session cookie, CSRF cookie and sign-in redirects work. |
 | either, with `VITE_API_BASE_URL` | that value | For hosting the UI apart from the API. |
 
 No AWS hostname appears anywhere in the source. `VITE_` variables are embedded in the browser
@@ -117,8 +137,9 @@ The production build emits no source maps, and only `index.html`, `favicon.svg` 
 Two ways to run it:
 
 - **Two processes (fast feedback):** `mvnw spring-boot:run` with the `local` profile, and
-  `npm run dev` in `frontend/`. The UI is on :5173 and calls the backend on :8080 across origins,
-  which the CORS default permits. This is unchanged by the packaging work.
+  `npm run dev` in `frontend/`. The UI is on :5173 and the Vite server proxies `/api` to the backend on
+  :8080, so the browser sees one origin. Sign-in needs a Workeasy360 client registered with the redirect
+  URI `http://localhost:5173/api/auth/callback/workeasy360` (`docs/workeasy360-sso.md`).
 - **One process (as deployed):** `mvnw clean package` then run the jar, and open
   <http://localhost:8080/>. Same-origin, exactly like the deployed environment.
 
@@ -127,10 +148,9 @@ application has no UI, and the tests that serve it skip rather than pass vacuous
 
 ## What this does not change
 
-- **No authentication was added.** Serving the UI from the same origin grants nothing. Every API
-  request is still authorised by the `X-User-Id` / `X-Org-Id` pair that an upstream gateway is
-  expected to supply, and those headers remain identity context, not proof of authentication.
-  Membership and cross-organisation checks are untouched.
+- **Serving the UI from the same origin grants nothing.** Every API request needs the session that
+  "Sign in with Workeasy360" creates (`docs/workeasy360-sso.md`); the former `X-User-Id` / `X-Org-Id`
+  trust-the-gateway headers are gone. Membership and cross-organisation checks are untouched.
 - **The AI provider is still unavailable.** `UnavailableAIProviderAdapter` throws
   `IntegrationUnavailableException`, so AI requests return `503 integration-unavailable` rather
   than inventing an answer. Nothing in this packaging changes that.
@@ -138,8 +158,9 @@ application has no UI, and the tests that serve it skip rather than pass vacuous
 
 ## Remaining manual steps
 
-- The environment serves **HTTP, not HTTPS**. Identity headers, and now the whole UI, travel in
-  clear text. Adding TLS needs a certificate and a load balancer, which costs money.
+- Sign-in requires **HTTPS** at the public address (the session cookie is `Secure`, and the production
+  start-up check requires an https issuer and redirect URI). The site is reached through Cloudflare, which
+  terminates TLS; a direct HTTP environment URL cannot hold a sign-in session.
 - The RDS instance accepts connections on 5432 from the public internet. It should be restricted
   to the Elastic Beanstalk instances' security group.
 - The health check path recommendation below still applies.

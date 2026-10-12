@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../../styles/workspace.css'
 import { useAllProjects, usePerProject } from '../../hooks/useWorkspaceData'
-import { useIdentity } from '../../context/IdentityContext'
+import { useSession } from '../../context/SessionContext'
 import { membersApi } from '../../api/members'
 import { PageHeader } from '../../components/common/PageHeader'
 import { Icon } from '../../components/common/Icon'
@@ -34,7 +34,8 @@ type View = 'people' | 'projects'
  * roles are managed on each project's own Members tab.
  */
 export function TeamPage() {
-  const { identity } = useIdentity()
+  const { user } = useSession()
+  const meUserId = user?.id
   const projectsState = useAllProjects()
   const projects = projectsState.data?.content ?? null
   const members = usePerProject(projects, (id) => membersApi.list(id))
@@ -45,7 +46,7 @@ export function TeamPage() {
 
   const all = useMemo(() => collectMemberships(projects ?? [], members.byProject), [projects, members.byProject])
   const filtered = useMemo(() => filterMemberships(all, { query, role }), [all, query, role])
-  const people = useMemo(() => groupPeople(filtered, identity?.userId), [filtered, identity?.userId])
+  const people = useMemo(() => groupPeople(filtered, meUserId), [filtered, meUserId])
   const summary = useMemo(() => teamSummary(all), [all])
   const hasFilters = query.trim() !== '' || role !== ''
 
@@ -164,7 +165,7 @@ export function TeamPage() {
           errors={members.errors}
           filtered={filtered}
           hasFilters={hasFilters}
-          meId={identity?.userId}
+          meId={meUserId}
         />
       )}
     </div>

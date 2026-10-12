@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useMatch, useNavigate } from 'react-router-dom'
-import { IdentityWidget } from '../common/IdentityWidget'
+import { AccountMenu } from '../common/AccountMenu'
 import { IconButton } from '../common/IconButton'
 import { Icon } from '../common/Icon'
 import { useSidebar } from '../../context/SidebarContext'
@@ -18,7 +18,7 @@ function useBreadcrumb(): string[] {
 }
 
 /**
- * Top bar: hamburger, breadcrumb, global search, theme toggle and the identity control.
+ * Top bar: hamburger, breadcrumb, global search, theme toggle and the account menu.
  *
  * Search is real and scoped to what the backend offers: inside a project it opens that
  * project's search (the `/projects/{id}/search` API); elsewhere it filters the projects list by
@@ -101,7 +101,7 @@ export function Header() {
         label={resolved === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         onClick={toggleTheme}
       />
-      <IdentityWidget />
+      <AccountMenu />
     </header>
   )
 }

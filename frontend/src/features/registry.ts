@@ -154,7 +154,7 @@ export const FEATURES: FeatureDefinition[] = [
   {
     id: 'settings',
     name: 'Settings',
-    description: 'Your identity, appearance and workspace preferences.',
+    description: 'Your account, appearance and workspace preferences.',
     scope: 'workspace',
     tier: 'CORE',
     category: 'Productivity',

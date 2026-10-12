@@ -4,7 +4,7 @@ import '../../styles/project.css'
 import { useAsyncData } from '../../hooks/useAsyncData'
 import { projectsApi } from '../../api/projects'
 import { membersApi } from '../../api/members'
-import { useIdentity } from '../../context/IdentityContext'
+import { useSession } from '../../context/SessionContext'
 import { useSidebar } from '../../context/SidebarContext'
 import { ProjectWorkspaceContext } from '../../context/ProjectWorkspaceContext'
 import { hasPermission, type ProjectPermission } from '../../utils/permissions'
@@ -17,13 +17,13 @@ import { formatDate } from '../../utils/format'
 import { EditProjectDialog } from './EditProjectDialog'
 
 /**
- * Project shell. A compact header card (identity, status, dates, owner, Edit) sits above the
+ * Project shell. A compact header card (name, status, dates, owner, Edit) sits above the
  * tab bar; the tab bar shows only CORE project features plus "More" (both derived from the
  * feature registry); on phones the same items become a bottom tab bar instead.
  */
 export function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>()
-  const { identity } = useIdentity()
+  const { user } = useSession()
   const { isMobile } = useSidebar()
   const [editOpen, setEditOpen] = useState(false)
 
@@ -31,9 +31,9 @@ export function ProjectWorkspace() {
   const membersState = useAsyncData(() => membersApi.list(projectId!), [projectId])
 
   const currentMember = useMemo(() => {
-    if (!membersState.data || !identity) return null
-    return membersState.data.find((m) => m.userId === identity.userId) ?? null
-  }, [membersState.data, identity])
+    if (!membersState.data || !user) return null
+    return membersState.data.find((m) => m.userId === user.id) ?? null
+  }, [membersState.data, user])
 
   const can = useCallback(
     (permission: ProjectPermission) => hasPermission(currentMember?.role ?? null, permission),

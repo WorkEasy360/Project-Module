@@ -3,8 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { TeamPage } from './TeamPage'
-import { IdentityProvider } from '../../context/IdentityContext'
-import { setIdentity } from '../../context/identityStore'
+import { SessionProvider } from '../../context/SessionContext'
+import { signInAs } from '../../test/session'
 import { projectsApi } from '../../api/projects'
 import { membersApi } from '../../api/members'
 import type { ProjectMember } from '../../types/project'
@@ -33,16 +33,16 @@ function page(totalElements = 3) {
 function renderTeam() {
   return render(
     <MemoryRouter>
-      <IdentityProvider>
+      <SessionProvider autoLoad={false}>
         <TeamPage />
-      </IdentityProvider>
+      </SessionProvider>
     </MemoryRouter>,
   )
 }
 
 describe('TeamPage', () => {
   beforeEach(() => {
-    setIdentity({ userId: ME, orgId: '99999999-2222-4333-8444-555555555555' })
+    signInAs(ME)
     vi.mocked(projectsApi.list).mockReset()
     vi.mocked(membersApi.list).mockReset()
     vi.mocked(projectsApi.list).mockImplementation(() => Promise.resolve(page()))
@@ -51,13 +51,13 @@ describe('TeamPage', () => {
     )
   })
 
-  it('groups members by user id with short-id avatars, highlights the current identity, and links roles to project members', async () => {
+  it('groups members by user id with short-id avatars, highlights the signed-in user, and links roles to project members', async () => {
     renderTeam()
     const people = await screen.findByRole('list', { name: 'People' })
     expect(vi.mocked(projectsApi.list)).toHaveBeenCalledWith(0, 50, 'updatedAt,DESC')
     const rows = within(people).getAllByRole('listitem').filter((li) => li.classList.contains('ws-person'))
     expect(rows).toHaveLength(2)
-    // The current identity comes first and is marked "You"; ids are shown as their first 8 chars only.
+    // The signed-in user comes first and is marked "You"; ids are shown as their first 8 chars only.
     expect(rows[0]).toHaveClass('is-me')
     expect(within(rows[0]).getByText('You')).toBeInTheDocument()
     expect(within(rows[0]).getByText('11111111')).toBeInTheDocument()

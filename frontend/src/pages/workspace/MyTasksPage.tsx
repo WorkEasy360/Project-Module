@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import '../../styles/mytasks.css'
 import { tasksApi } from '../../api/tasks'
-import { useIdentity } from '../../context/IdentityContext'
+import { useSession } from '../../context/SessionContext'
 import { useAllProjects, usePerProject } from '../../hooks/useWorkspaceData'
 import { PageHeader } from '../../components/common/PageHeader'
 import { Icon, type IconName } from '../../components/common/Icon'
@@ -42,8 +42,8 @@ import {
  * which performs the real PATCH and then reloads.
  */
 export function MyTasksPage() {
-  const { identity } = useIdentity()
-  const userId = identity?.userId ?? null
+  const { user } = useSession()
+  const userId = user?.id ?? null
   const today = todayIso()
 
   const projects = useAllProjects()
@@ -103,7 +103,7 @@ export function MyTasksPage() {
           icon="user"
           tone="info"
           label="Assigned to me"
-          sub={userId ? (mineActive ? 'open tasks · showing' : 'open tasks') : 'set your identity'}
+          sub={userId ? (mineActive ? 'open tasks · showing' : 'open tasks') : 'sign in to see yours'}
           value={summary.assignedToMe}
           loading={loading}
         />
@@ -178,7 +178,7 @@ export function MyTasksPage() {
           ))}
         </select>
         <div className="mt-toggles">
-          <label className={`mt-switch${userId ? '' : ' disabled'}`} title={userId ? undefined : 'Set your identity to filter by assignee'}>
+          <label className={`mt-switch${userId ? '' : ' disabled'}`} title={userId ? undefined : 'Sign in to filter by assignee'}>
             <input
               type="checkbox"
               checked={mineActive}

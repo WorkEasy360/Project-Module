@@ -12,6 +12,22 @@ server:
   # returned on 201 Created) point at the public address rather than the internal one.
   forward-headers-strategy: framework
 
+  servlet:
+    session:
+      # The server-side session that "Sign in with Workeasy360" creates. Idle timeout: a person who is
+      # away longer than this signs in again (access ending in Workeasy360 is enforced separately, by
+      # the entitlement check, within 15 minutes).
+      timeout: ${PROJECTMODULE_SESSION_IDLE_TIMEOUT:8h}
+      tracking-modes: cookie
+      cookie:
+        # __Host- prefix (only valid with Secure, path / and no Domain): a sibling subdomain cannot plant or
+        # overwrite it. The local profile (plain http) uses a plain name.
+        name: ${PROJECTMODULE_SESSION_COOKIE_NAME:__Host-ep_session}
+        http-only: true
+        same-site: lax
+        # Secure by default. Only the local profile (plain http on localhost) turns it off.
+        secure: ${PROJECTMODULE_SESSION_COOKIE_SECURE:true}
+
 spring:
   application:
     name: project-module
@@ -47,7 +63,8 @@ management:
         include: health,info
   endpoint:
     health:
-      show-details: when-authorized
+      # Never: health is a probe, not a status page for every signed-in customer.
+      show-details: never
 
 springdoc:
   api-docs:
@@ -68,8 +85,16 @@ projectmodule:
     # as the apex domain calling this API.
     #
     # Override with PROJECTMODULE_CORS_ALLOWED_ORIGINS to replace the whole list. Never use a
-    # wildcard: every request carries caller-identity headers.
+    # wildcard. Credentials are off, so a cross-origin page never carries the sign-in session.
     allowed-origins: ${PROJECTMODULE_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:4173,https://workeasy360.com,https://ops.workeasy360.com}
+
+# Sign in with Workeasy360 (docs/workeasy360-sso.md). Environment variables WORKEASY360_ISSUER,
+# WORKEASY360_CLIENT_ID, WORKEASY360_REDIRECT_URI, WORKEASY360_KEY_ID, WORKEASY360_PRIVATE_KEY_FILE
+# (or WORKEASY360_PRIVATE_KEY), WORKEASY360_PRODUCT_CODE and WORKEASY360_POST_LOGOUT_REDIRECT_URI bind to
+# the properties below. Nothing is defaulted here on purpose: outside the local and test profiles the
+# application refuses to start without the required ones.
+workeasy360:
+  product-code: easy_project
 
 logging:
   level:

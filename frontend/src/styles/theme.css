@@ -53,7 +53,7 @@
   --color-border-strong: #353a4d;
   --color-text: #e8eaf1;
   --color-text-muted: #a4aabb;
-  --color-text-faint: #7b8195;
+  --color-text-faint: #848a9e; /* was #7b8195: 4.42:1 on --color-surface, under WCAG AA's 4.5:1 */
   --color-primary: #8b8ff8;
   --color-primary-hover: #a3a6ff;
   --color-primary-bg: rgba(99, 102, 241, 0.18);
@@ -118,7 +118,8 @@ body {
 }
 .sidebar-brand-tagline {
   font-size: 10.5px;
-  color: var(--color-text-faint);
+  /* muted, not faint: faint is below the 4.5:1 text contrast on the sidebar surface */
+  color: var(--color-text-muted);
   letter-spacing: 0.02em;
   margin-top: 2px;
 }
@@ -130,7 +131,7 @@ body {
   padding: 10px 10px 20px;
 }
 .sidebar-section-title {
-  color: var(--color-text-faint);
+  color: var(--color-text-muted); /* --color-text-faint is under WCAG AA's 4.5:1 here */
   padding: 8px 12px 6px;
 }
 .sidebar-link {
@@ -470,4 +471,19 @@ tbody tr:hover {
   .identity-trigger {
     padding: 4px;
   }
+}
+
+.account-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 0;
+  font-size: 13px;
+}
+.account-details dt {
+  color: var(--color-text-muted);
+}
+.account-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }

@@ -1,25 +1,28 @@
-import { getIdentity } from '../context/identityStore'
+import { setAccessProblem, setUnauthenticated } from '../context/sessionStore'
 import type { ProblemDetail } from '../types/common'
+import { buildAccessProblem } from './sessionMessages'
 
 /**
  * Where the API lives, resolved at build time.
  *
- * In a production build the UI is packaged inside the Spring Boot jar and served from the same
- * origin as the API, so an empty base is correct: requests go to `/api/v1/...` on whatever host
- * served the page, and no CORS exchange is involved.
+ * Sign-in is a Workeasy360 session carried by an HttpOnly cookie, and writes carry a CSRF token
+ * read from a cookie, so the UI and the API must share one origin. That is true in the packaged
+ * deployment (the UI is served by the Spring Boot jar) and in development (the Vite dev server
+ * proxies `/api` to the backend, see `vite.config.ts`). The base is therefore empty by default.
  *
- * In development the Vite server (:5173) is a different origin from the backend (:8080), so the
- * absolute address is needed; the backend's CORS allowlist already permits that origin.
- *
- * `VITE_API_BASE_URL` overrides both, for the case where the UI is hosted apart from the API.
+ * `VITE_API_BASE_URL` can still override it, but a cross-origin base cannot carry the session
+ * cookie (requests use `credentials: 'same-origin'`), so only use it behind a same-origin proxy.
  * It holds a public address only — never a secret, because it is embedded in the browser bundle.
  */
-export const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ?? (import.meta.env.DEV ? 'http://localhost:8080' : '')
-).replace(/\/$/, '')
+export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/$/, '')
 
 const BASE_URL = API_BASE_URL
 const API_PREFIX = '/api/v1'
+const SESSION_PATH = '/api/auth/session'
+// The backend names the cookie `__Host-XSRF-TOKEN` when cookies are Secure (https) and `XSRF-TOKEN`
+// otherwise (the local profile over plain http); either one is the token.
+const CSRF_COOKIES = ['__Host-XSRF-TOKEN', 'XSRF-TOKEN']
+const CSRF_HEADER = 'X-XSRF-TOKEN'
 
 /**
  * Thrown for every non-2xx response. Carries the backend's RFC 9457 ProblemDetail so callers can
@@ -97,24 +100,89 @@ function newCorrelationId(): string {
   return `corr-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+/** Reads the CSRF token the backend placed in a script-readable cookie (URL-decoded), or null. */
+export function readCsrfToken(): string | null {
+  if (typeof document === 'undefined') return null
+  for (const part of document.cookie.split(';')) {
+    const eq = part.indexOf('=')
+    if (eq < 0) continue
+    if (!CSRF_COOKIES.includes(part.slice(0, eq).trim())) continue
+    const raw = part.slice(eq + 1).trim()
+    if (!raw) return null
+    try {
+      return decodeURIComponent(raw)
+    } catch {
+      return raw
+    }
+  }
+  return null
+}
+
+/**
+ * Returns the CSRF token for a state-changing request. If the cookie is not there yet (nothing
+ * has been read since the page loaded), a `GET /api/auth/session` makes the backend issue it.
+ */
+export async function ensureCsrfToken(): Promise<string | null> {
+  const existing = readCsrfToken()
+  if (existing) return existing
+  try {
+    await fetch(`${BASE_URL}${SESSION_PATH}`, {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: { Accept: 'application/json' },
+    })
+  } catch {
+    return null
+  }
+  return readCsrfToken()
+}
+
+/**
+ * Tells the session store what an error response means for the whole app: a 401 means the session
+ * is gone, and a `workeasy360_*` 403 means the organization's access to Easy Project has changed.
+ * Everything else is left to the caller as an ordinary error.
+ */
+function reportToSession(status: number, problem: ProblemDetail | null): void {
+  if (status === 401) {
+    setUnauthenticated()
+    return
+  }
+  const code = problem?.code
+  if (status === 403 && typeof code === 'string' && code.startsWith('workeasy360_')) {
+    setAccessProblem(buildAccessProblem(code, problem?.reason))
+  }
+}
+
+function parseProblem(text: string): ProblemDetail | null {
+  if (!text) return null
+  try {
+    const data = JSON.parse(text) as unknown
+    return data && typeof data === 'object' ? (data as ProblemDetail) : null
+  } catch {
+    return null
+  }
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const identity = getIdentity()
+  const method = options.method ?? 'GET'
   const headers: Record<string, string> = {
     'X-Correlation-Id': newCorrelationId(),
   }
-  if (identity) {
-    headers['X-User-Id'] = identity.userId
-    headers['X-Org-Id'] = identity.orgId
-  }
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json'
+  }
+  if (method !== 'GET') {
+    const token = await ensureCsrfToken()
+    if (token) headers[CSRF_HEADER] = token
   }
 
   let response: Response
   try {
     response = await fetch(`${BASE_URL}${API_PREFIX}${path}${buildQuery(options.query)}`, {
-      method: options.method ?? 'GET',
+      method,
       headers,
+      credentials: 'same-origin',
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
     })
   } catch (cause) {
@@ -126,14 +194,43 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   }
 
   const text = await response.text()
-  const data = text ? (JSON.parse(text) as unknown) : undefined
 
   if (!response.ok) {
-    const problem = (data as ProblemDetail | undefined) ?? null
+    const problem = parseProblem(text)
+    reportToSession(response.status, problem)
     throw new ApiError(response.status, problem, `Request failed with status ${response.status}`)
   }
 
-  return data as T
+  return (text ? (JSON.parse(text) as unknown) : undefined) as T
+}
+
+/**
+ * Calls an `/api/auth/*` endpoint (session check, logout). These live outside `/api/v1`, so they
+ * have their own small helper. A 401 here is an answer ("not signed in"), not a failure.
+ */
+export async function authRequest<T>(path: string, method: 'GET' | 'POST'): Promise<{ status: number; data: T | null }> {
+  const headers: Record<string, string> = { Accept: 'application/json', 'X-Correlation-Id': newCorrelationId() }
+  if (method !== 'GET') {
+    const token = await ensureCsrfToken()
+    if (token) headers[CSRF_HEADER] = token
+  }
+  let response: Response
+  try {
+    response = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      credentials: 'same-origin',
+      cache: 'no-store',
+    })
+  } catch (cause) {
+    throw new NetworkError(cause)
+  }
+  const text = response.status === 204 ? '' : await response.text()
+  if (response.status === 401) return { status: 401, data: null }
+  if (!response.ok) {
+    throw new ApiError(response.status, parseProblem(text), `Request failed with status ${response.status}`)
+  }
+  return { status: response.status, data: text ? (JSON.parse(text) as T) : null }
 }
 
 export const api = {

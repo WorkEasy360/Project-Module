@@ -22,4 +22,8 @@ export interface ProblemDetail {
   instance?: string
   traceId?: string
   errors?: FieldViolation[]
+  /** Machine-readable code on some 403s: `workeasy360_*` (entitlement) or `csrf_invalid`. */
+  code?: string
+  /** Why access ended, alongside `workeasy360_access_ended` (expired, not_entitled, suspended, ...). */
+  reason?: string
 }

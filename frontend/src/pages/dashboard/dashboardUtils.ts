@@ -160,7 +160,7 @@ export function filterAttention(list: AttentionTask[], f: AttentionFilters, sort
   })
 }
 
-// ---------- My Tasks (derived; scoped to the loaded projects and the current identity) ----------
+// ---------- My Tasks (derived; scoped to the loaded projects and the signed-in user) ----------
 
 export interface MyTaskCounts {
   overdue: number

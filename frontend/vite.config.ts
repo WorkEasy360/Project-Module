@@ -2,18 +2,27 @@
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
+// The UI and the API must share one origin: the sign-in session is an HttpOnly cookie and writes
+// carry a CSRF token. In production the Spring Boot jar serves both. In development the Vite
+// server forwards `/api` (and nothing else) to the backend. `changeOrigin` is deliberately left
+// off so the Host header, and therefore the cookies and the sign-in redirects, stay on the
+// address the browser used (localhost:5173 or localhost:4173).
+const backendProxy = {
+  '/api': { target: 'http://localhost:8080' },
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   server: {
-    // The backend's CORS allowlist is exactly 5173 (dev) and 4173 (preview). If 5173 is taken,
-    // fail loudly instead of silently moving to 5174 and producing confusing CORS errors.
     port: 5173,
     strictPort: true,
+    proxy: backendProxy,
   },
   preview: {
     port: 4173,
     strictPort: true,
+    proxy: backendProxy,
   },
   test: {
     environment: 'jsdom',

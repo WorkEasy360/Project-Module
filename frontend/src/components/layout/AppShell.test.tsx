@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { SidebarProvider } from '../../context/SidebarContext'
 import { setCollapsed } from '../../context/sidebarStore'
-import { IdentityProvider } from '../../context/IdentityContext'
+import { SessionProvider } from '../../context/SessionContext'
+import { signInAs } from '../../test/session'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 
@@ -25,12 +26,12 @@ function mockViewport(isMobile: boolean) {
 function renderShell() {
   return render(
     <MemoryRouter initialEntries={['/dashboard']}>
-      <IdentityProvider>
+      <SessionProvider autoLoad={false}>
         <SidebarProvider>
           <Header />
           <Sidebar />
         </SidebarProvider>
-      </IdentityProvider>
+      </SessionProvider>
     </MemoryRouter>,
   )
 }
@@ -38,6 +39,7 @@ function renderShell() {
 describe('AppShell — hamburger / sidebar navigation', () => {
   beforeEach(() => {
     setCollapsed(false)
+    signInAs('11111111-2222-4333-8444-555555555555', { name: 'Ada Lovelace' })
   })
 
   afterEach(() => {

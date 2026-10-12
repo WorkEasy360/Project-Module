@@ -53,6 +53,20 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!--
+          Sign in with Workeasy360 (docs/workeasy360-sso.md): Spring Security protects the API
+          with a server-side session, and its OAuth2 client carries the OpenID Connect protocol
+          (authorization code + PKCE, private_key_jwt client authentication, ID token validation).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
+
         <!-- Actuator: health / metrics -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -87,6 +101,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

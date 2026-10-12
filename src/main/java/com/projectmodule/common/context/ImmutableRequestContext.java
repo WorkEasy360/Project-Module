@@ -25,9 +25,8 @@ public record ImmutableRequestContext(
     /**
      * A context with no identity, used when a request reaches the module without one.
      *
-     * <p>Requests are not rejected here. Whether identity is required is decided by
-     * authorization at the point of use, which keeps unauthenticated access to open endpoints
-     * such as health checks possible without special cases.
+     * <p>Requests are not rejected here. The security chain decides which paths need a session, and
+     * authorization decides at the point of use whether an identity is required.
      */
     public static ImmutableRequestContext anonymous(String correlationId) {
         return new ImmutableRequestContext(

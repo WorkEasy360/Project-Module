@@ -1,5 +1,6 @@
 import { Navigate, Route, HashRouter, Routes } from 'react-router-dom'
-import { IdentityProvider } from './context/IdentityContext'
+import { SessionProvider } from './context/SessionContext'
+import { ErrorBoundary } from './components/common/ErrorBoundary'
 import { ThemeProvider } from './context/ThemeContext'
 import { AppLayout } from './components/layout/AppLayout'
 import { SignInPage } from './pages/auth/SignInPage'
@@ -43,8 +44,9 @@ import { AdvancedFeaturesPage } from './pages/features/AdvancedFeaturesPage'
 
 function App() {
   return (
+    <ErrorBoundary>
     <ThemeProvider>
-      <IdentityProvider>
+      <SessionProvider>
         <HashRouter>
           <Routes>
             <Route path="sign-in" element={<SignInPage />} />
@@ -94,8 +96,9 @@ function App() {
             </Route>
           </Routes>
         </HashRouter>
-      </IdentityProvider>
+      </SessionProvider>
     </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useProjectWorkspace } from '../../../context/ProjectWorkspaceContext'
-import { useIdentity } from '../../../context/IdentityContext'
+import { useSession } from '../../../context/SessionContext'
 import { useAsyncData } from '../../../hooks/useAsyncData'
 import { commentsApi } from '../../../api/comments'
 import { LoadingState } from '../../../components/common/LoadingState'
@@ -14,7 +14,7 @@ import type { Comment } from '../../../types/work'
 
 export function CommentsTab() {
   const { project, can } = useProjectWorkspace()
-  const { identity } = useIdentity()
+  const { user } = useSession()
   const [page, setPage] = useState(0)
   const [newBody, setNewBody] = useState('')
   const [postError, setPostError] = useState<string | null>(null)
@@ -80,7 +80,7 @@ export function CommentsTab() {
       {data && data.content.length > 0 && (
         <ul className="list-plain">
           {data.content.map((c) => {
-            const isAuthor = identity?.userId === c.authorId
+            const isAuthor = user?.id === c.authorId
             const isEditing = editing?.id === c.id
             return (
               <li key={c.id} className="comment-item">

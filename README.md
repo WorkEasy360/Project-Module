@@ -42,8 +42,8 @@ The `local` profile defaults to `jdbc:postgresql://localhost:5432/projectmodule`
 `postgres`; create that database once (`CREATE DATABASE projectmodule;`). Flyway applies all
 migrations in `src/main/resources/db/migration` on startup.
 
-Health check: `GET http://localhost:8080/actuator/health` → `{"status":"UP"}`.
-OpenAPI UI: `http://localhost:8080/swagger-ui.html`.
+Health check: `GET http://localhost:8080/actuator/health` → `{"status":"UP"}` (public).
+OpenAPI UI: `http://localhost:8080/swagger-ui.html` (needs a signed-in session in the same browser).
 
 ### Backend configuration (all environments)
 
@@ -53,6 +53,9 @@ OpenAPI UI: `http://localhost:8080/swagger-ui.html`.
 | `PROJECTMODULE_DB_USERNAME` | yes (default profile) | Database user |
 | `PROJECTMODULE_DB_PASSWORD` | yes | Database password — never commit it |
 | `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed to call the API. Defaults to the Vite dev/preview ports (`http://localhost:5173,http://localhost:4173`), which is what the `npm run dev` workflow needs. A packaged deployment serves the UI from the same origin as the API, so it needs no CORS and no value here. Set it only when a frontend is hosted on a different origin. |
+| `WORKEASY360_ISSUER`, `WORKEASY360_CLIENT_ID`, `WORKEASY360_REDIRECT_URI`, `WORKEASY360_KEY_ID`, `WORKEASY360_PRIVATE_KEY_FILE` (or `WORKEASY360_PRIVATE_KEY`) | yes, outside the `local`/`test` profiles | Sign in with Workeasy360. The application **refuses to start** without them. See [`docs/workeasy360-sso.md`](docs/workeasy360-sso.md). |
+| `WORKEASY360_PRODUCT_CODE`, `WORKEASY360_POST_LOGOUT_REDIRECT_URI` | no | The product code the ID token must carry (default `easy_project`); the registered post-logout URI that enables "sign out of Workeasy360 too" |
+| `PROJECTMODULE_SESSION_IDLE_TIMEOUT`, `PROJECTMODULE_SESSION_COOKIE_SECURE` | no | Session idle timeout (default `8h`); `Secure` cookie flag (default `true`; the `local` profile sets `false`) |
 | `SPRING_PROFILES_ACTIVE` | no | `local` for the developer profile above |
 
 ### Backend tests
@@ -96,18 +99,25 @@ Then open <http://localhost:8080/> — the UI and the API are on one origin, exa
 deployed environment. Add `-DskipFrontend=true` for a faster backend-only build; the packaged
 application then has no UI and the tests that serve it are skipped rather than passing vacuously.
 
-The app has no login screen by design: the backend expects an upstream gateway to supply
-`X-User-Id` and `X-Org-Id` headers. The frontend asks for those two UUIDs once ("Set identity",
-top-right) and sends them on every request. See [`frontend/README.md`](frontend/README.md) for
-the architecture, the feature registry (how to add a screen without touching navigation), and
-the full route list.
+People sign in with **Workeasy360**: the app has no password, no user-id form and no identity
+headers. Open the app, choose "Continue with Workeasy360" (or arrive from the Workeasy360 launcher),
+and the backend creates a server-side session (`HttpOnly`, `SameSite=Lax`, CSRF-protected). While the
+session lasts, Easy Project keeps asking Workeasy360 whether the person's organization may still use it.
+The backend refuses to start outside the `local` and `test` profiles without the `WORKEASY360_*`
+settings. Everything - how sign-in works, the variables, registration with
+`manage.py connect_product_sso --product easy_project ...`, entitlement behaviour, sign-out - is in
+[`docs/workeasy360-sso.md`](docs/workeasy360-sso.md). See [`frontend/README.md`](frontend/README.md) for
+the architecture, the feature registry (how to add a screen without touching navigation), and the full
+route list.
 
 ## Identity, authorization and organizations
 
-Users and organizations are external, opaque identifiers (`ExternalUserId`, `OrganizationId`).
-Authorization is per project via `ProjectMember` roles (`OWNER`, `MANAGER`, `MEMBER`,
-`VIEWER`); every request is checked server-side. The module never stores or authenticates
-users itself.
+Users and organizations are external, opaque identifiers (`ExternalUserId`, `OrganizationId`). They
+come from the verified Workeasy360 sign-in: the organization is the ID token's `organization_id`, and
+the user id is the token's `sub` when that is a UUID (otherwise a generated one, remembered in
+`federated_identities`). Authorization is per project via `ProjectMember` roles (`OWNER`, `MANAGER`,
+`MEMBER`, `VIEWER`); every request is checked server-side. The module stores no passwords and
+authenticates nobody itself - it verifies Workeasy360's assertion and holds the session.
 
 ## Deployment notes
 

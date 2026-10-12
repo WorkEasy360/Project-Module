@@ -21,10 +21,10 @@ public class OpenApiConfiguration {
             notifications and chat are owned by other modules and are referenced here by
             opaque identifier.
 
-            Caller identity is supplied by the upstream gateway in the X-User-Id and X-Org-Id
-            headers. These are a trust contract with the gateway, not an authentication scheme
-            offered by this module, and are deliberately not declared as an OpenAPI security
-            scheme.
+            People sign in with Workeasy360; the API is used with the server-side session that
+            sign-in creates (an HttpOnly cookie, plus the X-XSRF-TOKEN header on writes). The
+            session is not declared as an OpenAPI security scheme because it is established by
+            a browser redirect flow, not by credentials sent to this API (docs/workeasy360-sso.md).
 
             Errors are returned as RFC 9457 problem documents.""";
 
