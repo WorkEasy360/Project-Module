@@ -7,7 +7,8 @@ Easy Project has no sign-in of its own. People sign in with Workeasy360 (the reg
 document is everything you need to register the product, configure a deployment, and understand what you
 will see in production.
 
-Contents: [How sign-in works](#how-sign-in-works) - [Who is who](#who-is-who-the-provisioning-rules) -
+Contents: [How sign-in works](#how-sign-in-works) - [Opening Easy Project directly](#opening-easy-project-directly-automatic-sign-in) -
+[Who is who](#who-is-who-the-provisioning-rules) -
 [Registering Easy Project](#registering-easy-project-in-workeasy360) - [Configuration](#configuration) -
 [Entitlement while a session lasts](#entitlement-while-a-session-lasts) -
 [Background work](#background-work) - [Sign-out](#sign-out) - [Account switching](#account-switching) -
@@ -23,9 +24,13 @@ Workeasy360 repository). The code is in `com.projectmodule.security`.
 
 1. The person opens Easy Project from the Workeasy360 launcher, which sends them to
    `https://ops.workeasy360.com/?organization=<uuid>`. That always starts a sign-in for that organization,
-   even if they already have a session (they picked that organization). Opening `/` without an
-   organization shows the app, which shows its sign-in page; **the sign-in page never starts Workeasy360
-   sign-in by itself** - the person chooses "Continue with Workeasy360".
+   even if they already have a session (they picked that organization). Or they type
+   `https://ops.workeasy360.com/` (or any route, such as `/#/projects/123`): with **no Easy Project session at
+   all**, the app starts the sign-in itself, with no organization hint, and Workeasy360 completes it silently
+   when it already has a session for them (or asks, or shows its own sign-in; see
+   [Opening Easy Project directly](#opening-easy-project-directly-automatic-sign-in)). **The sign-in page never
+   starts Workeasy360 sign-in by itself**, and neither does anything after a sign-out of Easy Project in
+   that browser: there the person chooses "Continue with Workeasy360".
 2. `GET /api/auth/workeasy360/start?organization=<uuid>&next=<route>` creates `state`, `nonce` and a PKCE
    S256 challenge, keeps them (with the organization asked for and where to land) **server-side in the
    browser's session, for ten minutes and one use**, and redirects to Workeasy360's authorization endpoint.
@@ -59,7 +64,85 @@ The app uses hash routes, so `next` is a route written as a path, such as `/proj
 browser is sent to `/#/projects/123`. It is validated as a same-site path: it must start with a single `/`
 (not `//`), contain no backslash, whitespace, control character or `#`, be at most 2,048 characters, and not
 be an authentication page (`/sign-in`) or an API path; percent-encoded slashes, backslashes and control
-characters are refused too. Anything else lands on the home page.
+characters are refused too. Anything else lands on the home page. The single-page app applies the same rules before it ever builds a
+start URL (`safeNextRoute` in `frontend/src/api/session.ts`), so a hostile value is not forwarded at all, and
+the server checks again.
+
+## Opening Easy Project directly (automatic sign-in)
+
+A person who is already signed in to Workeasy360 and types `https://ops.workeasy360.com/` arrives signed in,
+without Easy Project's sign-in page and without a password (Workeasy360 product integration guide, section
+6b). Easy Project has no password sign-in of its own, so whenever Workeasy360 is configured it is SSO-only
+and the rule applies in full.
+
+**Start, do not ask.** The server cannot see the route (it is in the `#` fragment), so the single-page app does
+this. `SessionProvider` asks `GET /api/auth/session`; if the answer is "no session" (401), `AppLayout` renders
+`SignedOutGate`, which navigates the browser (top-level, never `fetch`) to
+
+```
+/api/auth/workeasy360/start?next=<the route that was asked for>
+```
+
+and shows a neutral "Signing you in with Workeasy360..." screen (one `h1`, no form, no link, text in the
+theme's text colours on the solid card colour, `aria-busy` while waiting) while the browser leaves. The start
+replaces the current history entry (`location.replace`), so Back from Workeasy360's page does not land on a page
+that bounces forward again; the explicit "Continue with Workeasy360" link is an ordinary link and keeps its
+entry. If the browser has not left after about 5 seconds, the screen adds "Continue with Workeasy360" (the same
+start URL) and "Go to the sign-in page", so a stalled navigation is not a dead end. There is no organization
+hint.
+Workeasy360 then completes the sign-in silently when it has a session and the person's preference is
+Automatic (the default), asks first when it is "Ask me each time", and shows its central sign-in when it has
+no session; the callback lands on `next`. `/` asks for `next=/` (then the home route, the dashboard); a deep
+route such as `https://ops.workeasy360.com/#/projects/6f1b2c3d-.../tasks?status=OPEN` comes back to exactly
+that route. The launcher's `?organization=<uuid>` is handled by the server before any of this, unchanged.
+
+**Never by itself.** The app shows the sign-in page (with "Continue with Workeasy360") instead of starting when:
+
+| Case | How it is detected |
+|---|---|
+| The sign-in route itself, whatever its query, including `?sso_error=` | `/sign-in` is outside the guard; `SignInPage` never starts anything. |
+| The person signed out of Easy Project in this browser and has not signed in since | **The signed-out marker**: a session cookie. Set on the response to `POST /api/auth/logout` (so by both "Sign out of Easy Project" and the first half of "Sign out of Easy Project and Workeasy360"), cleared by a successful sign-in, never by a failed one. |
+| This browser already started automatically less than 60 seconds ago and still has no session | **The loop guard**: the time of the last automatic start, in `sessionStorage` (`ep.autoSignInStartedAt`, per tab; a script-set session cookie `ep_auto_start_at` when storage is unavailable). Forgotten when a session read finds a session. |
+| The session check itself failed (server unreachable, an error) | That is "could not tell", not "no session"; the sign-in page shows the reason. |
+
+**The marker.** Name `__Host-ep_signed_out` over https and `ep_signed_out` over plain http (the `local` profile),
+the same rule as the other cookies; value `1`; path `/`; `SameSite=Lax`; `Secure` over https; **no `Max-Age`**
+(it ends with the browser session and is shared by every tab); **not `HttpOnly`**, because the app reads it. It
+holds nothing and grants nothing: a planted marker can only make the app show its sign-in page instead of
+starting a sign-in, and it is a user-experience guard, not an access control. Over https the `__Host-` prefix
+stops a sibling `*.workeasy360.com` site from planting it, and **the app honours only the `__Host-` name on an
+https page**: an unprefixed `ep_signed_out` planted with `Domain=workeasy360.com` would never be cleared by a
+sign-in here, so it is ignored (over plain http, the `local` profile, both names are read). Code: `SignedOutMarker` (server), `signedOutMarkerPresent` in
+`frontend/src/api/autoSignIn.ts` (app). **This matters for "Sign out of Easy Project and Workeasy360":**
+Easy Project's registered post-logout address is its root `https://ops.workeasy360.com/`. After the person
+confirms at Workeasy360 the browser returns to `/`, finds the marker, and shows Easy Project's sign-in page,
+instead of bouncing straight back into a sign-in at Workeasy360 (which would be a silent sign-in right after a
+sign-out, or Workeasy360's sign-in page for a person who just left it).
+
+| After... | What `/` shows |
+|---|---|
+| Sign out of Easy Project (product only) | The sign-in page. Workeasy360's session is untouched; one click on "Continue with Workeasy360" signs back in. |
+| Sign out of Easy Project and Workeasy360 | The sign-in page (the marker is already set when Workeasy360 sends the browser back to `/`). |
+| The session expiring or the server restarting (no sign-out) | A sign-in starts by itself, for the route the person was on. |
+| A sign-in (including from the launcher) | The marker is gone, so the next visit with no session starts automatically again. |
+
+**Loop guard.** An automatic start writes the time before navigating. If the browser comes back with still no
+session (a dropped cookie, a failure that was not reported as `sso_error`) within 60 seconds, the app shows the
+sign-in page instead of starting again.
+
+**Sign-out in progress.** The server ends the session before the 204 that carries the marker reaches the
+browser, so a call already in flight can get its 401 first. The app therefore notes "signing out" (in memory,
+for the life of the page) **before** it sends `POST /api/auth/logout`, and the route guard treats that as the
+marker; if the logout request fails, the note is dropped (the person is still signed in). The server-set cookie
+stays the durable marker.
+
+**A session whose access ended keeps its explanation.** Automatic start happens only for "no session at all":
+a session that exists but whose access ended (`workeasy360_access_ended`, `workeasy360_access_unverified`) keeps
+the "Easy Project access has ended" screen; nothing replaces a session silently.
+
+**API calls are never redirected.** `/api/**` answers 401 JSON as before; the app's API client never
+navigates. Only the page's route guard starts sign-in. A 401 in the middle of a visit (an idle timeout, a
+restart) leaves the session and starts a sign-in for the page the person is on.
 
 ## Who is who: the provisioning rules
 
@@ -199,12 +282,14 @@ denied; `EntitlementService` is the place to extend.
 ## Sign-out
 
 - **Sign out of Easy Project** - `POST /api/auth/logout` (CSRF-protected) ends the Easy Project session
-  server-side. Workeasy360 is untouched.
+  server-side and leaves the [signed-out marker](#opening-easy-project-directly-automatic-sign-in), so the next
+  visit shows the sign-in page instead of signing the person straight back in. Workeasy360 is untouched.
 - **Sign out of Easy Project and Workeasy360** - offered only when `WORKEASY360_POST_LOGOUT_REDIRECT_URI` is
   set. The app ends the session as above, then navigates to `GET /api/auth/workeasy360/logout`, which
   redirects to Workeasy360's `end_session_endpoint?client_id=...&post_logout_redirect_uri=...` (Workeasy360
   asks the person to confirm). That endpoint changes nothing in Easy Project - a link to it cannot sign anyone
-  out - and without the setting, or without a published end-session endpoint, it redirects to `/`.
+  out - and without the setting, or without a published end-session endpoint, it redirects to `/`. The
+  marker was left by the logout request, before the browser left, so the return to `/` shows the sign-in page.
 - There is **no** front-channel or back-channel logout: ending a Workeasy360 session does not end an Easy
   Project session. Access ending is handled by the entitlement check, within 15 minutes.
 
@@ -221,15 +306,17 @@ session as it was.
 - **Sessions and pending sign-ins are in memory, per instance.** Run **one instance**, or put a load balancer
   with **sticky sessions** in front of several; a pending sign-in (state, nonce, PKCE verifier) lives in the
   browser's session, so a callback that reaches a different instance finds nothing and ends in `expired`.
-  **A deploy or restart signs everyone out**: the next page load shows the sign-in page, and one click on
-  "Continue with Workeasy360" brings the person back (Workeasy360's own session is untouched, so it does not
-  ask for a password again). Entitlement answers are in memory too and are simply asked again.
+  **A deploy or restart signs everyone out**: the next page load starts a sign-in by itself (a restart is
+  not a sign-out, so there is no marker), and Workeasy360's own session, which is untouched, brings the person
+  back to the page they were on without a password. Entitlement answers are in memory too and are simply asked
+  again.
 - **Anonymous requests create no session.** A browser only gets a session cookie when it starts a sign-in, and
   that pre-sign-in session lives **10 minutes** (the life of the flow). The signed-in session is a new one
   with the 8 h idle timeout (`PROJECTMODULE_SESSION_IDLE_TIMEOUT`).
-- **Cookies are `__Host-` prefixed over https** (`__Host-ep_session`, `__Host-XSRF-TOKEN`): `Secure`, path `/`,
-  no `Domain`, so a sibling `*.workeasy360.com` site cannot plant or replace them. The `local` profile (plain
-  http, where the prefix is not allowed) uses `ep_session` and `XSRF-TOKEN`. Do not set
+- **Cookies are `__Host-` prefixed over https** (`__Host-ep_session`, `__Host-XSRF-TOKEN`,
+  `__Host-ep_signed_out`): `Secure`, path `/`, no `Domain`, so a sibling `*.workeasy360.com` site cannot plant
+  or replace them. The `local` profile (plain http, where the prefix is not allowed) uses `ep_session`,
+  `XSRF-TOKEN` and `ep_signed_out`. Do not set
   `PROJECTMODULE_SESSION_COOKIE_SECURE=false` in production: the browser would reject the prefixed cookie.
 - **Writes must be same-origin.** A non-GET request whose `Origin` is present and is not this origin, or whose
   `Sec-Fetch-Site` is anything but `same-origin`/`none`, is refused (403 `origin_not_allowed`) before CSRF is

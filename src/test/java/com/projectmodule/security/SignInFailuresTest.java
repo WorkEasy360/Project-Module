@@ -53,6 +53,13 @@ class SignInFailuresTest extends SsoFlowTestBase {
                         s -> s.audience = List.of(FakeWorkeasy360.CLIENT_ID, "some-other-client")),
                 token("token minted for another product's client (cross-product)", "refused",
                         s -> s.audience = "easy-crm-client"),
+                token("azp names another client (aud is this client)", "refused",
+                        s -> s.extra.put("azp", "some-other-client")),
+                token("azp names another client and aud lists two", "refused", s -> {
+                    s.audience = List.of(FakeWorkeasy360.CLIENT_ID, "some-other-client");
+                    s.extra.put("azp", "some-other-client");
+                }),
+                token("azp that is empty", "refused", s -> s.extra.put("azp", "")),
                 token("wrong issuer", "refused", s -> s.issuer = "https://evil.example"),
                 token("issuer with a trailing slash", "refused", s -> s.issuer = s.issuer + "/"),
                 token("wrong product code", "wrong_product", s -> s.productCode = "easy_crm"),
@@ -91,6 +98,15 @@ class SignInFailuresTest extends SsoFlowTestBase {
         MvcResult result = signInFresh(null, change);
 
         assertFailedClosed(result, expected);
+    }
+
+    @Test
+    @DisplayName("an azp that names this client is fine (the other direction of the azp check)")
+    void azpOfThisClientIsAccepted() throws Exception {
+        MvcResult result = signInFresh(null, s -> s.extra.put("azp", FakeWorkeasy360.CLIENT_ID));
+
+        assertThat(ssoError(result)).isNull();
+        assertThat(sessionOf(result)).isNotNull();
     }
 
     @Test

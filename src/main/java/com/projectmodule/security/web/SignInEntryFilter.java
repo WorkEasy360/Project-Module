@@ -22,7 +22,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
  *   <li><strong>The launcher.</strong> {@code GET /?organization=<uuid>} always starts a sign-in for that
  *       organization, even when a session exists (the person picked that organization in the Workeasy360
  *       launcher). A value that is not a UUID is ignored and the app is served as usual. A plain {@code /}
- *       never starts anything: the sign-in page does not auto-start Workeasy360 either.
+ *       is not started here either: the server cannot see the route in the {@code #} fragment, so the
+ *       single-page app does it (its route guard, when there is no session and nothing forbids it: integration
+ *       guide section 6b), carrying the route it was opened on as {@code next}. The sign-in page itself never
+ *       starts a sign-in.
  *   <li><strong>Start pre-flight.</strong> Spring would answer a failed discovery with a bare 500. The
  *       pre-flight asks for the registration first, so a Workeasy360 that is down (or a product that is not
  *       configured) becomes the sign-in error {@code unavailable} on the sign-in page.

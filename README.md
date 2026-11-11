@@ -100,8 +100,9 @@ deployed environment. Add `-DskipFrontend=true` for a faster backend-only build;
 application then has no UI and the tests that serve it are skipped rather than passing vacuously.
 
 People sign in with **Workeasy360**: the app has no password, no user-id form and no identity
-headers. Open the app, choose "Continue with Workeasy360" (or arrive from the Workeasy360 launcher),
-and the backend creates a server-side session (`HttpOnly`, `SameSite=Lax`, CSRF-protected). While the
+headers. Open the app (a person already signed in to Workeasy360 arrives signed in; after a sign-out the app
+shows "Continue with Workeasy360" instead), or arrive from the Workeasy360 launcher;
+the backend then creates a server-side session (`HttpOnly`, `SameSite=Lax`, CSRF-protected). While the
 session lasts, Easy Project keeps asking Workeasy360 whether the person's organization may still use it.
 The backend refuses to start outside the `local` and `test` profiles without the `WORKEASY360_*`
 settings. Everything - how sign-in works, the variables, registration with

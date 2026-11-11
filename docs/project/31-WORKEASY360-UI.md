@@ -18,7 +18,7 @@ backend has no such data or capability. Nothing in the UI is simulated.
 
 | Reference | Implementation | Why |
 |---|---|---|
-| Email + password login | **Omitted.** "Already a Workeasy360 user?" with a **Continue with Workeasy360** link (`pages/auth/SignInPage.tsx`) | Easy Project is registered `sso_only`: people sign in with Workeasy360, there is no password here. The link starts `GET /api/auth/workeasy360/start?next=<route>`; the page never starts sign-in by itself. |
+| Email + password login | **Omitted.** "Already a Workeasy360 user?" with a **Continue with Workeasy360** link (`pages/auth/SignInPage.tsx`) | Easy Project is registered `sso_only`: people sign in with Workeasy360, there is no password here. The link starts `GET /api/auth/workeasy360/start?next=<route>`; the sign-in page never starts sign-in by itself. Opening any other route with no session starts it automatically (`SignedOutGate`), except after a sign-out here, within 60 s of a previous automatic start, or when the session check failed: see `docs/workeasy360-sso.md`. |
 | "Success animation on valid login" | Sign-in happens at Workeasy360 and the browser returns to the app signed in | The session is created by the backend (`docs/workeasy360-sso.md`); failures come back as `/#/sign-in?sso_error=<code>` and are explained on the page. |
 | "Remember me" | **Omitted** | The server-side session has an idle timeout (default 8 hours); nothing identity-related is stored in the browser. |
 | Continue with Google / Microsoft | **Omitted** | Workeasy360 is the one identity provider; it offers whatever sign-in methods the organization allows. |

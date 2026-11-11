@@ -15,6 +15,7 @@ import com.projectmodule.security.oidc.Workeasy360Provider;
 import com.projectmodule.security.web.CsrfSupport;
 import com.projectmodule.security.web.SignInEntryFilter;
 import com.projectmodule.security.web.SignInHandlers;
+import com.projectmodule.security.web.SignedOutMarker;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -139,6 +140,8 @@ public class SecurityConfiguration {
             @Value("${server.servlet.session.cookie.name:JSESSIONID}") String sessionCookieName) throws Exception {
 
         SecurityContextRepository contexts = new HttpSessionSecurityContextRepository();
+        // Left by both sign-outs, cleared by a sign-in: keeps the app from signing a person straight back in.
+        SignedOutMarker signedOut = new SignedOutMarker(secureCookies);
 
         CookieCsrfTokenRepository csrfTokens = CookieCsrfTokenRepository.withHttpOnlyFalse();
         // Over https the cookie carries the __Host- prefix: the browser then refuses one set by a sibling
@@ -208,13 +211,14 @@ public class SecurityConfiguration {
                                 .userService(request -> {
                                     throw new OAuth2AuthenticationException(new OAuth2Error("refused"));
                                 }))
-                        .successHandler(SignInHandlers.success(contexts))
+                        .successHandler(SignInHandlers.success(contexts, signedOut))
                         .failureHandler(SignInHandlers.failure()))
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
                         .invalidateHttpSession(true)
                         .clearAuthentication(true)
                         .deleteCookies(sessionCookieName)
+                        .addLogoutHandler(signedOut.onLogout())
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
                 .addFilterAfter(new CsrfSupport.CsrfCookieFilter(), BasicAuthenticationFilter.class)
                 .addFilterBefore(new NoStoreFilter(), CsrfFilter.class)

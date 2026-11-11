@@ -36,6 +36,48 @@ class SignInFlowTest extends SsoFlowTestBase {
     }
 
     @Test
+    @DisplayName("a hostile Host or X-Forwarded-Host never changes the redirect_uri: not on start, not at the token endpoint")
+    void redirectUriIsNeverBuiltFromTheRequest() throws Exception {
+        MvcResult start = mvc.perform(withHostileHost(get("/api/auth/workeasy360/start").param("next", "/projects/1")))
+                .andReturn();
+
+        String location = start.getResponse().getHeader("Location");
+        assertThat(start.getResponse().getStatus()).isEqualTo(302);
+        assertThat(location).startsWith(FAKE.issuer());
+        assertThat(location).doesNotContain("evil.example");
+        FakeWorkeasy360.Authorization request = FAKE.parse(location);
+        assertThat(request.redirectUri()).isEqualTo(FakeWorkeasy360.REDIRECT_URI);
+
+        // The callback, also arriving under a hostile Host, exchanges the code with the registered URI.
+        MockHttpSession session = (MockHttpSession) start.getRequest().getSession(false);
+        String code = FAKE.issueCode(request, spec -> spec.subject = UUID.randomUUID().toString());
+        mvc.perform(withHostileHost(get("/api/auth/callback/workeasy360").param("code", code)
+                .param("state", request.state()).session(session))).andReturn();
+
+        assertThat(FAKE.tokenRequests).isNotEmpty();
+        for (var tokenRequest : FAKE.tokenRequests) {
+            assertThat(tokenRequest.get("redirect_uri")).isEqualTo(FakeWorkeasy360.REDIRECT_URI);
+        }
+        assertThat(FAKE.assertionProblems).isEmpty();
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder withHostileHost(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder builder) {
+        return builder
+                .header("Host", "evil.example:8443")
+                .header("X-Forwarded-Host", "evil.example")
+                .header("X-Forwarded-Proto", "http")
+                .header("X-Forwarded-Port", "8443")
+                .header("Forwarded", "host=evil.example;proto=http")
+                .with(request -> {
+                    request.setServerName("evil.example");
+                    request.setServerPort(8443);
+                    request.setScheme("http");
+                    return request;
+                });
+    }
+
+    @Test
     @DisplayName("a full sign-in creates a session pinned to the token's organization and lands on the app")
     void fullSignIn() throws Exception {
         String subject = UUID.randomUUID().toString();

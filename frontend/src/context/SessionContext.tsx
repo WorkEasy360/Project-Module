@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { loadSession, logoutRequest, navigateTo, workeasy360LogoutUrl } from '../api/session'
+import { abortSigningOut, beginSigningOut } from '../api/autoSignIn'
 import {
   clearAccessProblem,
   getSessionState,
@@ -52,14 +53,21 @@ export function SessionProvider({ children, autoLoad = true }: { children: React
   const refresh = useCallback(() => loadSession(), [])
   const dismissAccessProblem = useCallback(() => clearAccessProblem(), [])
   const signOut = useCallback(async () => {
-    await logoutRequest()
+    // Before the request: a 401 for a call already in flight can land before the logout's own answer, and
+    // the route guard must not take that for "no session" (see beginSigningOut).
+    beginSigningOut()
+    try {
+      await logoutRequest()
+    } catch (error) {
+      abortSigningOut() // still signed in: nothing to suppress
+      throw error
+    }
     setUnauthenticated()
   }, [])
   const signOutEverywhere = useCallback(async () => {
-    await logoutRequest()
-    setUnauthenticated()
+    await signOut()
     navigateTo(workeasy360LogoutUrl())
-  }, [])
+  }, [signOut])
 
   const value = useMemo<SessionContextValue>(
     () => ({

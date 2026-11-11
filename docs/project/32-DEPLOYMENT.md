@@ -40,8 +40,8 @@ Workeasy360 (see `docs/workeasy360-sso.md`).
 Sessions and pending sign-ins are held in memory by the instance that created them. Run **a single instance**
 (as this environment does), or enable **sticky sessions** on the load balancer if you ever scale out; a request
 that reaches a different instance has no session and a sign-in callback that reaches a different instance
-finds no pending flow (`expired`). Every deploy or restart therefore **signs everyone out**: they see the
-sign-in page and one click on "Continue with Workeasy360" brings them back, without another password
+finds no pending flow (`expired`). Every deploy or restart therefore **signs everyone out**: their next page
+load starts a sign-in by itself and brings them back to the page they were on, without another password
 (Workeasy360's own session continues). See `docs/workeasy360-sso.md`, "Sessions, deployment shape and edge
 protection", which also asks for rate limiting of `/api/auth/**` at Cloudflare.
 

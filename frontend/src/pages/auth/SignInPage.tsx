@@ -12,6 +12,9 @@ import '../../styles/signin.css'
  * Sign-in. Easy Project has no passwords or user ids of its own: people sign in with Workeasy360.
  * "Continue with Workeasy360" is a plain link — a top-level navigation to the backend, which
  * performs the OIDC redirect — and is never followed automatically; the person always chooses.
+ * This route is outside the guard that starts sign-in by itself (`SignedOutGate`), so it never does,
+ * whatever its query. (Opening any other route with no session does; after a sign-out, a recent
+ * automatic start or a failed session check, that guard sends the person here instead.)
  * The route they were trying to reach (set by `AppLayout`) travels as `next` and the backend
  * returns them to it. If the sign-in fails, the backend sends the browser back here with
  * `?sso_error=<code>`, shown below in plain language.

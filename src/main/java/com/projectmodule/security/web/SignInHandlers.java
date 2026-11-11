@@ -32,9 +32,11 @@ public final class SignInHandlers {
      * By now Spring has already replaced the session (session fixation: {@code newSession()}, nothing
      * carried over, which also ends any previous person's session in this browser). This swaps the
      * authentication Spring built, which still holds the verified ID token, for the slim principal the
-     * rest of the application uses, saves it into the fresh session and lands the browser on the app.
+     * rest of the application uses, saves it into the fresh session and lands the browser on the app. A
+     * successful sign-in also clears the "signed out of Easy Project" marker, so the next visit without a
+     * session is again allowed to start a sign-in by itself.
      */
-    public static AuthenticationSuccessHandler success(SecurityContextRepository repository) {
+    public static AuthenticationSuccessHandler success(SecurityContextRepository repository, SignedOutMarker marker) {
         return (HttpServletRequest request, HttpServletResponse response, Authentication authentication) -> {
             if (!(authentication.getPrincipal() instanceof SignedInUser user)) {
                 log.error("workeasy360.sign_in_failed code={}", SignInErrors.REFUSED);
@@ -51,6 +53,7 @@ public final class SignInHandlers {
             context.setAuthentication(new Workeasy360Authentication(user.principal()));
             SecurityContextHolder.setContext(context);
             repository.saveContext(context, request, response);
+            marker.clear(response);
             log.info("workeasy360.sign_in user={} organization={}",
                     user.principal().userId(), user.principal().organizationId());
             SignInEntryFilter.redirect(response, NextPath.landingUrl(user.next()));

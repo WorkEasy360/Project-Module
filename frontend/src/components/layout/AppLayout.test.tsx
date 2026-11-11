@@ -6,11 +6,28 @@ import { AppLayout } from './AppLayout'
 import { SessionProvider } from '../../context/SessionContext'
 import { getSessionState, setAccessProblem, setUnauthenticated } from '../../context/sessionStore'
 import { buildAccessProblem } from '../../api/sessionMessages'
+import { navigateTo, replaceTo } from '../../api/session'
+import { abortSigningOut } from '../../api/autoSignIn'
 import { resetSessionForTest, signInAs } from '../../test/session'
+
+vi.mock('../../api/session', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/session')>()),
+  navigateTo: vi.fn(),
+  replaceTo: vi.fn(),
+}))
 
 const originalFetch = globalThis.fetch
 const ME = '11111111-2222-4333-8444-555555555555'
 const ORG = '99999999-2222-4333-8444-555555555555'
+const GONE = 'Thu, 01 Jan 1970 00:00:00 GMT'
+
+/** The server's logout answer: 204 and the session cookie that marks "signed out of Easy Project here". */
+function serverLogout() {
+  return vi.fn().mockImplementation(async () => {
+    document.cookie = 'ep_signed_out=1; path=/'
+    return new Response(null, { status: 204 })
+  })
+}
 
 function SignInProbe() {
   const location = useLocation()
@@ -47,10 +64,16 @@ const SESSION_BODY = {
 describe('AppLayout guard and SessionProvider', () => {
   beforeEach(() => {
     document.cookie = 'XSRF-TOKEN=tok; path=/'
+    window.sessionStorage.clear()
   })
   afterEach(() => {
     globalThis.fetch = originalFetch
     document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
+    document.cookie = `ep_signed_out=; expires=${GONE}; path=/`
+    window.sessionStorage.clear()
+    vi.mocked(navigateTo).mockClear()
+    vi.mocked(replaceTo).mockClear()
+    abortSigningOut()
     resetSessionForTest()
     vi.restoreAllMocks()
   })
@@ -79,7 +102,22 @@ describe('AppLayout guard and SessionProvider', () => {
     })
   })
 
-  it('redirects to the sign-in page carrying the requested route when the session check answers 401', async () => {
+  it('starts Workeasy360 sign-in for the requested route when the session check answers 401 and nothing forbids it', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      json(401, { type: 'https://errors.projectmodule/identity-missing', status: 401 }),
+    ) as unknown as typeof fetch
+    renderApp(true)
+
+    await waitFor(() =>
+      expect(replaceTo).toHaveBeenCalledWith('/api/auth/workeasy360/start?next=' + encodeURIComponent('/projects/42?tab=x')),
+    )
+    expect(screen.queryByText(/SIGN IN PAGE/)).not.toBeInTheDocument()
+    expect(screen.queryByText('PROJECT CONTENT')).not.toBeInTheDocument()
+    expect(getSessionState().status).toBe('unauthenticated')
+  })
+
+  it('redirects to the sign-in page carrying the requested route when the session check answers 401 after a sign-out here', async () => {
+    document.cookie = 'ep_signed_out=1; path=/'
     globalThis.fetch = vi.fn().mockResolvedValue(
       json(401, { type: 'https://errors.projectmodule/identity-missing', status: 401 }),
     ) as unknown as typeof fetch
@@ -88,21 +126,35 @@ describe('AppLayout guard and SessionProvider', () => {
     expect(await screen.findByText('SIGN IN PAGE from=/projects/42?tab=x')).toBeInTheDocument()
     expect(screen.queryByText('PROJECT CONTENT')).not.toBeInTheDocument()
     expect(getSessionState().status).toBe('unauthenticated')
+    expect(replaceTo).not.toHaveBeenCalled()
   })
 
-  it('treats an unreachable server as signed out, with a message for the sign-in page', async () => {
+  it('treats an unreachable server as signed out, with a message for the sign-in page, and starts nothing', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('offline')) as unknown as typeof fetch
     renderApp(true)
     expect(await screen.findByText(/SIGN IN PAGE/)).toBeInTheDocument()
     expect(getSessionState().loadError).toMatch(/could not reach the server/i)
+    expect(replaceTo).not.toHaveBeenCalled()
   })
 
-  it('sends a signed-in person back to sign-in as soon as any API call reports the session is gone', async () => {
+  it('starts a sign-in as soon as any API call reports the session is gone', async () => {
+    signInAs(ME, { orgId: ORG })
+    renderApp(false)
+    expect(screen.getByText('PROJECT CONTENT')).toBeInTheDocument()
+    act(() => setUnauthenticated())
+    await waitFor(() =>
+      expect(replaceTo).toHaveBeenCalledWith('/api/auth/workeasy360/start?next=' + encodeURIComponent('/projects/42?tab=x')),
+    )
+  })
+
+  it('sends a signed-in person back to the sign-in page when the session is gone and they signed out here before', async () => {
+    document.cookie = 'ep_signed_out=1; path=/'
     signInAs(ME, { orgId: ORG })
     renderApp(false)
     expect(screen.getByText('PROJECT CONTENT')).toBeInTheDocument()
     act(() => setUnauthenticated())
     expect(await screen.findByText(/SIGN IN PAGE/)).toBeInTheDocument()
+    expect(replaceTo).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -146,17 +198,19 @@ describe('AppLayout guard and SessionProvider', () => {
     expect(fetchMock).toHaveBeenCalledWith('/api/auth/session', expect.objectContaining({ method: 'GET' }))
   })
 
-  it('"Try again" lands on the sign-in page if the re-check finds the session gone', async () => {
+  it('"Try again" starts a sign-in if the re-check finds the session gone (there is no session left to explain)', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(json(401, { status: 401 })) as unknown as typeof fetch
     signInAs(ME, { orgId: ORG })
     renderApp(false)
     act(() => setAccessProblem(buildAccessProblem('workeasy360_access_ended', 'suspended')))
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByText(/SIGN IN PAGE/)).toBeInTheDocument()
+    await waitFor(() => expect(replaceTo).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(replaceTo).mock.calls[0][0]).toContain('/api/auth/workeasy360/start?next=')
+    expect(screen.queryByText(/SIGN IN PAGE/)).not.toBeInTheDocument()
   })
 
   it('"Sign out" on the access-ended screen posts the logout and goes to sign-in', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
+    const fetchMock = serverLogout()
     globalThis.fetch = fetchMock as unknown as typeof fetch
     signInAs(ME, { orgId: ORG })
     renderApp(false)
@@ -165,6 +219,7 @@ describe('AppLayout guard and SessionProvider', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
 
     expect(await screen.findByText(/SIGN IN PAGE/)).toBeInTheDocument()
+    expect(replaceTo).not.toHaveBeenCalled()
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     expect(url).toBe('/api/auth/logout')
     expect(init.method).toBe('POST')

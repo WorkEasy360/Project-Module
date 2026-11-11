@@ -185,6 +185,22 @@ describe('api client', () => {
     expect(getSessionState().user).toBeNull()
   })
 
+  it('an API call is never redirected or retried on a 401: one request, the 401 as an error, no sign-in started', async () => {
+    const fetchMock = vi.fn().mockImplementation(async () =>
+      problemResponse(401, { type: 'https://errors.projectmodule/identity-missing', status: 401 }),
+    )
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    const before = window.location.href
+
+    await expect(api.get('/projects')).rejects.toMatchObject({ status: 401, isUnauthenticated: true })
+    await expect(api.post('/projects', {})).rejects.toMatchObject({ status: 401 })
+
+    // Only the page's route guard starts sign-in; the API client never navigates anywhere.
+    expect(window.location.href).toBe(before)
+    const apiCalls = fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/v1/'))
+    expect(apiCalls).toHaveLength(2)
+  })
+
   it('reports a workeasy360_access_ended 403 with its reason, keeps the user signed in, and still throws', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue(
       problemResponse(403, { code: 'workeasy360_access_ended', reason: 'no_seat', status: 403 }),

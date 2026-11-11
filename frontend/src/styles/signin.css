@@ -441,3 +441,51 @@ a.si-submit {
   gap: 12px;
   margin: 12px 24px 0;
 }
+
+/* Automatic sign-in: the neutral screen while the browser is handed to Workeasy360. Solid card colour
+   under the text (no gradient, no animation on the text) so contrast is the theme's own in both themes. */
+.signing-in {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.signing-in-card {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+  border-radius: var(--radius-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text);
+}
+.signing-in-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: var(--color-text);
+}
+.signing-in-text {
+  font-size: 14px;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+.signing-in-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Text colour plus underline: the link is told apart without relying on colour, and keeps the card's contrast. */
+.signing-in-link {
+  color: var(--color-text);
+  font-weight: 600;
+  text-decoration: underline;
+}

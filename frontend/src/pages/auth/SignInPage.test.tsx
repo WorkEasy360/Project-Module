@@ -44,10 +44,10 @@ describe('SignInPage', () => {
 
   it('carries the route AppLayout asked for as the encoded next parameter', () => {
     setUnauthenticated()
-    renderPage({ pathname: '/sign-in', state: { from: '/projects/123/tasks?q=a b' } })
+    renderPage({ pathname: '/sign-in', state: { from: '/projects/123/tasks?q=a%20b' } })
     expect(screen.getByRole('link', { name: /continue with workeasy360/i })).toHaveAttribute(
       'href',
-      '/api/auth/workeasy360/start?next=' + encodeURIComponent('/projects/123/tasks?q=a b'),
+      '/api/auth/workeasy360/start?next=' + encodeURIComponent('/projects/123/tasks?q=a%20b'),
     )
   })
 

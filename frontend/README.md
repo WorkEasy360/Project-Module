@@ -70,22 +70,31 @@ setup, and a cross-origin deployment is not supported.
 There is no username, password or user-id form. People sign in with Workeasy360:
 
 1. `SessionProvider` asks `GET /api/auth/session` on load. While that is pending `AppLayout` shows a
-   neutral loading state. A `401` means not signed in, and the person is sent to `#/sign-in` together
-   with the route they wanted.
+   neutral loading state. A `401` means no session. Then `SignedOutGate` (`src/components/layout`) **starts
+   sign-in by itself**: it replaces the current page with `/api/auth/workeasy360/start?next=<the route that was
+   asked for>` (`location.replace`, so Back does not bounce forward) and shows the neutral "Signing you in with
+   Workeasy360..." screen (with a way out after about 5 seconds), so a person already signed in to
+   Workeasy360 who types the address arrives signed in. It does **not** start (and sends the person to
+   `#/sign-in` with the route they wanted) when the signed-out marker cookie is present (the person signed
+   out of Easy Project in this browser), when an automatic start happened less than 60 seconds ago (the loop
+   guard), or when the session check failed. Rules and storage names: `src/api/autoSignIn.ts` and
+   `docs/workeasy360-sso.md`. The sign-in route itself never starts anything, whatever its query.
 2. The sign-in page shows **Continue with Workeasy360**, a plain link to
    `/api/auth/workeasy360/start?next=<route>` (a top-level navigation, never `fetch`, and never followed
    automatically). The backend redirects to Workeasy360 and, after sign-in, lands the browser on
-   `/#/<route>`.
+   `/#/<route>`. `next` is validated by `safeNextRoute` (the server's rules: a hostile value becomes `/`).
 3. If sign-in fails the backend returns to `#/sign-in?sso_error=<code>`. Each code has a plain-language
    message in `src/api/sessionMessages.ts`; an unknown code is shown as `refused`.
-4. **Sign out of Easy Project** calls `POST /api/auth/logout` and returns to the sign-in page. When the
+4. **Sign out of Easy Project** calls `POST /api/auth/logout` (the server leaves the `ep_signed_out` marker
+   cookie, so nothing signs the person straight back in) and returns to the sign-in page. When the
    session says `workeasy360SignOut: true`, **Sign out of Easy Project and Workeasy360** does the same and
    then navigates to `/api/auth/workeasy360/logout`. Both are in the header account dialog and in
    Settings (which also shows the signed-in account and organization id, read-only).
 
 API errors feed the session:
 
-- `401` on any `/api/v1` call ends the session in the UI (back to sign-in).
+- `401` on any `/api/v1` call ends the session in the UI (the route guard then starts a sign-in, or shows
+  the sign-in page after a sign-out). The API client itself never navigates.
 - `403` with `workeasy360_access_ended` or `workeasy360_access_unverified` replaces the app with an
   "Easy Project access has ended" / "Workeasy360 can't confirm access right now" screen, with the reason
   in plain words and *Try again* / *Sign out* buttons.

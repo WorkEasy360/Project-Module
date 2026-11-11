@@ -1,7 +1,8 @@
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 import { AccessEndedScreen } from './AccessEndedScreen'
+import { SignedOutGate } from './SignedOutGate'
 import { SidebarProvider } from '../../context/SidebarContext'
 import { useSession } from '../../context/SessionContext'
 import { LoadingState } from '../common/LoadingState'
@@ -11,8 +12,10 @@ import { LoadingState } from '../common/LoadingState'
  *
  * - While the session is being checked: a neutral loading state (never a flash of the app or of
  *   the sign-in page).
- * - Not signed in: redirect to the sign-in page, carrying the route that was asked for so the
- *   sign-in can bring the person back to it.
+ * - No session at all: `SignedOutGate` starts Workeasy360 sign-in straight away, carrying the route that
+ *   was asked for so the person lands back on it (integration guide 6b). Only when that is not allowed
+ *   (signed out of Easy Project in this browser, a start less than a minute ago, or a session check that
+ *   failed) does it go to the sign-in page, which waits for the person to choose.
  * - Signed in, but Workeasy360 says access has ended (or cannot be confirmed): a full screen that
  *   replaces the app, because every request would be refused anyway.
  * - Signed in, subscription read-only: the app, with a dismissible notice.
@@ -30,7 +33,7 @@ export function AppLayout() {
   }
 
   if (status === 'unauthenticated') {
-    return <Navigate to="/sign-in" replace state={{ from: `${location.pathname}${location.search}` }} />
+    return <SignedOutGate from={`${location.pathname}${location.search}`} />
   }
 
   if (accessProblem && accessProblem.code !== 'workeasy360_read_only') {
