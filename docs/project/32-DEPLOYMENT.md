@@ -12,12 +12,13 @@ is written so that customers using the product never notice a release:
    If anything fails, nothing is deployed.
 2. **Check, then back up.** It checks:
    - the environment must be Ready
-   - enhanced health reporting must be on
+   - it must have a service role, so enhanced health reporting can be turned on
    - the current version is recorded
 
    Then it takes an RDS snapshot named `before-<run>-<attempt>-<time>` and waits for it to be
    available. Nothing in AWS changes before this point.
-3. **Immutable deployment.** The environment's deployment policy is set to Immutable. Elastic
+3. **Immutable deployment.** Enhanced health reporting is turned on if it is off (once), and the
+   environment's deployment policy is set to Immutable. Elastic
    Beanstalk then starts the new version on fresh instances and checks its health before moving
    traffic to it. On a single-instance environment it moves the Elastic IP. If the new version is
    unhealthy, it is discarded and the old one keeps serving.

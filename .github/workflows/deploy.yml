@@ -134,9 +134,11 @@ jobs:
           echo "Environment type: $(setting aws:elasticbeanstalk:environment EnvironmentType)"
           echo "Deployment policy: $(setting aws:elasticbeanstalk:command DeploymentPolicy)"
           HEALTH_SYSTEM="$(setting aws:elasticbeanstalk:healthreporting:system SystemType)"
-          echo "Health reporting: $HEALTH_SYSTEM"
-          if [ "$HEALTH_SYSTEM" != "enhanced" ]; then
-            echo "::error::A no-downtime (immutable) deployment needs enhanced health reporting, and this environment uses '$HEALTH_SYSTEM'. Nothing was changed."
+          SERVICE_ROLE="$(setting aws:elasticbeanstalk:environment ServiceRole)"
+          echo "Health reporting: $HEALTH_SYSTEM; service role: $SERVICE_ROLE"
+          echo "HEALTH_SYSTEM=$HEALTH_SYSTEM" >> "$GITHUB_ENV"
+          if [ "$HEALTH_SYSTEM" != "enhanced" ] && { [ -z "$SERVICE_ROLE" ] || [ "$SERVICE_ROLE" = "None" ]; }; then
+            echo "::error::Enhanced health reporting (needed for a no-downtime deployment) needs the environment to have a service role, and it has none. Nothing was changed."
             exit 1
           fi
           DB_URL="$(setting aws:elasticbeanstalk:application:environment PROJECTMODULE_DB_URL)"
@@ -160,18 +162,43 @@ jobs:
           aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAPSHOT"
           echo "Backup ready: $SNAPSHOT"
 
-      - name: Use immutable deployments (no downtime)
+      - name: Prepare a no-downtime deployment (enhanced health, immutable)
         run: |
           set -euo pipefail
           POLICY="$(aws elasticbeanstalk describe-configuration-settings \
             --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
             --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:elasticbeanstalk:command' && OptionName=='DeploymentPolicy'].Value | [0]" \
             --output text)"
+          SETTINGS=()
+          if [ "$HEALTH_SYSTEM" != "enhanced" ]; then
+            echo "Turning on enhanced health reporting (one time)"
+            SETTINGS+=("Namespace=aws:elasticbeanstalk:healthreporting:system,OptionName=SystemType,Value=enhanced")
+          fi
           if [ "$POLICY" != "Immutable" ]; then
-            echo "Switching the deployment policy from $POLICY to Immutable (a setting only; no restart)"
-            aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" \
-              --option-settings Namespace=aws:elasticbeanstalk:command,OptionName=DeploymentPolicy,Value=Immutable > /dev/null
-            aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENVIRONMENT"
+            echo "Switching the deployment policy from $POLICY to Immutable"
+            SETTINGS+=("Namespace=aws:elasticbeanstalk:command,OptionName=DeploymentPolicy,Value=Immutable")
+          fi
+          if [ ${#SETTINGS[@]} -gt 0 ]; then
+            aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --option-settings "${SETTINGS[@]}" > /dev/null
+            for i in $(seq 1 80); do
+              read -r STATUS HEALTH <<<"$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+                --query 'Environments[0].[Status,Health]' --output text)"
+              echo "$(date -u +%H:%M:%S) status $STATUS, health $HEALTH"
+              [ "$STATUS" = "Ready" ] && break
+              sleep 15
+            done
+            NOW="$(aws elasticbeanstalk describe-configuration-settings \
+              --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
+              --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:elasticbeanstalk:healthreporting:system' && OptionName=='SystemType'].Value | [0]" \
+              --output text)"
+            if [ "$STATUS" != "Ready" ] || [ "$NOW" != "enhanced" ]; then
+              echo "::error::Enhanced health could not be turned on (status $STATUS, health reporting $NOW). The new version was not deployed."
+              aws elasticbeanstalk describe-events --environment-name "$EB_ENVIRONMENT" --max-items 15 \
+                --query 'Events[].[EventDate,Severity,Message]' --output text || true
+              exit 1
+            fi
+            # Give the health agent a moment to report before the deployment relies on it.
+            sleep 60
           fi
 
       - name: Deploy the new version
