@@ -171,11 +171,26 @@ jobs:
             --query "DBInstances[?Endpoint.Address=='$HOST'].DBInstanceIdentifier | [0]" --output text)"
           if [ -n "$INSTANCE" ] && [ "$INSTANCE" != "None" ]; then
             echo "Snapshotting the database instance as $STAMP"
-            aws rds create-db-snapshot --region "$DB_REGION" --db-instance-identifier "$INSTANCE" \
-              --db-snapshot-identifier "$STAMP" > /dev/null
-            aws rds wait db-snapshot-available --region "$DB_REGION" --db-snapshot-identifier "$STAMP"
-            echo "Backup ready: $STAMP"
-            exit 0
+            if aws rds create-db-snapshot --region "$DB_REGION" --db-instance-identifier "$INSTANCE" \
+                --db-snapshot-identifier "$STAMP" > /dev/null; then
+              aws rds wait db-snapshot-available --region "$DB_REGION" --db-snapshot-identifier "$STAMP"
+              echo "Backup ready: $STAMP"
+              exit 0
+            fi
+            # The deploy credentials may not be allowed to take snapshots. RDS's automated backups
+            # also allow restoring to any second, so accept them if they are on and up to date.
+            echo "A manual snapshot was refused; checking RDS automated backups instead."
+            read -r RETENTION RESTORABLE <<<"$(aws rds describe-db-instances --region "$DB_REGION" \
+              --db-instance-identifier "$INSTANCE" \
+              --query 'DBInstances[0].[BackupRetentionPeriod,LatestRestorableTime]' --output text)"
+            AGE=$(( $(date -u +%s) - $(date -u -d "$RESTORABLE" +%s 2>/dev/null || echo 0) ))
+            if [ "${RETENTION:-0}" -gt 0 ] && [ "$AGE" -lt 900 ]; then
+              echo "Automated backups are on (kept $RETENTION days) and restorable to $RESTORABLE."
+              echo "To undo this release's data changes, restore the database to a point in time before $(date -u +%Y-%m-%dT%H:%M:%SZ)."
+              exit 0
+            fi
+            echo "::error::No backup is possible: snapshots are not allowed for the deploy credentials, and automated backups are off or out of date (retention ${RETENTION:-0} days). Nothing was changed."
+            exit 1
           fi
 
           CLUSTER="$(aws rds describe-db-clusters --region "$DB_REGION" \
