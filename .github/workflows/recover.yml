@@ -61,6 +61,30 @@ jobs:
           curl -s -m 10 -o /dev/null -w 'ops.workeasy360.com %{http_code}\n' https://ops.workeasy360.com/actuator/health || true
           curl -s -m 10 -o /dev/null -w '13.51.245.164 %{http_code}\n' http://13.51.245.164/actuator/health || true
 
+      - name: Restore the settings from before the release, and wait for the site
+        if: inputs.action == 'restore'
+        run: |
+          set -uo pipefail
+          aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --option-settings \
+            Namespace=aws:elasticbeanstalk:healthreporting:system,OptionName=SystemType,Value=basic \
+            Namespace=aws:elasticbeanstalk:command,OptionName=DeploymentPolicy,Value=AllAtOnce > /dev/null
+          for i in $(seq 1 120); do
+            read -r STATUS HEALTH <<<"$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+              --query 'Environments[0].[Status,Health]' --output text)"
+            COUNT="$(aws elasticbeanstalk describe-environment-resources --environment-name "$EB_ENVIRONMENT" \
+              --query 'length(EnvironmentResources.Instances)' --output text)"
+            CODE="$(curl -s -m 8 -o /dev/null -w '%{http_code}' https://ops.workeasy360.com/actuator/health || true)"
+            echo "$(date -u +%H:%M:%S) $STATUS $HEALTH instances=$COUNT site=$CODE"
+            [ "$STATUS" = "Ready" ] && [ "$CODE" = "200" ] && break
+            sleep 15
+          done
+          for g in $(aws elasticbeanstalk describe-environment-resources --environment-name "$EB_ENVIRONMENT" \
+              --query 'EnvironmentResources.AutoScalingGroups[].Name' --output text); do
+            aws autoscaling describe-scaling-activities --auto-scaling-group-name "$g" --max-items 3 \
+              --query 'Activities[].[StartTime,StatusCode,StatusMessage]' --output text || true
+          done
+          aws ec2 describe-addresses --public-ips 13.51.245.164 --query 'Addresses[0].[PublicIp,InstanceId]' --output text || true
+
       - name: Restart the app server
         if: inputs.action == 'restart'
         run: |
