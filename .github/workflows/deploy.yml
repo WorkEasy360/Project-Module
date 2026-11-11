@@ -142,6 +142,9 @@ jobs:
             exit 1
           fi
           DB_URL="$(setting aws:elasticbeanstalk:application:environment PROJECTMODULE_DB_URL)"
+          if [ -z "$DB_URL" ] || [ "$DB_URL" = "None" ]; then
+            DB_URL="$(setting aws:elasticbeanstalk:application:environment SPRING_DATASOURCE_URL)"
+          fi
           echo "::add-mask::$DB_URL"
           DB_HOST="$(echo "$DB_URL" | sed -E 's#^jdbc:postgresql://([^:/]+).*#\1#')"
           echo "::add-mask::$DB_HOST"
@@ -150,17 +153,45 @@ jobs:
       - name: Back up the production database
         run: |
           set -euo pipefail
-          INSTANCE="$(aws rds describe-db-instances \
-            --query "DBInstances[?Endpoint.Address=='$DB_HOST'].DBInstanceIdentifier | [0]" --output text)"
-          if [ -z "$INSTANCE" ] || [ "$INSTANCE" = "None" ]; then
-            echo "::error::Could not find the production database to back up. Nothing was changed."
+          # Only harmless facts are printed: the repository is public, so its logs are too.
+          if [ -z "$DB_HOST" ] || [ "$DB_HOST" = "None" ]; then
+            echo "::error::The environment has no PROJECTMODULE_DB_URL or SPRING_DATASOURCE_URL to find the database by. Nothing was changed."
             exit 1
           fi
-          SNAPSHOT="before-${{ github.run_number }}-${{ github.run_attempt }}-$(date -u +%Y%m%d%H%M)"
-          echo "Snapshotting $INSTANCE as $SNAPSHOT"
-          aws rds create-db-snapshot --db-instance-identifier "$INSTANCE" --db-snapshot-identifier "$SNAPSHOT" > /dev/null
-          aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAPSHOT"
-          echo "Backup ready: $SNAPSHOT"
+          HOST="$(echo "$DB_HOST" | tr '[:upper:]' '[:lower:]')"
+          if ! echo "$HOST" | grep -qE '\.rds\.amazonaws\.com$'; then
+            echo "::error::The database address is not an RDS endpoint, so it cannot be snapshotted here. Nothing was changed."
+            exit 1
+          fi
+          DB_REGION="$(echo "$HOST" | sed -E 's#.*\.([a-z0-9-]+)\.rds\.amazonaws\.com$#\1#')"
+          echo "Database region: $DB_REGION"
+          STAMP="before-${{ github.run_number }}-${{ github.run_attempt }}-$(date -u +%Y%m%d%H%M)"
+
+          INSTANCE="$(aws rds describe-db-instances --region "$DB_REGION" \
+            --query "DBInstances[?Endpoint.Address=='$HOST'].DBInstanceIdentifier | [0]" --output text)"
+          if [ -n "$INSTANCE" ] && [ "$INSTANCE" != "None" ]; then
+            echo "Snapshotting the database instance as $STAMP"
+            aws rds create-db-snapshot --region "$DB_REGION" --db-instance-identifier "$INSTANCE" \
+              --db-snapshot-identifier "$STAMP" > /dev/null
+            aws rds wait db-snapshot-available --region "$DB_REGION" --db-snapshot-identifier "$STAMP"
+            echo "Backup ready: $STAMP"
+            exit 0
+          fi
+
+          CLUSTER="$(aws rds describe-db-clusters --region "$DB_REGION" \
+            --query "DBClusters[?Endpoint=='$HOST' || ReaderEndpoint=='$HOST'].DBClusterIdentifier | [0]" --output text 2>/dev/null || echo None)"
+          if [ -n "$CLUSTER" ] && [ "$CLUSTER" != "None" ]; then
+            echo "Snapshotting the database cluster as $STAMP"
+            aws rds create-db-cluster-snapshot --region "$DB_REGION" --db-cluster-identifier "$CLUSTER" \
+              --db-cluster-snapshot-identifier "$STAMP" > /dev/null
+            aws rds wait db-cluster-snapshot-available --region "$DB_REGION" --db-cluster-snapshot-identifier "$STAMP"
+            echo "Backup ready: $STAMP"
+            exit 0
+          fi
+
+          COUNT="$(aws rds describe-db-instances --region "$DB_REGION" --query 'length(DBInstances)' --output text)"
+          echo "::error::No database in $DB_REGION has the app's address ($COUNT database instance(s) visible to the deploy credentials). It may be in another AWS account. Nothing was changed."
+          exit 1
 
       - name: Prepare a no-downtime deployment (enhanced health, immutable)
         run: |
