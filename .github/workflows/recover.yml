@@ -61,8 +61,43 @@ jobs:
           curl -s -m 10 -o /dev/null -w 'ops.workeasy360.com %{http_code}\n' https://ops.workeasy360.com/actuator/health || true
           curl -s -m 10 -o /dev/null -w '13.51.245.164 %{http_code}\n' http://13.51.245.164/actuator/health || true
 
+      - name: Stop the deployment in progress and remove its temporary servers
+        if: inputs.action == 'cleanup'
+        run: |
+          set -uo pipefail
+          STATUS="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+            --query 'Environments[0].Status' --output text)"
+          if [ "$STATUS" = "Updating" ]; then
+            echo "Aborting the update in progress; Elastic Beanstalk removes the servers it launched for it."
+            aws elasticbeanstalk abort-environment-update --environment-name "$EB_ENVIRONMENT" || true
+          fi
+          for i in $(seq 1 80); do
+            STATUS="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+              --query 'Environments[0].Status' --output text)"
+            echo "$(date -u +%H:%M:%S) $STATUS"
+            [ "$STATUS" = "Ready" ] && break
+            sleep 15
+          done
+          # Only servers of THIS environment that are not in its main Auto Scaling group: leftovers.
+          MAIN="$(aws elasticbeanstalk describe-environment-resources --environment-name "$EB_ENVIRONMENT" \
+            --query 'EnvironmentResources.AutoScalingGroups[0].Name' --output text)"
+          echo "Main group: $MAIN"
+          aws ec2 describe-instances \
+            --filters "Name=tag:elasticbeanstalk:environment-name,Values=$EB_ENVIRONMENT" \
+                      "Name=instance-state-name,Values=pending,running,stopping,stopped" \
+            --query 'Reservations[].Instances[].[InstanceId,State.Name,Tags[?Key==`aws:autoscaling:groupName`]|[0].Value]' \
+            --output text > instances.txt
+          echo "Servers of this environment:"; cat instances.txt
+          while read -r ID STATE GROUP; do
+            [ -z "$ID" ] && continue
+            if [ "$GROUP" != "$MAIN" ]; then
+              echo "Removing leftover temporary server $ID (group $GROUP)"
+              aws ec2 terminate-instances --instance-ids "$ID" > /dev/null
+            fi
+          done < instances.txt
+
       - name: Restore the settings from before the release, and wait for the site
-        if: inputs.action == 'restore'
+        if: inputs.action == 'restore' || inputs.action == 'cleanup'
         run: |
           set -uo pipefail
           aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --option-settings \
