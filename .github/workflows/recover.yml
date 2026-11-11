@@ -1,0 +1,83 @@
+name: Recover production
+
+# Run by hand. "diagnose" only reads. "restart" restarts the app server on the current instance.
+# "rebuild" replaces the environment's instances with fresh ones running the current version
+# (keeps the database and the environment's settings).
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: diagnose, restart or rebuild
+        required: true
+        default: diagnose
+
+permissions:
+  contents: read
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: eu-north-1
+      EB_ENVIRONMENT: Project-Module-env
+    steps:
+      - name: Diagnose (read only)
+        run: |
+          set -uo pipefail
+          echo "== environment"
+          aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+            --query 'Environments[0].[Status,Health,HealthStatus,VersionLabel,EndpointURL]' --output text
+          echo "== resources"
+          aws elasticbeanstalk describe-environment-resources --environment-name "$EB_ENVIRONMENT" \
+            --query 'EnvironmentResources.{instances:Instances[].Id,groups:AutoScalingGroups[].Name}' --output json
+          echo "== instance health"
+          aws elasticbeanstalk describe-instances-health --environment-name "$EB_ENVIRONMENT" \
+            --attribute-names All --query 'InstanceHealthList[].[InstanceId,HealthStatus,Color,Causes]' --output json || true
+          echo "== instances"
+          for id in $(aws elasticbeanstalk describe-environment-resources --environment-name "$EB_ENVIRONMENT" \
+              --query 'EnvironmentResources.Instances[].Id' --output text); do
+            aws ec2 describe-instances --instance-ids "$id" \
+              --query 'Reservations[0].Instances[0].[InstanceId,State.Name,InstanceType,PublicIpAddress,LaunchTime]' --output text || true
+          done
+          echo "== elastic ip 13.51.245.164"
+          aws ec2 describe-addresses --public-ips 13.51.245.164 \
+            --query 'Addresses[0].[PublicIp,InstanceId,AssociationId]' --output text || true
+          echo "== auto scaling"
+          for g in $(aws elasticbeanstalk describe-environment-resources --environment-name "$EB_ENVIRONMENT" \
+              --query 'EnvironmentResources.AutoScalingGroups[].Name' --output text); do
+            aws autoscaling describe-auto-scaling-groups --auto-scaling-group-names "$g" \
+              --query 'AutoScalingGroups[0].[MinSize,MaxSize,DesiredCapacity,length(Instances)]' --output text || true
+            aws autoscaling describe-scaling-activities --auto-scaling-group-name "$g" --max-items 5 \
+              --query 'Activities[].[StartTime,StatusCode,Description,StatusMessage]' --output text || true
+          done
+          echo "== recent events"
+          aws elasticbeanstalk describe-events --environment-name "$EB_ENVIRONMENT" --max-items 30 \
+            --query 'Events[].[EventDate,Severity,Message]' --output text || true
+          echo "== site"
+          curl -s -m 10 -o /dev/null -w 'ops.workeasy360.com %{http_code}\n' https://ops.workeasy360.com/actuator/health || true
+          curl -s -m 10 -o /dev/null -w '13.51.245.164 %{http_code}\n' http://13.51.245.164/actuator/health || true
+
+      - name: Restart the app server
+        if: inputs.action == 'restart'
+        run: |
+          aws elasticbeanstalk restart-app-server --environment-name "$EB_ENVIRONMENT"
+          sleep 90
+          aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+            --query 'Environments[0].[Status,Health]' --output text
+
+      - name: Rebuild the environment's instances
+        if: inputs.action == 'rebuild'
+        run: |
+          aws elasticbeanstalk rebuild-environment --environment-name "$EB_ENVIRONMENT"
+          for i in $(seq 1 120); do
+            read -r STATUS HEALTH <<<"$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+              --query 'Environments[0].[Status,Health]' --output text)"
+            echo "$(date -u +%H:%M:%S) $STATUS $HEALTH"
+            [ "$STATUS" = "Ready" ] && break
+            sleep 15
+          done
+          curl -s -m 10 -o /dev/null -w 'ops.workeasy360.com %{http_code}\n' https://ops.workeasy360.com/actuator/health || true
