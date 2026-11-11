@@ -9,7 +9,7 @@ import { ApiError, NetworkError } from './client'
 export function toUserMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.isUnauthenticated) {
-      return 'Your identity is not set. Please set your User ID and Organization ID.'
+      return 'Your session has ended. Please sign in again.'
     }
     if (error.isForbidden) {
       return error.problem?.detail || "You don't have permission to do this."

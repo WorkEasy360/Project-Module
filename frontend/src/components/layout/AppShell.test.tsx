@@ -26,10 +26,10 @@ function renderShell() {
   return render(
     <MemoryRouter initialEntries={['/dashboard']}>
       <IdentityProvider>
-        <SidebarProvider>
+        <IdentityProvider><SidebarProvider>
           <Header />
           <Sidebar />
-        </SidebarProvider>
+        </SidebarProvider></IdentityProvider>
       </IdentityProvider>
     </MemoryRouter>,
   )
@@ -126,9 +126,9 @@ describe('AppShell — hamburger / sidebar navigation', () => {
     mockViewport(false)
     render(
       <MemoryRouter initialEntries={['/templates']}>
-        <SidebarProvider>
+        <IdentityProvider><SidebarProvider>
           <Sidebar />
-        </SidebarProvider>
+        </SidebarProvider></IdentityProvider>
       </MemoryRouter>,
     )
     const templates = screen.getByRole('link', { name: /^templates$/i })
@@ -138,30 +138,41 @@ describe('AppShell — hamburger / sidebar navigation', () => {
     expect(screen.queryByRole('link', { name: /^more$/i })).not.toBeInTheDocument()
   })
 
-  it('only shows project-specific sections when inside a project route', () => {
+  it('groups the workspace into short sections', () => {
     mockViewport(false)
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
-        <SidebarProvider>
+        <IdentityProvider><SidebarProvider>
           <Sidebar />
-        </SidebarProvider>
+        </SidebarProvider></IdentityProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByText('Work')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Timesheet' })).toHaveAttribute('href', '/timesheet')
+  })
+
+  it('never repeats the project tabs in the sidebar', () => {
+    mockViewport(false)
+    render(
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <IdentityProvider><SidebarProvider>
+          <Sidebar />
+        </SidebarProvider></IdentityProvider>
       </MemoryRouter>,
     )
     expect(screen.queryByRole('link', { name: /^tasks$/i })).not.toBeInTheDocument()
   })
 
-  it('shows project-specific sections when a project is open, linking to the real routes', () => {
+  it('keeps project tabs off the sidebar even inside a project', () => {
     mockViewport(false)
     render(
       <MemoryRouter initialEntries={['/projects/proj-123/overview']}>
-        <SidebarProvider>
+        <IdentityProvider><SidebarProvider>
           <Sidebar />
-        </SidebarProvider>
+        </SidebarProvider></IdentityProvider>
       </MemoryRouter>,
     )
-    expect(screen.getByRole('link', { name: /^tasks$/i })).toHaveAttribute('href', '/projects/proj-123/tasks')
-    // Advanced features are NOT in the sidebar — they live behind "More".
-    expect(screen.queryByRole('link', { name: /gantt/i })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('link', { name: /^more$/i }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('link', { name: /^tasks$/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Projects' })).toBeInTheDocument()
   })
 })

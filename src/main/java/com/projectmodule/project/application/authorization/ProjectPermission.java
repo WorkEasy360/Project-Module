@@ -13,6 +13,8 @@ public enum ProjectPermission {
 
     VIEW_PROJECT,
     EDIT_PROJECT,
+    /** Create and update tasks, their subtasks and checklists: the day-to-day work of a project. */
+    EDIT_TASKS,
     ARCHIVE_PROJECT,
     MANAGE_MEMBERS,
     MANAGE_SETTINGS

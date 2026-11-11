@@ -99,8 +99,7 @@ public class ProjectApplicationService {
     @Transactional(readOnly = true)
     public Page<Project> listProjects(RequestContext context, Pageable pageable) {
         OrganizationId organizationId = requireOrganizationId(context);
-        return projectRepository.findByOrganizationIdAndArchivedAtIsNull(
-                organizationId.value(), pageable);
+        return projectRepository.findVisibleToUser(organizationId.value(), context.requireUserId().value(), pageable);
     }
 
     @Transactional

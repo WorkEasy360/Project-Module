@@ -59,11 +59,10 @@ describe('AdvancedFeaturesPage', () => {
     expect(await screen.findByText(/no in-app access-request workflow yet/i)).toBeInTheDocument()
   })
 
-  it('shows Activity as coming soon without an Open link', () => {
+  it('links to Activity, now that it is available', () => {
     renderInProject('OWNER')
     const card = screen.getByRole('heading', { name: 'Activity' }).closest('article')!
-    expect(card).toHaveTextContent('Coming soon')
-    expect(card.querySelector('a')).toBeNull()
+    expect(card.querySelector('a')).not.toBeNull()
   })
 
   it('never lists workspace-level features such as Templates (they are direct sidebar links)', () => {

@@ -1,3 +1,4 @@
+import { initials } from '../../utils/format'
 import type { BadgeTone } from '../../components/common/Badge'
 import type { ProjectMember, ProjectRole, ProjectSummary } from '../../types/project'
 
@@ -7,7 +8,7 @@ export interface Membership {
   member: ProjectMember
 }
 
-/** A person is just a user id — this backend has no user directory (no names, no emails). */
+/** A person on one or more projects. Names come from PeopleContext. */
 export interface Person {
   userId: string
   memberships: Membership[]
@@ -26,13 +27,13 @@ export const ROLE_TONE: Record<ProjectRole, BadgeTone> = {
   VIEWER: 'neutral',
 }
 
-/** First 8 characters of a user id — the only "name" this backend can give a person. */
+/** First 8 characters of a user id. */
 export function shortId(id: string): string {
   return id.slice(0, 8)
 }
 
-export function avatarText(id: string): string {
-  return id.slice(0, 2).toUpperCase()
+export function avatarText(nameOrId: string): string {
+  return initials(nameOrId)
 }
 
 /** Flattens the per-project member lists (skipping projects that failed or are still loading). */
@@ -47,12 +48,19 @@ export function collectMemberships(
   return out
 }
 
-export function filterMemberships(items: Membership[], filters: TeamFilters): Membership[] {
+export function filterMemberships(
+  items: Membership[],
+  filters: TeamFilters,
+  nameOf: (userId: string) => string = (userId) => userId,
+): Membership[] {
   const q = filters.query.trim().toLowerCase()
   return items.filter(
     ({ project, member }) =>
       (filters.role === '' || member.role === filters.role) &&
-      (q === '' || member.userId.toLowerCase().includes(q) || project.name.toLowerCase().includes(q)),
+      (q === '' ||
+        nameOf(member.userId).toLowerCase().includes(q) ||
+        member.userId.toLowerCase().includes(q) ||
+        project.name.toLowerCase().includes(q)),
   )
 }
 

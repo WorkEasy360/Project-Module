@@ -9,9 +9,15 @@ package com.projectmodule.common.exception;
 public final class IntegrationUnavailableException extends ProjectModuleException {
 
     public IntegrationUnavailableException(String module, Throwable cause) {
-        super(ErrorType.INTEGRATION_UNAVAILABLE,
-                "External module unavailable: " + module,
-                java.util.List.of(),
-                cause);
+        this("External module unavailable: " + module, cause, true);
+    }
+
+    private IntegrationUnavailableException(String message, Throwable cause, boolean ignored) {
+        super(ErrorType.INTEGRATION_UNAVAILABLE, message, java.util.List.of(), cause);
+    }
+
+    /** For a message written to be shown to a person as it is. */
+    public static IntegrationUnavailableException withMessage(String message, Throwable cause) {
+        return new IntegrationUnavailableException(message, cause, true);
     }
 }

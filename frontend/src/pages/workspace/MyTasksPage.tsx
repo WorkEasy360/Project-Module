@@ -12,7 +12,8 @@ import { TaskStatusControl } from '../../components/task/TaskStatusControl'
 import { EmptyState } from '../../components/common/EmptyState'
 import { ErrorState } from '../../components/common/ErrorState'
 import { Skeleton } from '../../components/common/Skeleton'
-import { formatDate, humanizeToken } from '../../utils/format'
+import { formatDate, humanizeToken, initials } from '../../utils/format'
+import { usePeople } from '../../context/PeopleContext'
 import { TASK_STATUSES, type Task, type TaskStatus } from '../../types/work'
 import { FailedProjectsNotice, TruncationNote } from './WorkspaceNotices'
 import {
@@ -22,10 +23,8 @@ import {
   dueHint,
   flattenTasks,
   hasActiveFilters,
-  initialOf,
   isPastDue,
   scopeTasks,
-  shortId,
   showsPastDueMarker,
   summarizeTasks,
   todayIso,
@@ -326,6 +325,7 @@ function TaskRow({
   isMine: boolean
   onChanged: () => void
 }) {
+  const { nameOf } = usePeople()
   const pastDue = isPastDue(task, today)
   const hint = dueHint(task.dueDate, today)
   return (
@@ -363,11 +363,11 @@ function TaskRow({
       </td>
       <td data-label="Assignee" className="mt-cell-assignee">
         {task.assigneeId ? (
-          <span className="mt-assignee" title={task.assigneeId}>
+          <span className="mt-assignee" title={nameOf(task.assigneeId)}>
             <span className={`mt-avatar${isMine ? ' me' : ''}`} aria-hidden="true">
-              {initialOf(task.assigneeId)}
+              {initials(nameOf(task.assigneeId))}
             </span>
-            <span className="mono">{isMine ? 'You' : shortId(task.assigneeId)}</span>
+            <span>{isMine ? 'You' : nameOf(task.assigneeId)}</span>
           </span>
         ) : (
           <span className="mt-assignee unassigned">

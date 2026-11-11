@@ -20,6 +20,11 @@ public class TaskMapper {
                 task.isArchived(),
                 task.getCreatedAt(),
                 task.getUpdatedAt(),
-                task.getVersion());
+                task.getVersion(),
+                task.getStartDate().orElse(null),
+                task.getPriority(),
+                task.getEstimateMinutes().orElse(null),
+                task.getRecurrence(),
+                task.getTags());
     }
 }

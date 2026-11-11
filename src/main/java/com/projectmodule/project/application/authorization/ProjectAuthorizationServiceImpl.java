@@ -20,8 +20,8 @@ import org.springframework.stereotype.Service;
  *
  * <ul>
  *   <li>{@code VIEWER}: "read-only access" -&gt; {@link ProjectPermission#VIEW_PROJECT} only.
- *   <li>{@code MEMBER}: "contributes work" (tasks, not yet built) -&gt; view only at the
- *       project level; nothing in {@code ProjectRole} attributes project editing to MEMBER.
+ *   <li>{@code MEMBER}: "contributes work" -&gt; view, and create and update tasks; nothing in
+ *       {@code ProjectRole} attributes editing the project's plan to MEMBER.
  *   <li>{@code MANAGER}: "plans and runs the project, manages membership, cannot delete it"
  *       -&gt; view, edit, manage members; explicitly not archive.
  *   <li>{@code OWNER}: "full control, including deletion and ownership transfer" -&gt;
@@ -48,16 +48,19 @@ public class ProjectAuthorizationServiceImpl implements ProjectAuthorizationServ
                 ProjectPermission.VIEW_PROJECT));
 
         ROLE_PERMISSIONS.put(ProjectRole.MEMBER, EnumSet.of(
-                ProjectPermission.VIEW_PROJECT));
+                ProjectPermission.VIEW_PROJECT,
+                ProjectPermission.EDIT_TASKS));
 
         ROLE_PERMISSIONS.put(ProjectRole.MANAGER, EnumSet.of(
                 ProjectPermission.VIEW_PROJECT,
                 ProjectPermission.EDIT_PROJECT,
+                ProjectPermission.EDIT_TASKS,
                 ProjectPermission.MANAGE_MEMBERS));
 
         ROLE_PERMISSIONS.put(ProjectRole.OWNER, EnumSet.of(
                 ProjectPermission.VIEW_PROJECT,
                 ProjectPermission.EDIT_PROJECT,
+                ProjectPermission.EDIT_TASKS,
                 ProjectPermission.MANAGE_MEMBERS,
                 ProjectPermission.ARCHIVE_PROJECT));
     }

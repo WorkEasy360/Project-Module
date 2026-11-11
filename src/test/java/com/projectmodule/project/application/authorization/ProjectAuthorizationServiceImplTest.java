@@ -66,11 +66,13 @@ class ProjectAuthorizationServiceImplTest {
     class Member {
 
         @Test
-        @DisplayName("MEMBER may view but not edit, archive or manage members")
-        void memberHasViewOnly() {
+        @DisplayName("MEMBER may view and work on tasks, but not edit the project, archive or manage members")
+        void memberWorksOnTasks() {
             givenMembership(ProjectRole.MEMBER);
 
             assertThat(authorizationService.hasPermission(USER, PROJECT_ID, ProjectPermission.VIEW_PROJECT))
+                    .isTrue();
+            assertThat(authorizationService.hasPermission(USER, PROJECT_ID, ProjectPermission.EDIT_TASKS))
                     .isTrue();
             assertThat(authorizationService.hasPermission(USER, PROJECT_ID, ProjectPermission.EDIT_PROJECT))
                     .isFalse();

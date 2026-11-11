@@ -45,7 +45,7 @@ public class ChecklistApplicationService {
     public Checklist createChecklist(RequestContext context, UUID taskId, CreateChecklistRequest request) {
         Task task = taskApplicationService.findActiveTaskInCallerOrganization(context, taskId);
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         Checklist checklist = Checklist.create(taskId, request.subtaskId(), request.text());
 
@@ -65,7 +65,7 @@ public class ChecklistApplicationService {
         Checklist checklist = findActiveChecklist(checklistId);
         Task task = taskApplicationService.findActiveTaskInCallerOrganization(context, checklist.getTaskId());
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         if (checklist.getVersion() != request.version()) {
             throw new ConflictException(
@@ -95,7 +95,7 @@ public class ChecklistApplicationService {
         Checklist checklist = findActiveChecklist(checklistId);
         Task task = taskApplicationService.findActiveTaskInCallerOrganization(context, checklist.getTaskId());
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         checklist.archive(context.requireUserId());
         checklistRepository.save(checklist);

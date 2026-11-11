@@ -17,7 +17,7 @@ const todoTask: Task = {
   dueDate: null,
   assigneeId: null,
   status: 'TODO',
-  archived: false,
+  archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[],
   createdAt: '2026-01-01T00:00:00Z',
   updatedAt: '2026-01-01T00:00:00Z',
   version: 0,

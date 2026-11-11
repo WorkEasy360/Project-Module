@@ -18,7 +18,7 @@ const projects = [
   { id: 'p2', name: 'Mobile App', status: 'PLANNING', priority: 'MEDIUM', ownerId: 'u', updatedAt: '2026-09-09T00:00:00Z' },
 ] as const
 const t = (over: Partial<Task>): Task => ({
-  id: 'x', projectId: 'p1', name: 'x', description: null, dueDate: null, assigneeId: null, status: 'TODO', archived: false, createdAt: '', updatedAt: '', version: 0, ...over,
+  id: 'x', projectId: 'p1', name: 'x', description: null, dueDate: null, assigneeId: null, status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0, ...over,
 })
 const tasksById: Record<string, Task[]> = {
   p1: [
@@ -79,7 +79,7 @@ describe('MyTasksPage', () => {
     // Sorted by due date ascending: past-due first, with the stored status kept and a derived marker.
     const first = rows()[0]
     expect(first).toHaveTextContent('Fix authentication bug')
-    expect(within(first).getByText('Todo', { selector: '.badge' })).toBeInTheDocument()
+    expect(within(first).getByText('To Do', { selector: '.badge' })).toBeInTheDocument()
     expect(within(first).getByText('past due')).toBeInTheDocument()
     expect(within(first).queryByText('Overdue', { selector: '.badge' })).not.toBeInTheDocument()
     expect(within(first).getByRole('link', { name: /Website Redesign/ })).toHaveAttribute('href', '/projects/p1/overview')
@@ -103,7 +103,7 @@ describe('MyTasksPage', () => {
     expect(within(blocked).getByText('Blocked', { selector: '.badge' })).toBeInTheDocument()
     expect(within(blocked).getByText('past due')).toBeInTheDocument()
     expect(within(blocked).queryByText('Overdue', { selector: '.badge' })).not.toBeInTheDocument()
-    expect(blocked).toHaveTextContent('someone-…')
+    expect(blocked).toHaveTextContent('someone-')
     const chore = rows().find((r) => r.textContent?.includes('Unassigned chore'))!
     expect(chore).toHaveTextContent('Unassigned')
     expect(chore).toHaveTextContent('No due date')

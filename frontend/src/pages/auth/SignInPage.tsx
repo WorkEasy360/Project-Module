@@ -1,59 +1,248 @@
-import { useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useIdentity } from '../../context/IdentityContext'
-import { dashboardApi } from '../../api/dashboard'
+import { forgetEarlierSignIn, getEarlierSignIn } from '../../context/identityStore'
+import { authApi, type Session } from '../../api/auth'
+import { ApiError } from '../../api/client'
 import { toUserMessage } from '../../api/errorMessage'
 import { Icon } from '../../components/common/Icon'
-import { BrandMark } from '../../components/layout/Sidebar'
+import { BRAND_NAME, BrandMark, BrandName } from '../../components/layout/Brand'
 import '../../styles/signin.css'
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+/** The small part of Google's sign-in script this page uses. */
+interface GoogleIdentity {
+  accounts: {
+    id: {
+      initialize: (options: { client_id: string; callback: (response: { credential: string }) => void }) => void
+      renderButton: (parent: HTMLElement, options: Record<string, unknown>) => void
+    }
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const MIN_PASSWORD_LENGTH = 8
+
+/** The backend's own wording is written for this form; a 401 or 409 here is not a session problem. */
+function authErrorMessage(error: unknown): string {
+  if (error instanceof ApiError && !error.problem?.errors?.length && error.problem?.detail) {
+    return error.problem.detail
+  }
+  return toUserMessage(error)
+}
 
 /**
- * Sign-in. This backend has no username/password login: every request is authorised by the
- * X-User-Id / X-Org-Id headers a gateway would inject. So "signing in" here means providing
- * those two identifiers, which are then *verified against the real backend* (a dashboard read
- * with those headers must succeed) before the app opens. Nothing is simulated: an identity the
- * backend rejects (401/403) is not stored. There is no third-party SSO because no such backend
- * integration exists.
+ * Sign in with email and password, or create an account. The backend checks the password and
+ * returns a session token; nothing is stored unless it accepts. "Forgot password" and "Sign in with
+ * Google" appear only when this deployment has email and a Google client id configured.
  */
 export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number }) {
-  const { identity, setIdentity, clearIdentity } = useIdentity()
+  const { identity, setIdentity } = useIdentity()
+  const { inviteToken, resetToken } = useParams<{ inviteToken: string; resetToken: string }>()
   const navigate = useNavigate()
   const location = useLocation()
   const from = (location.state as { from?: string } | null)?.from
-  const [userId, setUserId] = useState('')
-  const [orgId, setOrgId] = useState('')
+  // Someone who used the app before email sign-in still has their old ids in this browser.
+  const [earlier] = useState(() => (inviteToken || resetToken ? null : getEarlierSignIn()))
+  const [mode, setMode] = useState<'sign-in' | 'register' | 'forgot' | 'handover'>(
+    inviteToken ? 'register' : earlier ? 'handover' : 'sign-in',
+  )
+  const [notice, setNotice] = useState<string | null>(null)
+  const [config, setConfig] = useState<{ googleClientId: string; emailEnabled: boolean; legacyHandover?: boolean } | null>(null)
+  const googleButtonRef = useRef<HTMLDivElement>(null)
+  const [inviteInvalid, setInviteInvalid] = useState(false)
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
-  const [showIds, setShowIds] = useState(true)
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'checking' | 'success' | 'shake'>('idle')
 
-  // Already signed in (and not mid-verification): go straight to the workspace.
-  if (identity && phase === 'idle') {
+  const handingOver = mode === 'handover' && earlier !== null
+  // Moving over creates an account, so it asks for the same details as registering.
+  const registering = mode === 'register' || handingOver
+  const forgetting = mode === 'forgot'
+
+  function enterWorkspace(session: Session) {
+    // The phase moves first: an identity while idle would redirect straight past the animation.
+    setPhase('success')
+    setIdentity(
+      {
+        userId: session.account.id,
+        orgId: session.account.organizationId,
+        token: session.token,
+        email: session.account.email,
+        name: session.account.name,
+      },
+      remember,
+    )
+    window.setTimeout(() => navigate(from && from !== '/sign-in' ? from : '/dashboard', { replace: true }), successDelayMs)
+  }
+
+  // What this deployment offers: both of these depend on its configuration.
+  useEffect(() => {
+    authApi
+      .config()
+      .then((c) => {
+        setConfig(c)
+        // This server no longer moves earlier sign-ins: offer the ordinary sign-in instead.
+        if (c.legacyHandover === false) setMode((m) => (m === 'handover' ? 'sign-in' : m))
+      })
+      .catch(() => undefined)
+  }, [])
+
+  const googleClientId = config?.googleClientId
+  useEffect(() => {
+    if (!googleClientId || inviteToken || resetToken) return
+    const render = () => {
+      const google = (window as unknown as { google?: GoogleIdentity }).google
+      if (!google || !googleButtonRef.current) return
+      google.accounts.id.initialize({
+        client_id: googleClientId,
+        callback: (response) => {
+          authApi
+            .google({ credential: response.credential, rememberMe: true })
+            .then(enterWorkspace)
+            .catch((err: unknown) => fail(authErrorMessage(err)))
+        },
+      })
+      google.accounts.id.renderButton(googleButtonRef.current, { theme: 'outline', size: 'large', width: 340 })
+    }
+    const script = document.createElement('script')
+    script.src = 'https://accounts.google.com/gsi/client'
+    script.async = true
+    script.onload = render
+    document.head.appendChild(script)
+    return () => script.remove()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleClientId, inviteToken, resetToken])
+
+  // An invitation link fixes the address the new account will use.
+  useEffect(() => {
+    if (!inviteToken) return
+    authApi
+      .previewInvitation(inviteToken)
+      .then((invitation) => setEmail(invitation.email))
+      .catch((err: unknown) => {
+        setInviteInvalid(true)
+        setError(authErrorMessage(err))
+      })
+  }, [inviteToken])
+
+  // Already signed in (and not mid-verification): go straight to the workspace. An invitation is
+  // the exception, since whoever opened it may be joining with a new account on this browser.
+  if (identity && phase === 'idle' && !inviteToken && !resetToken) {
     return <Navigate to={from && from !== '/sign-in' ? from : '/dashboard'} replace />
   }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    const u = userId.trim()
-    const o = orgId.trim()
-    if (!UUID_RE.test(u) || !UUID_RE.test(o)) {
-      fail('Both IDs must be valid UUIDs (8-4-4-4-12 hexadecimal).')
+    setNotice(null)
+    if (resetToken) {
+      await submitReset(resetToken)
+      return
+    }
+    const trimmedEmail = email.trim()
+    if (forgetting) {
+      await submitForgot(trimmedEmail)
+      return
+    }
+    if (registering && !name.trim()) {
+      fail('Please enter your name.')
+      return
+    }
+    if (!EMAIL_RE.test(trimmedEmail)) {
+      fail('Please enter a valid email address.')
+      return
+    }
+    if (!password) {
+      fail('Please enter your password.')
+      return
+    }
+    if (registering && password.length < MIN_PASSWORD_LENGTH) {
+      fail(`Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       return
     }
     setPhase('checking')
     setError(null)
-    // The API client reads identity from the store, so set it first, then prove it works.
-    setIdentity({ userId: u, orgId: o }, remember)
     try {
-      await dashboardApi.get()
-      setPhase('success')
-      window.setTimeout(() => navigate(from && from !== '/sign-in' ? from : '/dashboard', { replace: true }), successDelayMs)
+      const session = inviteToken
+        ? await authApi.acceptInvitation({ token: inviteToken, name: name.trim(), password, rememberMe: remember })
+        : handingOver && earlier
+          ? await authApi.claimEarlierSignIn({
+              userId: earlier.userId,
+              organizationId: earlier.orgId,
+              name: name.trim(),
+              email: trimmedEmail,
+              password,
+              rememberMe: remember,
+            })
+        : registering
+          ? await authApi.register({ name: name.trim(), email: trimmedEmail, password, rememberMe: remember })
+          : await authApi.login({ email: trimmedEmail, password, rememberMe: remember })
+      enterWorkspace(session)
     } catch (err) {
-      clearIdentity()
-      fail(`We couldn't verify this identity with the backend. ${toUserMessage(err)}`)
+      setPassword('')
+      if (handingOver && err instanceof ApiError && err.status === 409) {
+        // This workspace was already moved over (perhaps on another device): just sign in.
+        setMode('sign-in')
+        setPhase('idle')
+        setError(null)
+        setNotice('Your workspace already has an email sign-in. Sign in with that email and password.')
+        return
+      }
+      fail(authErrorMessage(err))
     }
+  }
+
+  function startFresh() {
+    forgetEarlierSignIn()
+    setMode('register')
+    setError(null)
+    setNotice(null)
+    setPassword('')
+  }
+
+  async function submitForgot(address: string) {
+    if (!EMAIL_RE.test(address)) {
+      fail('Please enter a valid email address.')
+      return
+    }
+    setPhase('checking')
+    setError(null)
+    try {
+      await authApi.forgotPassword(address)
+      setNotice('If that address has an account, a reset link is on its way. Check your email.')
+      setMode('sign-in')
+      setPhase('idle')
+    } catch (err) {
+      fail(authErrorMessage(err))
+    }
+  }
+
+  async function submitReset(token: string) {
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      fail(`Your password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
+      return
+    }
+    setPhase('checking')
+    setError(null)
+    try {
+      await authApi.resetPassword({ token, newPassword: password })
+      setPassword('')
+      setNotice('Your password has been changed. Sign in with your new password.')
+      setPhase('idle')
+      navigate('/sign-in', { replace: true })
+    } catch (err) {
+      fail(authErrorMessage(err))
+    }
+  }
+
+  function switchMode() {
+    setMode(registering || forgetting ? 'sign-in' : 'register')
+    setError(null)
+    setNotice(null)
+    setPassword('')
   }
 
   function fail(message: string) {
@@ -64,11 +253,13 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
 
   return (
     <div className="si-page">
-      <section className="si-brand" aria-label="About WorkEasy360">
+      <section className="si-brand" aria-label={`About ${BRAND_NAME}`}>
         <div className="si-brand-head">
           <BrandMark size={40} />
           <div>
-            <div className="si-brand-name">WorkEasy360</div>
+            <div className="si-brand-name">
+              <BrandName />
+            </div>
             <div className="si-brand-tag">Plan · Collaborate · Achieve</div>
           </div>
         </div>
@@ -82,12 +273,31 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
 
       <section className="si-form-wrap" aria-labelledby="si-title">
         <form className={`si-card${phase === 'shake' ? ' shake' : ''}`} onSubmit={handleSubmit} noValidate>
-          <h2 id="si-title">Welcome back</h2>
-          <p className="si-form-sub">Sign in to continue to WorkEasy360</p>
-
-          <p className="si-note">
-            This workspace identifies you by your <strong>User ID</strong> and <strong>Organization ID</strong>{' '}
-            (sent as identity headers on every request). There is no password.
+          <h2 id="si-title">
+            {resetToken
+              ? 'Choose a new password'
+              : forgetting
+                ? 'Reset your password'
+                : inviteToken
+                  ? "You've been invited"
+                  : handingOver
+                    ? 'Welcome back! One quick step'
+                  : registering
+                    ? 'Create your account'
+                    : 'Welcome back'}
+          </h2>
+          <p className="si-form-sub">
+            {resetToken
+              ? 'This will sign you out everywhere else'
+              : forgetting
+                ? "We'll email you a link to set a new one"
+                : inviteToken
+              ? <>Set up your account to join your team on <BrandName /></>
+              : handingOver
+                ? 'We now use email sign-in. Choose the email and password you will use from now on. All your projects and tasks stay exactly as they are.'
+              : registering
+                ? <>Get started with <BrandName /></>
+                : <>Sign in to continue to <BrandName /></>}
           </p>
 
           {error && (
@@ -96,74 +306,143 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
             </div>
           )}
 
+          {notice && (
+            <div className="banner banner-info" role="status">
+              {notice}
+            </div>
+          )}
+
+          {registering && !resetToken && (
+            <label className="si-field">
+              <span className="si-label">Full name</span>
+              <span className="si-input">
+                <Icon name="user" size={16} />
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Your name"
+                  autoComplete="name"
+                  maxLength={120}
+                  required
+                />
+              </span>
+            </label>
+          )}
+          {!resetToken && (
           <label className="si-field">
-            <span className="si-label">User ID</span>
+            <span className="si-label">Email</span>
             <span className="si-input">
               <Icon name="user" size={16} />
               <input
-                type={showIds ? 'text' : 'password'}
-                value={userId}
-                onChange={(e) => setUserId(e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
                 autoComplete="username"
                 spellCheck={false}
+                readOnly={Boolean(inviteToken)}
                 required
               />
             </span>
           </label>
+          )}
+          {!forgetting && (
           <label className="si-field">
-            <span className="si-label">Organization ID</span>
+            <span className="si-label">{resetToken ? 'New password' : 'Password'}</span>
             <span className="si-input">
-              <Icon name="projects" size={16} />
+              <Icon name="settings" size={16} />
               <input
-                type={showIds ? 'text' : 'password'}
-                value={orgId}
-                onChange={(e) => setOrgId(e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                spellCheck={false}
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={registering || resetToken ? `At least ${MIN_PASSWORD_LENGTH} characters` : 'Your password'}
+                autoComplete={registering || resetToken ? 'new-password' : 'current-password'}
                 required
               />
               <button
                 type="button"
                 className="si-eye"
-                onClick={() => setShowIds((v) => !v)}
-                aria-label={showIds ? 'Hide identifiers' : 'Show identifiers'}
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
-                <Icon name={showIds ? 'eyeOff' : 'eye'} size={16} />
+                <Icon name={showPassword ? 'eyeOff' : 'eye'} size={16} />
               </button>
             </span>
           </label>
+          )}
 
+          {!forgetting && !resetToken && (
           <div className="si-row">
             <label className="checkbox-row">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               Remember me
             </label>
-            <span className="si-hint">{remember ? 'Kept on this device' : 'This tab only'}</span>
+            {mode === 'sign-in' && config?.emailEnabled ? (
+              <button type="button" className="si-switch si-forgot" onClick={() => { setMode('forgot'); setError(null); setNotice(null) }}>
+                Forgot password?
+              </button>
+            ) : (
+              <span className="si-hint">{remember ? 'Kept on this device' : 'This tab only'}</span>
+            )}
           </div>
+          )}
 
-          <button type="submit" className="btn btn-primary si-submit" disabled={phase === 'checking' || phase === 'success'}>
+          <button
+            type="submit"
+            className="btn btn-primary si-submit"
+            disabled={phase === 'checking' || phase === 'success' || inviteInvalid}
+          >
             {phase === 'checking' ? (
               <>
-                <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /> Verifying…
+                <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />{' '}
+                {resetToken || forgetting ? 'Sending…' : handingOver ? 'Saving…' : registering ? 'Creating your account…' : 'Signing in…'}
               </>
             ) : (
               <>
-                Continue <Icon name="arrowRight" size={16} />
+                {resetToken ? 'Set new password' : forgetting ? 'Send reset link' : inviteToken ? 'Join workspace' : handingOver ? 'Keep my workspace' : registering ? 'Create account' : 'Sign in'}{' '}
+                <Icon name="arrowRight" size={16} />
               </>
             )}
           </button>
 
-          <p className="si-foot">
-            Identity is verified against the backend before you enter. Nothing is stored unless it is accepted.
-          </p>
+          {googleClientId && !inviteToken && !resetToken && !forgetting && !handingOver && (
+            <div className="si-google">
+              <span className="si-divider">or</span>
+              <div ref={googleButtonRef} />
+            </div>
+          )}
+
+          {handingOver && (
+            <p className="si-foot">
+              Already did this?{' '}
+              <button type="button" className="si-switch" onClick={() => { setMode('sign-in'); setError(null); setPassword('') }}>
+                Sign in
+              </button>
+              {' · '}
+              <button type="button" className="si-switch" onClick={startFresh}>
+                Start a new workspace instead
+              </button>
+            </p>
+          )}
+
+          {!inviteToken && !resetToken && !handingOver && (
+            <p className="si-foot">
+              {forgetting ? 'Remembered it?' : registering ? 'Already have an account?' : <>New to <BrandName />?</>}{' '}
+              <button type="button" className="si-switch" onClick={switchMode}>
+                {registering || forgetting ? 'Sign in' : 'Create an account'}
+              </button>
+            </p>
+          )}
 
           {phase === 'success' && (
             <div className="si-success" role="status">
               <span className="si-check">
                 <Icon name="check" size={34} />
               </span>
-              <strong>Welcome to WorkEasy360</strong>
+              <strong>
+                Welcome to <BrandName />
+              </strong>
               <span>Opening your workspace…</span>
             </div>
           )}
@@ -203,8 +482,8 @@ function FloatingScene() {
         <path d="M5 95 C 80 20, 160 130, 315 30" fill="none" stroke="url(#si-grad)" strokeWidth="3" strokeLinecap="round" strokeDasharray="8 8" />
         <defs>
           <linearGradient id="si-grad" x1="0" x2="1">
-            <stop offset="0" stopColor="#6366f1" />
-            <stop offset="1" stopColor="#a855f7" />
+            <stop offset="0" stopColor="#00bf62" />
+            <stop offset="1" stopColor="#ffc940" />
           </linearGradient>
         </defs>
       </svg>

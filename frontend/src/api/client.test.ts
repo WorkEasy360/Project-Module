@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, ApiError, NetworkError } from './client'
-import { setIdentity } from '../context/identityStore'
+import { getIdentity, setIdentity } from '../context/identityStore'
 
 const originalFetch = globalThis.fetch
 
 describe('api client', () => {
   beforeEach(() => {
-    setIdentity({ userId: 'user-1', orgId: 'org-1' })
+    setIdentity({ userId: 'user-1', orgId: 'org-1', token: 'session-token' })
   })
 
   afterEach(() => {
@@ -15,7 +15,25 @@ describe('api client', () => {
     vi.restoreAllMocks()
   })
 
-  it('sends X-User-Id and X-Org-Id headers on every request', async () => {
+  it('ends the local session when the backend no longer accepts its token', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ type: 't', title: 't', status: 401, detail: 'expired' }), { status: 401 }),
+    ) as unknown as typeof fetch
+
+    await expect(api.get('/projects')).rejects.toBeInstanceOf(ApiError)
+    expect(getIdentity()).toBeNull()
+  })
+
+  it('keeps the session on other errors', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ type: 't', title: 't', status: 403, detail: 'no' }), { status: 403 }),
+    ) as unknown as typeof fetch
+
+    await expect(api.get('/projects')).rejects.toBeInstanceOf(ApiError)
+    expect(getIdentity()).not.toBeNull()
+  })
+
+  it('sends the session token, and no longer sends identity headers, on every request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ ok: true }), { status: 200, headers: { 'Content-Type': 'application/json' } }),
     )
@@ -26,8 +44,9 @@ describe('api client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     const headers = init.headers as Record<string, string>
-    expect(headers['X-User-Id']).toBe('user-1')
-    expect(headers['X-Org-Id']).toBe('org-1')
+    expect(headers['Authorization']).toBe('Bearer session-token')
+    expect(headers['X-User-Id']).toBeUndefined()
+    expect(headers['X-Org-Id']).toBeUndefined()
     expect(headers['X-Correlation-Id']).toBeTruthy()
   })
 

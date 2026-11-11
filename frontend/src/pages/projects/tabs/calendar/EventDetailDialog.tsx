@@ -1,3 +1,4 @@
+import { usePeople } from '../../../../context/PeopleContext'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Modal } from '../../../../components/common/Modal'
@@ -41,6 +42,7 @@ export function EventDetailDialog({
   /** Called after any successful change so the caller reloads from the database. */
   onChanged?: () => void
 }) {
+  const { nameOf } = usePeople()
   const tone = entryTone(entry)
   const base = `/projects/${projectId}`
   const target =
@@ -126,7 +128,7 @@ export function EventDetailDialog({
           {entry.entityType === 'TASK' && (
             <div>
               <dt>Assignee</dt>
-              <dd className="mono">{entry.assigneeId ?? 'Unassigned'}</dd>
+              <dd>{entry.assigneeId ? nameOf(entry.assigneeId) : 'Unassigned'}</dd>
             </div>
           )}
         </dl>

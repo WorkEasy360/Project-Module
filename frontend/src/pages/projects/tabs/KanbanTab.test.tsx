@@ -18,7 +18,7 @@ const project: Project = {
 }
 const task: Task = {
   id: 't1', projectId: 'p1', name: 'Repro task', description: null, dueDate: null, assigneeId: null,
-  status: 'TODO', archived: false, createdAt: '', updatedAt: '', version: 0,
+  status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0,
 }
 
 function board(status: Task['status']) {

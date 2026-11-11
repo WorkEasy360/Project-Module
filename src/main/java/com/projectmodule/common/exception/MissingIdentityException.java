@@ -1,11 +1,8 @@
 package com.projectmodule.common.exception;
 
 /**
- * The request carried no caller identity where one is required.
- *
- * <p>This module does not authenticate anyone. Identity is expected to have been established
- * upstream and passed in. This exception reports that it was absent, which is a contract
- * failure between the gateway and this module rather than a rejected credential.
+ * The request carried no valid caller identity where one is required, or sign-in was refused.
+ * Either way the caller is not authenticated, so both are answered 401.
  */
 public final class MissingIdentityException extends ProjectModuleException {
 

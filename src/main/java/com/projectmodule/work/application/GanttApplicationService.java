@@ -77,7 +77,8 @@ public class GanttApplicationService {
         List<GanttPointResponse> tasks = taskRepository
                 .findByProjectIdAndDueDateIsNotNullAndArchivedAtIsNullOrderByDueDateAsc(projectId)
                 .stream()
-                .map(task -> new GanttPointResponse(task.getId(), task.getName(), task.getDueDate().orElseThrow()))
+                .map(task -> new GanttPointResponse(task.getId(), task.getName(), task.getDueDate().orElseThrow(),
+                        task.getStartDate().orElse(null)))
                 .toList();
 
         List<GanttPointResponse> milestones = milestoneRepository

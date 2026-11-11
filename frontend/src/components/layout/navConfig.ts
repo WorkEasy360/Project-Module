@@ -17,6 +17,22 @@ export function workspaceNav(): NavItem[] {
   return coreFeatures('workspace').map((f) => ({ to: f.route, label: f.name, icon: f.icon, feature: f }))
 }
 
+/** The sidebar's sections, so a longer list stays easy to scan. */
+const WORKSPACE_GROUPS: { title: string; featureIds: string[] }[] = [
+  { title: 'Work', featureIds: ['home', 'projects', 'my-tasks', 'workspace-calendar'] },
+  { title: 'Team', featureIds: ['team', 'timesheet'] },
+  { title: 'Insights', featureIds: ['workspace-reports', 'workspace-automations'] },
+  { title: 'Setup', featureIds: ['templates', 'settings'] },
+]
+
+export function workspaceNavGroups(): { title: string; items: NavItem[] }[] {
+  const items = workspaceNav()
+  return WORKSPACE_GROUPS.map((group) => ({
+    title: group.title,
+    items: group.featureIds.flatMap((id) => items.filter((item) => item.feature?.id === id)),
+  }))
+}
+
 export function projectNav(projectId: string): NavItem[] {
   return [
     ...coreFeatures('project').map((f) => ({

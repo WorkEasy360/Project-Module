@@ -62,6 +62,12 @@ class TaskApplicationServiceTest {
     @Mock
     private WorkEventRecorder workEventRecorder;
 
+    @Mock
+    private TaskNotifier taskNotifier;
+
+    @Mock
+    private com.projectmodule.work.infrastructure.TaskFollowerRepository followerRepository;
+
     private TaskApplicationService service;
     private RequestContext context;
     private Project project;
@@ -69,7 +75,8 @@ class TaskApplicationServiceTest {
     @BeforeEach
     void setUp() {
         service = new TaskApplicationService(
-                taskRepository, projectApplicationService, projectAuthorizationService, workEventRecorder);
+                taskRepository, projectApplicationService, projectAuthorizationService, workEventRecorder,
+                taskNotifier, followerRepository);
         context = new ImmutableRequestContext(
                 Optional.of(USER), Optional.of(ORG), "corr-1", ActorType.HUMAN);
         project = Project.create(ORG, "Apollo", USER, ProjectPriority.MEDIUM);
@@ -101,7 +108,7 @@ class TaskApplicationServiceTest {
                     .thenReturn(project);
             doThrow(new AuthorizationException("denied"))
                     .when(projectAuthorizationService)
-                    .requirePermission(USER, project.getId(), ProjectPermission.EDIT_PROJECT);
+                    .requirePermission(USER, project.getId(), ProjectPermission.EDIT_TASKS);
 
             CreateTaskRequest request = new CreateTaskRequest("Implement login", null, null, null);
 
@@ -325,19 +332,57 @@ class TaskApplicationServiceTest {
         }
 
         @Test
-        @DisplayName("status TODO is rejected - no event exists for that transition")
-        void statusTodoIsRejected() {
+        @DisplayName("a blocked or completed task can be put back to To Do")
+        void reopensTask() {
             Task task = Task.create(project.getId(), "Implement login", null, null);
-            task.markBlocked();
+            task.complete();
+            when(taskRepository.findByIdAndArchivedAtIsNull(task.getId())).thenReturn(Optional.of(task));
+            when(projectApplicationService.findActiveProjectInCallerOrganization(context, project.getId()))
+                    .thenReturn(project);
+            when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.updateTask(context, task.getId(), new UpdateTaskRequest(
+                    null, null, null, null, TaskStatus.TODO, task.getVersion()));
+
+            assertThat(task.getStatus()).isEqualTo(TaskStatus.TODO);
+        }
+
+        @Test
+        @DisplayName("completing a repeating task creates its next occurrence, once")
+        void completingARepeatingTaskCreatesTheNextOne() {
+            Task task = Task.create(project.getId(), "Weekly report", java.time.LocalDate.of(2026, 3, 2), USER);
+            task.repeat(com.projectmodule.work.domain.TaskRecurrence.WEEKLY);
+            task.tag(java.util.List.of("reports"));
+            when(taskRepository.findByIdAndArchivedAtIsNull(task.getId())).thenReturn(Optional.of(task));
+            when(projectApplicationService.findActiveProjectInCallerOrganization(context, project.getId()))
+                    .thenReturn(project);
+            when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+            org.mockito.ArgumentCaptor<Task> saved = org.mockito.ArgumentCaptor.forClass(Task.class);
+
+            service.updateTask(context, task.getId(), new UpdateTaskRequest(
+                    null, null, null, null, TaskStatus.COMPLETED, task.getVersion()));
+            verify(taskRepository, org.mockito.Mockito.times(2)).save(saved.capture());
+
+            Task next = saved.getAllValues().get(1);
+            assertThat(next.getId()).isNotEqualTo(task.getId());
+            assertThat(next.getStatus()).isEqualTo(TaskStatus.TODO);
+            assertThat(next.getDueDate()).contains(java.time.LocalDate.of(2026, 3, 9));
+            assertThat(next.getTags()).containsExactly("reports");
+            assertThat(task.spawnNextOccurrence()).isEmpty();
+        }
+
+        @Test
+        @DisplayName("a due date before the start date is refused")
+        void refusesDatesOutOfOrder() {
+            Task task = Task.create(project.getId(), "Implement login", java.time.LocalDate.of(2026, 3, 2), null);
             when(taskRepository.findByIdAndArchivedAtIsNull(task.getId())).thenReturn(Optional.of(task));
             when(projectApplicationService.findActiveProjectInCallerOrganization(context, project.getId()))
                     .thenReturn(project);
 
-            UpdateTaskRequest request = new UpdateTaskRequest(
-                    null, null, null, null, TaskStatus.TODO, task.getVersion());
-
-            assertThatThrownBy(() -> service.updateTask(context, task.getId(), request))
-                    .isInstanceOf(BusinessRuleViolationException.class);
+            assertThatThrownBy(() -> service.updateTask(context, task.getId(), new UpdateTaskRequest(
+                    null, null, null, null, null, task.getVersion(), java.time.LocalDate.of(2026, 3, 5),
+                    null, null, null, null)))
+                    .isInstanceOf(com.projectmodule.common.exception.ValidationException.class);
         }
 
         @Test

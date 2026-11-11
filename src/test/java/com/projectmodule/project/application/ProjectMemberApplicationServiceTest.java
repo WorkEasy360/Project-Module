@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.projectmodule.account.domain.UserAccount;
+import com.projectmodule.account.infrastructure.UserAccountRepository;
 import com.projectmodule.common.context.ActorType;
 import com.projectmodule.common.context.ImmutableRequestContext;
 import com.projectmodule.common.context.RequestContext;
@@ -53,6 +55,9 @@ class ProjectMemberApplicationServiceTest {
     @Mock
     private ProjectAuthorizationService projectAuthorizationService;
 
+    @Mock
+    private UserAccountRepository userAccountRepository;
+
     private ProjectMemberApplicationService service;
     private RequestContext context;
     private Project project;
@@ -60,7 +65,8 @@ class ProjectMemberApplicationServiceTest {
     @BeforeEach
     void setUp() {
         service = new ProjectMemberApplicationService(
-                projectMemberRepository, projectApplicationService, projectAuthorizationService);
+                projectMemberRepository, projectApplicationService, projectAuthorizationService,
+                userAccountRepository);
         context = new ImmutableRequestContext(
                 Optional.of(CALLER), Optional.of(ORG), "corr-1", ActorType.HUMAN);
         project = Project.create(ORG, "Apollo", OWNER, ProjectPriority.MEDIUM);
@@ -99,6 +105,18 @@ class ProjectMemberApplicationServiceTest {
 
     @Nested
     class Add {
+
+        @Test
+        @DisplayName("refuses someone whose account is in another workspace")
+        void refusesOtherWorkspace() {
+            UserAccount outsider = UserAccount.register("out@example.com", "Outsider", "hash");
+            when(userAccountRepository.findById(outsider.getId())).thenReturn(Optional.of(outsider));
+
+            assertThatThrownBy(() -> service.addMember(context, project.getId(),
+                    new AddMemberRequest(outsider.getId(), ProjectRole.MEMBER)))
+                    .isInstanceOf(BusinessRuleViolationException.class);
+            verify(projectMemberRepository, never()).save(any());
+        }
 
         @Test
         @DisplayName("adds a member after checking MANAGE_MEMBERS")

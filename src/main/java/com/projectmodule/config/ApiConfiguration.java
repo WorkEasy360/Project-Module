@@ -45,7 +45,7 @@ public class ApiConfiguration implements WebMvcConfigurer {
         registry.addMapping(API_PREFIX + "/**")
                 .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders("Content-Type", "X-User-Id", "X-Org-Id", "X-Correlation-Id")
+                .allowedHeaders("Authorization", "Content-Type", "X-User-Id", "X-Org-Id", "X-Correlation-Id")
                 .exposedHeaders("Location");
     }
 }

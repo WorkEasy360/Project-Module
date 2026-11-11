@@ -1,17 +1,22 @@
-import { NavLink, useMatch } from 'react-router-dom'
+import { NavLink } from 'react-router-dom'
 import { useSidebar } from '../../context/SidebarContext'
 import { Icon } from '../common/Icon'
-import { projectNav, workspaceNav, type NavItem } from './navConfig'
+import { BrandMark, BrandName } from './Brand'
+import { useIdentity } from '../../context/IdentityContext'
+import { usePeople } from '../../context/PeopleContext'
+import { initials } from '../../utils/format'
+
+export { BrandMark }
+import { workspaceNavGroups, type NavItem } from './navConfig'
 
 /**
- * Deliberately short: only CORE features from the feature registry plus a "More" entry that
- * opens the Advanced Features hub. Everything else stays reachable through that hub — the
- * sidebar never needs editing when a feature is added.
+ * The workspace's core features, in short labelled sections. A project's own screens are its tabs,
+ * on the project page, so they are not repeated here.
  */
 export function Sidebar() {
   const { isMobile, collapsed, mobileOpen, closeMobile } = useSidebar()
-  const projectMatch = useMatch('/projects/:projectId/*')
-  const projectId = projectMatch?.params.projectId
+  const { identity } = useIdentity()
+  const { isAdmin } = usePeople()
 
   const iconOnly = !isMobile && collapsed
   const visible = isMobile ? mobileOpen : true
@@ -30,51 +35,36 @@ export function Sidebar() {
           <BrandMark />
           {!iconOnly && (
             <span className="sidebar-brand-text">
-              <span className="sidebar-brand-name">WorkEasy360</span>
+              <span className="sidebar-brand-name">
+                <BrandName />
+              </span>
               <span className="sidebar-brand-tagline">Plan · Collaborate · Achieve</span>
             </span>
           )}
         </div>
         <nav className="sidebar-nav" aria-label="Primary">
-          <NavGroup title="Workspace" items={workspaceNav()} iconOnly={iconOnly} onNavigate={closeMobile} />
-          {projectId && (
-            <>
-              <div className="sidebar-divider" role="separator" />
-              <NavGroup
-                title="This project"
-                items={projectNav(projectId)}
-                iconOnly={iconOnly}
-                onNavigate={closeMobile}
-              />
-            </>
-          )}
+          {workspaceNavGroups().map((group) => (
+            <NavGroup key={group.title} title={group.title} items={group.items} iconOnly={iconOnly} onNavigate={closeMobile} />
+          ))}
         </nav>
+        {identity && (
+          <div className="sidebar-user" title={iconOnly ? identity.name ?? undefined : undefined}>
+            <span className="sidebar-user-avatar" aria-hidden="true">
+              {initials(identity.name ?? identity.email ?? '?')}
+            </span>
+            {!iconOnly && (
+              <span className="sidebar-user-text">
+                <strong>{identity.name ?? identity.email}</strong>
+                <span>{isAdmin ? 'Admin' : 'Member'}</span>
+              </span>
+            )}
+          </div>
+        )}
       </aside>
     </>
   )
 }
 
-/** The WorkEasy360 loop mark, drawn inline so it scales crisply and follows the theme. */
-export function BrandMark({ size = 30 }: { size?: number }) {
-  return (
-    <svg className="brand-mark" width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-      <defs>
-        <linearGradient id="we-brand" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#6366f1" />
-          <stop offset="1" stopColor="#a855f7" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M8 12c0-2.8 2.2-5 5-5s5 2.2 5 5v16c0 2.8 2.2 5 5 5s5-2.2 5-5V12c0-2.8 2.2-5 5-5"
-        fill="none"
-        stroke="url(#we-brand)"
-        strokeWidth="5.5"
-        strokeLinecap="round"
-      />
-      <circle cx="33" cy="12" r="4.5" fill="url(#we-brand)" />
-    </svg>
-  )
-}
 
 function NavGroup({
   title,

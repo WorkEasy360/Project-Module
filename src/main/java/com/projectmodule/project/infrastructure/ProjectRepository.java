@@ -62,4 +62,16 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
 
         long getTotal();
     }
+
+    /** The live projects a person belongs to: what they see in lists. */
+    @Query("SELECT p FROM Project p, ProjectMember m WHERE m.projectId = p.id AND m.userId = :userId "
+            + "AND p.organizationId = :organizationId AND p.archivedAt IS NULL")
+    Page<Project> findVisibleToUser(@Param("organizationId") UUID organizationId, @Param("userId") UUID userId,
+                                    Pageable pageable);
+
+    @Query("SELECT p FROM Project p, ProjectMember m WHERE m.projectId = p.id AND m.userId = :userId "
+            + "AND p.organizationId = :organizationId AND p.archivedAt IS NULL "
+            + "AND LOWER(p.name) LIKE LOWER(CONCAT('%', :term, '%')) ORDER BY p.updatedAt DESC")
+    List<Project> searchVisibleToUser(@Param("organizationId") UUID organizationId, @Param("userId") UUID userId,
+                                      @Param("term") String term, Pageable pageable);
 }

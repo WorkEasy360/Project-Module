@@ -1,3 +1,4 @@
+import { usePeople } from '../../../context/PeopleContext'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useProjectWorkspace } from '../../../context/ProjectWorkspaceContext'
@@ -11,7 +12,7 @@ import { ErrorState } from '../../../components/common/ErrorState'
 import { Skeleton, StatGridSkeleton } from '../../../components/common/Skeleton'
 import { Icon } from '../../../components/common/Icon'
 import { Badge, ArchivedBadge, TaskStatusBadge } from '../../../components/common/Badge'
-import { formatDate } from '../../../utils/format'
+import { formatDate, humanizeToken } from '../../../utils/format'
 import { EditProjectDialog } from '../EditProjectDialog'
 import { ArchiveProjectDialog } from '../ArchiveProjectDialog'
 import { CreateTaskDialog } from '../CreateTaskDialog'
@@ -24,6 +25,7 @@ import type { DelayedItem, ProjectHealth, Task } from '../../../types/work'
  * comes from a real endpoint (health, reports/summary, tasks?status=…, members).
  */
 export function OverviewTab() {
+  const { nameOf } = usePeople()
   const { project, can } = useProjectWorkspace()
   const navigate = useNavigate()
   const [editOpen, setEditOpen] = useState(false)
@@ -177,8 +179,8 @@ export function OverviewTab() {
             <ul className="list-plain">
               {members.data.slice(0, 6).map((m) => (
                 <li key={m.id} className="work-item">
-                  <span className="mono">{m.userId.slice(0, 8)}…</span>
-                  <Badge tone={m.role === 'OWNER' ? 'primary' : 'neutral'}>{m.role}</Badge>
+                  <span>{nameOf(m.userId)}</span>
+                  <Badge tone={m.role === 'OWNER' ? 'primary' : 'neutral'}>{humanizeToken(m.role)}</Badge>
                 </li>
               ))}
               {members.data.length > 6 && (

@@ -18,7 +18,7 @@ const projects = [
   { id: 'p3', name: 'Data Migration', status: 'ON_HOLD', priority: 'LOW', ownerId: 'u', updatedAt: '2026-09-08T00:00:00Z' },
 ] as const
 const empty: ProjectSummaryReport = {
-  taskCountByStatus: { TODO: 0, BLOCKED: 0, OVERDUE: 0, COMPLETED: 0 },
+  taskCountByStatus: { TODO: 0, IN_PROGRESS: 0, BLOCKED: 0, OVERDUE: 0, COMPLETED: 0 },
   riskCountByStatus: { OPEN: 0, RESOLVED: 0 },
   riskCountByPriority: { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 },
   issueCountByPriority: { LOW: 0, MEDIUM: 0, HIGH: 0, CRITICAL: 0 },
@@ -28,7 +28,7 @@ const empty: ProjectSummaryReport = {
 }
 const reportsById: Record<string, ProjectSummaryReport> = {
   p1: {
-    taskCountByStatus: { TODO: 2, BLOCKED: 1, OVERDUE: 0, COMPLETED: 3 },
+    taskCountByStatus: { TODO: 2, IN_PROGRESS: 0, BLOCKED: 1, OVERDUE: 0, COMPLETED: 3 },
     riskCountByStatus: { OPEN: 1, RESOLVED: 2 },
     riskCountByPriority: { LOW: 1, MEDIUM: 0, HIGH: 1, CRITICAL: 0 },
     issueCountByPriority: { LOW: 0, MEDIUM: 2, HIGH: 0, CRITICAL: 1 },
@@ -78,7 +78,7 @@ describe('WorkspaceReportsPage', () => {
     // 3 completed of 6 tasks -> 50% (the card exists before its report resolves, so wait for it)
     expect(await within(website).findByRole('progressbar')).toHaveAttribute('aria-valuenow', '50')
     expect(website).toHaveTextContent('3/6 tasks · 50%')
-    expect(website).toHaveTextContent('2Todo')
+    expect(website).toHaveTextContent('2To Do')
     expect(website).toHaveTextContent('1Blocked')
     expect(website).toHaveTextContent('3Completed')
     expect(website).toHaveTextContent('1Open')

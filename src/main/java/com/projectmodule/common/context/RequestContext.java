@@ -8,9 +8,8 @@ import java.util.Optional;
 /**
  * The identity and tracing information attached to a unit of work.
  *
- * <p>This module does not authenticate. It consumes an identity that an upstream gateway has
- * already authenticated, and exposes it here. Authentication, credential handling and session
- * management all belong to another module.
+ * <p>By the time code sees this, the caller has been authenticated (see
+ * {@code RequestContextFilter}). Nothing outside the {@code account} package handles credentials.
  *
  * <p>The same abstraction is used by the AI and automation paths, so every layer below sees
  * one uniform notion of "who is asking" regardless of how the work arrived.

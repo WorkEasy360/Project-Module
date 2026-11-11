@@ -94,7 +94,7 @@ class ApiConfigurationCorsTest {
                         .header(HttpHeaders.ORIGIN, "https://ops.workeasy360.com")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
                         .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS,
-                                "content-type,x-user-id,x-org-id,x-correlation-id"))
+                                "authorization,content-type,x-correlation-id"))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Access-Control-Allow-Origin", "https://ops.workeasy360.com"))
                 .andExpect(header().stringValues("Access-Control-Allow-Methods",
@@ -102,9 +102,9 @@ class ApiConfigurationCorsTest {
     }
 
     /**
-     * Credentials stay off. This API is authorised by the X-User-Id / X-Org-Id headers the
-     * upstream gateway supplies, not by cookies or HTTP authentication, and the browser client
-     * never sets {@code credentials: 'include'}. Switching credentials on would tell browsers to
+     * Credentials stay off. This API is authorised by a bearer token the client sends explicitly,
+     * not by cookies, and the browser client never sets {@code credentials: 'include'}. Switching
+     * credentials on would tell browsers to
      * attach cookies to cross-origin calls, widening exposure for no functional gain, so its
      * absence is asserted rather than left to chance.
      */

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -17,6 +18,20 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     Optional<Task> findByIdAndArchivedAtIsNull(UUID id);
 
     List<Task> findByProjectIdAndArchivedAtIsNullOrderByCreatedAtAsc(UUID projectId);
+
+    /** Open, assigned tasks in live projects, due on the date: what the reminder job tells people about. */
+    @Query("SELECT t FROM Task t, Project p WHERE t.projectId = p.id AND p.archivedAt IS NULL "
+            + "AND t.archivedAt IS NULL AND t.assigneeId IS NOT NULL AND t.status <> com.projectmodule.work.domain.TaskStatus.COMPLETED "
+            + "AND t.dueDate = :date")
+    List<Task> findOpenAssignedTasksDueOn(@Param("date") LocalDate date);
+
+    /** Tasks by name in the projects a person belongs to, each with its project's name. */
+    @Query("SELECT t, p.name FROM Task t, Project p, ProjectMember m "
+            + "WHERE t.projectId = p.id AND m.projectId = p.id AND m.userId = :userId "
+            + "AND p.organizationId = :organizationId AND p.archivedAt IS NULL AND t.archivedAt IS NULL "
+            + "AND LOWER(t.name) LIKE LOWER(CONCAT('%', :term, '%')) ORDER BY t.updatedAt DESC")
+    List<Object[]> searchVisibleToUser(@Param("organizationId") UUID organizationId, @Param("userId") UUID userId,
+                                       @Param("term") String term, Pageable pageable);
 
     /** For {@code docs/project/17-CALENDAR-SPEC.md} §5: active tasks with a real due date. */
     List<Task> findByProjectIdAndDueDateIsNotNullAndArchivedAtIsNullOrderByDueDateAsc(UUID projectId);

@@ -5,8 +5,8 @@
   display: grid;
   grid-template-columns: 1.1fr 1fr;
   background:
-    radial-gradient(900px 500px at 10% 0%, rgba(99, 102, 241, 0.16), transparent 60%),
-    radial-gradient(700px 400px at 100% 100%, rgba(168, 85, 247, 0.14), transparent 55%),
+    radial-gradient(900px 500px at 10% 0%, rgba(0, 191, 98, 0.16), transparent 60%),
+    radial-gradient(700px 400px at 100% 100%, rgba(0, 143, 73, 0.14), transparent 55%),
     var(--color-bg);
 }
 
@@ -27,10 +27,6 @@
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: var(--gradient-brand);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 .si-brand-tag {
   font-size: 12px;
@@ -92,14 +88,14 @@
   width: 80px;
   height: 22px;
   border-radius: 8px 8px 0 0;
-  background: linear-gradient(135deg, #7c7ff5, #9f8bff);
+  background: linear-gradient(160deg, #7be8b2, #1fd47a);
 }
 .si-folder-body {
   position: absolute;
   inset: 14px 0 0 0;
   border-radius: 10px 14px 14px 14px;
-  background: linear-gradient(160deg, #8b8ff8, #6d6ff0 60%, #5a5ce8);
-  box-shadow: 0 30px 50px -20px rgba(79, 70, 229, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  background: linear-gradient(160deg, #3fd98a, #00bf62 60%, #008f49);
+  box-shadow: 0 30px 50px -20px rgba(0, 143, 73, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
 }
 .si-float {
   position: absolute;
@@ -148,7 +144,7 @@
 .si-chip-1 {
   left: 18%;
   top: 8%;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  background: linear-gradient(135deg, #008f49, #00bf62);
 }
 .si-chip-2 {
   left: 6%;
@@ -279,9 +275,21 @@
 }
 .si-foot {
   margin: 14px 0 0;
-  font-size: 11.5px;
+  font-size: 13px;
   color: var(--color-text-faint);
   text-align: center;
+}
+.si-switch {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+.si-switch:hover {
+  text-decoration: underline;
 }
 
 /* feedback */
@@ -380,4 +388,22 @@
   .si-scene {
     display: none;
   }
+}
+
+.si-forgot {
+  font-size: 13px;
+}
+.si-google {
+  margin-top: 14px;
+}
+.si-divider {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--color-text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+.si-google > div {
+  display: flex;
+  justify-content: center;
 }

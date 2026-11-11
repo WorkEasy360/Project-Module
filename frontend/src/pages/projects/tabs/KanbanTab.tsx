@@ -1,3 +1,5 @@
+import { PriorityBadge } from '../../../components/common/Badge'
+import { usePeople } from '../../../context/PeopleContext'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useProjectWorkspace } from '../../../context/ProjectWorkspaceContext'
@@ -5,12 +7,13 @@ import { useAsyncData } from '../../../hooks/useAsyncData'
 import { tasksApi } from '../../../api/tasks'
 import { LoadingState } from '../../../components/common/LoadingState'
 import { ErrorState, InlineError } from '../../../components/common/ErrorState'
-import { humanizeToken } from '../../../utils/format'
+import { humanizeToken, formatDate, initials } from '../../../utils/format'
 import { TASK_STATUS_TRANSITIONS, type KanbanColumn, type Task, type TaskStatus } from '../../../types/work'
 import { toUserMessage } from '../../../api/errorMessage'
 import { TaskStatusControl } from '../../../components/task/TaskStatusControl'
 
 export function KanbanTab() {
+  const { nameOf } = usePeople()
   const { project, can } = useProjectWorkspace()
   const { data, loading, error, reload } = useAsyncData(() => tasksApi.board(project.id), [project.id])
   const [draggingTask, setDraggingTask] = useState<Task | null>(null)
@@ -24,14 +27,14 @@ export function KanbanTab() {
 
   async function handleDrop(column: KanbanColumn) {
     setDropTarget(null)
-    if (!draggingTask || !can('EDIT_PROJECT')) return
+    if (!draggingTask || !can('EDIT_TASKS')) return
     const task = draggingTask
     setDraggingTask(null)
     if (task.status === column.status) return
 
     const allowed = TASK_STATUS_TRANSITIONS[task.status].includes(column.status)
     if (!allowed) {
-      setMessage(`Cannot move a task from ${task.status} directly to ${column.status}.`)
+      setMessage(`Cannot move a task from ${humanizeToken(task.status)} to ${humanizeToken(column.status)}.`)
       return
     }
 
@@ -76,15 +79,23 @@ export function KanbanTab() {
                 <div
                   key={task.id}
                   className={`kanban-card${draggingTask?.id === task.id ? ' dragging' : ''}`}
-                  draggable={can('EDIT_PROJECT')}
+                  draggable={can('EDIT_TASKS')}
                   onDragStart={() => setDraggingTask(task)}
                   onDragEnd={() => setDraggingTask(null)}
                 >
                   <Link to={`../tasks/${task.id}`} relative="path">
                     {task.name}
                   </Link>
-                  {task.dueDate && <div className="text-faint">Due {task.dueDate}</div>}
-                  {can('EDIT_PROJECT') && (
+                  <div className="kanban-card-meta">
+                    <PriorityBadge priority={task.priority} />
+                    {task.dueDate && <span className="text-faint">{formatDate(task.dueDate)}</span>}
+                    {task.assigneeId && (
+                      <span className="task-avatar sm" title={nameOf(task.assigneeId)}>
+                        {initials(nameOf(task.assigneeId))}
+                      </span>
+                    )}
+                  </div>
+                  {can('EDIT_TASKS') && (
                     <div className="kanban-card-actions">
                       <TaskStatusControl task={task} onChanged={reload} compact />
                     </div>

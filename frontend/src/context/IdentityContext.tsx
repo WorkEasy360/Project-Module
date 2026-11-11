@@ -6,6 +6,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from 'react'
+import { authApi } from '../api/auth'
 import { type Identity, getIdentity, setIdentity, subscribeIdentity } from './identityStore'
 
 interface IdentityContextValue {
@@ -13,7 +14,7 @@ interface IdentityContextValue {
   isConfigured: boolean
   setIdentity: (identity: Identity, remember?: boolean) => void
   clearIdentity: () => void
-  /** Shared so both the header widget and the setup banner open the same dialog. */
+  /** Shared so both the header and Settings open the same account dialog. */
   isPromptOpen: boolean
   openPrompt: () => void
   closePrompt: () => void
@@ -26,7 +27,12 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const [isPromptOpen, setPromptOpen] = useState(false)
 
   const update = useCallback((next: Identity, remember = true) => setIdentity(next, remember), [])
-  const clear = useCallback(() => setIdentity(null), [])
+  const clear = useCallback(() => {
+    // The request captures the token before the identity is cleared. Signing out locally must
+    // succeed even if the server cannot be reached.
+    if (getIdentity()?.token) authApi.logout().catch(() => undefined)
+    setIdentity(null)
+  }, [])
   const openPrompt = useCallback(() => setPromptOpen(true), [])
   const closePrompt = useCallback(() => setPromptOpen(false), [])
 

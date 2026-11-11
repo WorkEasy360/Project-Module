@@ -9,6 +9,7 @@ import com.projectmodule.work.application.ProjectCommentApplicationService;
 import com.projectmodule.work.domain.ProjectComment;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -19,7 +20,9 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -60,6 +63,19 @@ public class CommentController {
                 .toUri();
 
         return ResponseEntity.created(location).body(response);
+    }
+
+    @GetMapping("/tasks/{taskId}/comments")
+    public List<CommentResponse> listTaskComments(@PathVariable UUID taskId) {
+        return commentApplicationService.listTaskComments(requestContext, taskId).stream()
+                .map(commentMapper::toResponse).toList();
+    }
+
+    @PostMapping("/tasks/{taskId}/comments")
+    @ResponseStatus(HttpStatus.CREATED)
+    public CommentResponse createTaskComment(@PathVariable UUID taskId,
+                                             @Valid @RequestBody CreateCommentRequest request) {
+        return commentMapper.toResponse(commentApplicationService.createTaskComment(requestContext, taskId, request));
     }
 
     @GetMapping("/projects/{projectId}/comments")

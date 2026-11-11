@@ -13,14 +13,15 @@ import { LoadingState } from '../../components/common/LoadingState'
 import { Skeleton } from '../../components/common/Skeleton'
 import { humanizeToken } from '../../utils/format'
 import { PROJECT_ROLES, type ProjectMember, type ProjectRole, type ProjectSummary } from '../../types/project'
+import { usePeople } from '../../context/PeopleContext'
 import { ProjectLimitNote, PerProjectErrors } from './WorkspaceNotices'
+import { WorkspacePeoplePanel } from './WorkspacePeoplePanel'
 import {
   ROLE_TONE,
   avatarText,
   collectMemberships,
   filterMemberships,
   groupPeople,
-  shortId,
   teamSummary,
   type Membership,
   type Person,
@@ -29,12 +30,12 @@ import {
 type View = 'people' | 'projects'
 
 /**
- * My Team: every member of every loaded project. The backend only lists members per project
- * (`GET /projects/{id}/members`) and has no user directory, so people are shown by user id and
- * roles are managed on each project's own Members tab.
+ * My Team: everyone in the workspace, then every member of every loaded project. Project roles
+ * are managed on each project's own Team tab.
  */
 export function TeamPage() {
   const { identity } = useIdentity()
+  const { nameOf } = usePeople()
   const projectsState = useAllProjects()
   const projects = projectsState.data?.content ?? null
   const members = usePerProject(projects, (id) => membersApi.list(id))
@@ -44,7 +45,7 @@ export function TeamPage() {
   const [role, setRole] = useState<ProjectRole | ''>('')
 
   const all = useMemo(() => collectMemberships(projects ?? [], members.byProject), [projects, members.byProject])
-  const filtered = useMemo(() => filterMemberships(all, { query, role }), [all, query, role])
+  const filtered = useMemo(() => filterMemberships(all, { query, role }, nameOf), [all, query, role, nameOf])
   const people = useMemo(() => groupPeople(filtered, identity?.userId), [filtered, identity?.userId])
   const summary = useMemo(() => teamSummary(all), [all])
   const hasFilters = query.trim() !== '' || role !== ''
@@ -71,6 +72,7 @@ export function TeamPage() {
     return (
       <div className="ws-page">
         {header}
+        <WorkspacePeoplePanel />
         <EmptyState
           title="No projects yet"
           description="Your team appears here once you are a member of a project."
@@ -87,9 +89,11 @@ export function TeamPage() {
   return (
     <div className="ws-page rise-in">
       {header}
+      <WorkspacePeoplePanel />
       <ProjectLimitNote totalElements={projectsState.data?.totalElements ?? 0} loaded={projects.length} what="members" />
       <PerProjectErrors projects={projects} errors={members.errors} onRetry={members.reload} />
 
+      <h2 className="ws-list-title">On projects</h2>
       <div className="ws-chips" aria-label="Team summary">
         <span className="ws-chip is-accent">
           <strong>{members.loading ? '…' : summary.people}</strong> people
@@ -104,11 +108,6 @@ export function TeamPage() {
           <strong>{members.loading ? '…' : summary.managers}</strong> managers
         </span>
       </div>
-      <p className="ws-hint">
-        This workspace has no user directory, so people are shown by their user id. Roles are changed on each
-        project's Members tab.
-      </p>
-
       <div className="ws-toolbar">
         <div className="ws-seg" role="group" aria-label="View">
           <button type="button" aria-pressed={view === 'people'} onClick={() => setView('people')}>
@@ -123,7 +122,7 @@ export function TeamPage() {
           <input
             id="team-search"
             type="search"
-            placeholder="User id or project name"
+            placeholder="Name or project"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -186,6 +185,7 @@ function TeamSkeleton() {
 }
 
 function PeopleView({ people, hasFilters }: { people: Person[]; hasFilters: boolean }) {
+  const { nameOf } = usePeople()
   if (people.length === 0) {
     return (
       <EmptyState
@@ -203,12 +203,10 @@ function PeopleView({ people, hasFilters }: { people: Person[]; hasFilters: bool
         {people.map((person) => (
           <li key={person.userId} className={`ws-person${person.isMe ? ' is-me' : ''}`}>
             <span className="ws-avatar" aria-hidden="true">
-              {avatarText(person.userId)}
+              {avatarText(nameOf(person.userId))}
             </span>
             <div className="ws-person-id">
-              <span className="mono" title={person.userId}>
-                {shortId(person.userId)}
-              </span>
+              <span title={person.userId}>{nameOf(person.userId)}</span>
               <span className="ws-person-meta">
                 {person.isMe && <Badge tone="primary">You</Badge>}
                 <span>
@@ -216,7 +214,7 @@ function PeopleView({ people, hasFilters }: { people: Person[]; hasFilters: bool
                 </span>
               </span>
             </div>
-            <ul className="ws-roles" aria-label={`Projects of ${shortId(person.userId)}`}>
+            <ul className="ws-roles" aria-label={`Projects of ${nameOf(person.userId)}`}>
               {person.memberships.map(({ project, member }) => (
                 <li key={member.id} className="ws-role">
                   <Link to={`/projects/${project.id}/members`}>{project.name}</Link>
@@ -246,6 +244,7 @@ function ProjectsView({
   hasFilters: boolean
   meId: string | undefined
 }) {
+  const { nameOf } = usePeople()
   const cards = projects
     .map((project) => ({
       project,
@@ -281,10 +280,10 @@ function ProjectsView({
               {members.map((m) => (
                 <li key={m.id} className={`ws-member${m.userId === meId ? ' is-me' : ''}`}>
                   <span className="ws-avatar sm" aria-hidden="true">
-                    {avatarText(m.userId)}
+                    {avatarText(nameOf(m.userId))}
                   </span>
-                  <span className="mono" title={m.userId}>
-                    {shortId(m.userId)}
+                  <span title={m.userId}>
+                    {nameOf(m.userId)}
                     {m.userId === meId ? ' (you)' : ''}
                   </span>
                   <Badge tone={ROLE_TONE[m.role]}>{humanizeToken(m.role)}</Badge>

@@ -2,7 +2,6 @@ package com.projectmodule.work.application;
 
 import com.projectmodule.common.api.SortDirection;
 import com.projectmodule.common.context.RequestContext;
-import com.projectmodule.common.exception.BusinessRuleViolationException;
 import com.projectmodule.common.exception.ConflictException;
 import com.projectmodule.common.exception.ResourceNotFoundException;
 import com.projectmodule.common.identity.ExternalUserId;
@@ -12,14 +11,17 @@ import com.projectmodule.project.application.authorization.ProjectPermission;
 import com.projectmodule.work.api.dto.CreateTaskRequest;
 import com.projectmodule.work.api.dto.UpdateTaskRequest;
 import com.projectmodule.work.domain.Task;
+import com.projectmodule.work.domain.TaskFollower;
 import com.projectmodule.work.domain.TaskSortField;
 import com.projectmodule.work.domain.TaskStatus;
 import com.projectmodule.work.domain.event.TaskDomainEvent;
+import com.projectmodule.work.infrastructure.TaskFollowerRepository;
 import com.projectmodule.work.infrastructure.TaskRepository;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.data.domain.Sort;
@@ -47,11 +49,17 @@ public class TaskApplicationService {
     private final ProjectApplicationService projectApplicationService;
     private final ProjectAuthorizationService projectAuthorizationService;
     private final WorkEventRecorder workEventRecorder;
+    private final TaskNotifier taskNotifier;
+    private final TaskFollowerRepository followerRepository;
 
     public TaskApplicationService(TaskRepository taskRepository,
                                   ProjectApplicationService projectApplicationService,
                                   ProjectAuthorizationService projectAuthorizationService,
-                                  WorkEventRecorder workEventRecorder) {
+                                  WorkEventRecorder workEventRecorder,
+                                  TaskNotifier taskNotifier,
+                                  TaskFollowerRepository followerRepository) {
+        this.taskNotifier = taskNotifier;
+        this.followerRepository = followerRepository;
         this.taskRepository = taskRepository;
         this.projectApplicationService = projectApplicationService;
         this.projectAuthorizationService = projectAuthorizationService;
@@ -62,17 +70,55 @@ public class TaskApplicationService {
     public Task createTask(RequestContext context, UUID projectId, CreateTaskRequest request) {
         projectApplicationService.findActiveProjectInCallerOrganization(context, projectId);
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), projectId, ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), projectId, ProjectPermission.EDIT_TASKS);
 
         ExternalUserId assignee = request.assigneeId() == null
                 ? null : ExternalUserId.of(request.assigneeId());
         Task task = Task.create(projectId, request.name(), request.dueDate(), assignee);
         task.describe(request.description());
+        if (request.startDate() != null) {
+            task.scheduleStart(request.startDate());
+        }
+        if (request.priority() != null) {
+            task.prioritize(request.priority());
+        }
+        if (request.estimateMinutes() != null) {
+            task.estimate(request.estimateMinutes());
+        }
+        if (request.recurrence() != null) {
+            task.repeat(request.recurrence());
+        }
+        if (request.tags() != null) {
+            task.tag(request.tags());
+        }
+        task.requireDatesInOrder();
 
         task = taskRepository.save(task);
         recordEvents(context, task);
+        if (assignee != null) {
+            taskNotifier.assigned(task, context.requireUserId().value());
+        }
 
         return task;
+    }
+
+    /** People following the task. */
+    @Transactional(readOnly = true)
+    public List<UUID> listFollowers(RequestContext context, UUID taskId) {
+        Task task = getTask(context, taskId);
+        return followerRepository.findByTaskId(task.getId()).stream().map(TaskFollower::getUserId).toList();
+    }
+
+    /** Start or stop following a task. Anyone who can see it may follow it. */
+    @Transactional
+    public void setFollowing(RequestContext context, UUID taskId, boolean following) {
+        Task task = getTask(context, taskId);
+        TaskFollower.Key key = new TaskFollower.Key(task.getId(), context.requireUserId().value());
+        if (following && !followerRepository.existsById(key)) {
+            followerRepository.save(new TaskFollower(key.taskId(), key.userId()));
+        } else if (!following) {
+            followerRepository.deleteById(key);
+        }
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +199,7 @@ public class TaskApplicationService {
         Task task = findActiveTask(taskId);
         projectApplicationService.findActiveProjectInCallerOrganization(context, task.getProjectId());
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         if (task.getVersion() != request.version()) {
             throw new ConflictException(
@@ -161,10 +207,29 @@ public class TaskApplicationService {
                             + "; reload and try again");
         }
 
+        TaskStatus statusBefore = task.getStatus();
+        Optional<ExternalUserId> assigneeBefore = task.getAssigneeId();
         applyUpdates(task, request);
+        task.requireDatesInOrder();
+
+        boolean justCompleted = statusBefore != TaskStatus.COMPLETED && task.getStatus() == TaskStatus.COMPLETED;
+        Optional<Task> nextOccurrence = justCompleted ? task.spawnNextOccurrence() : Optional.empty();
 
         task = taskRepository.save(task);
         recordEvents(context, task);
+
+        if (nextOccurrence.isPresent()) {
+            Task next = taskRepository.save(nextOccurrence.get());
+            recordEvents(context, next);
+        }
+
+        UUID actorId = context.requireUserId().value();
+        if (!task.getAssigneeId().equals(assigneeBefore)) {
+            taskNotifier.assigned(task, actorId);
+        }
+        if (justCompleted) {
+            taskNotifier.completed(task, actorId);
+        }
 
         return task;
     }
@@ -174,7 +239,7 @@ public class TaskApplicationService {
         Task task = findActiveTask(taskId);
         projectApplicationService.findActiveProjectInCallerOrganization(context, task.getProjectId());
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         task.archive(context.requireUserId());
         taskRepository.save(task);
@@ -196,6 +261,26 @@ public class TaskApplicationService {
             task.reschedule(request.dueDate());
             plainFieldChanged = true;
         }
+        if (request.startDate() != null) {
+            task.scheduleStart(request.startDate());
+            plainFieldChanged = true;
+        }
+        if (request.priority() != null) {
+            task.prioritize(request.priority());
+            plainFieldChanged = true;
+        }
+        if (request.estimateMinutes() != null) {
+            task.estimate(request.estimateMinutes());
+            plainFieldChanged = true;
+        }
+        if (request.recurrence() != null) {
+            task.repeat(request.recurrence());
+            plainFieldChanged = true;
+        }
+        if (request.tags() != null) {
+            task.tag(request.tags());
+            plainFieldChanged = true;
+        }
         if (plainFieldChanged) {
             task.recordUpdated();
         }
@@ -212,8 +297,8 @@ public class TaskApplicationService {
             case COMPLETED -> task.complete();
             case BLOCKED -> task.markBlocked();
             case OVERDUE -> task.markOverdue();
-            case TODO -> throw new BusinessRuleViolationException(
-                    "Cannot set task status back to TODO; no event exists for that transition");
+            case IN_PROGRESS -> task.startWork();
+            case TODO -> task.reopen();
         }
     }
 

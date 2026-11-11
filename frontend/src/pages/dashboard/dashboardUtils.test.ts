@@ -28,7 +28,7 @@ const health = (over: Partial<ProjectHealth> = {}): ProjectHealth => ({
 })
 const task = (over: Partial<Task>): Task => ({
   id: 't', projectId: 'p', name: 'T', description: null, dueDate: null, assigneeId: null, status: 'TODO',
-  archived: false, createdAt: '', updatedAt: '', version: 0, ...over,
+  archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0, ...over,
 })
 const milestone = (over: Partial<Milestone>): Milestone => ({
   id: 'm', projectId: 'p', phaseId: null, name: 'M', description: null, dueDate: null, status: 'PENDING',

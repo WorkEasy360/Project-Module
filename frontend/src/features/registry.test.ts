@@ -20,10 +20,10 @@ describe('feature registry', () => {
     }
   })
 
-  it('keeps the primary navigation bounded: the 9-item workspace sidebar of the reference design, at most 5 core project tabs', () => {
-    // Workspace: Home, Projects, My Tasks, Calendar, My Team, Reports, Templates, Automations, Settings.
+  it('keeps the primary navigation bounded: the 10-item workspace sidebar, at most 5 core project tabs', () => {
+    // Workspace: Home, Projects, My Tasks, Calendar, My Team, Timesheet, Reports, Templates, Automations, Settings.
     expect(coreFeatures('workspace').map((f) => f.name)).toEqual([
-      'Home', 'Projects', 'My Tasks', 'Calendar', 'My Team', 'Reports', 'Templates', 'Automations', 'Settings',
+      'Home', 'Projects', 'My Tasks', 'Calendar', 'My Team', 'Timesheet', 'Reports', 'Templates', 'Automations', 'Settings',
     ])
     expect(coreFeatures('project').length).toBeLessThanOrEqual(5)
   })
@@ -68,7 +68,11 @@ describe('resolveFeatureAccess', () => {
   })
 
   it('is COMING_SOON for features without a backend API, regardless of role', () => {
-    expect(resolveFeatureAccess(activity, { can: () => true })).toBe('COMING_SOON')
+    expect(resolveFeatureAccess({ ...activity, releaseState: 'COMING_SOON' }, { can: () => true })).toBe('COMING_SOON')
+  })
+
+  it('shows Activity as available, now that it has an API', () => {
+    expect(resolveFeatureAccess(activity, { can: () => true })).toBe('AVAILABLE')
   })
 
   it('reports BETA for AI (provider may be unconfigured) once permission is satisfied', () => {

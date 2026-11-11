@@ -60,13 +60,13 @@ describe('CalendarTab', () => {
     vi.mocked(calendarApi.get).mockImplementation(() => Promise.resolve(sept))
     vi.mocked(tasksApi.list).mockImplementation(() =>
       Promise.resolve([
-        { id: 't1', projectId: 'p1', name: 'Ship release notes', description: null, dueDate: '2026-09-19', assigneeId: 'user-42', status: 'TODO', archived: false, createdAt: '', updatedAt: '', version: 0 },
-        { id: 't2', projectId: 'p1', name: 'Old task', description: null, dueDate: '2026-09-02', assigneeId: null, status: 'TODO', archived: false, createdAt: '', updatedAt: '', version: 0 },
+        { id: 't1', projectId: 'p1', name: 'Ship release notes', description: null, dueDate: '2026-09-19', assigneeId: 'user-42', status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0 },
+        { id: 't2', projectId: 'p1', name: 'Old task', description: null, dueDate: '2026-09-02', assigneeId: null, status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0 },
       ]),
     )
     vi.mocked(milestonesApi.list).mockImplementation(() =>
       Promise.resolve([
-        { id: 'm1', projectId: 'p1', phaseId: null, name: 'Beta', description: null, dueDate: '2026-09-25', status: 'PENDING', archived: false, createdAt: '', updatedAt: '', version: 3 },
+        { id: 'm1', projectId: 'p1', phaseId: null, name: 'Beta', description: null, dueDate: '2026-09-25', status: 'PENDING', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 3 },
       ]),
     )
     vi.mocked(phasesApi.list).mockImplementation(() => Promise.resolve([]))
@@ -103,7 +103,7 @@ describe('CalendarTab', () => {
     expect(side).toHaveTextContent(D('2026-09-19'))
     expect(side).toHaveTextContent('Today')
     expect(within(side).getByText('Ship release notes')).toBeInTheDocument()
-    expect(within(side).getByText('Todo')).toBeInTheDocument()
+    expect(within(side).getByText('To Do')).toBeInTheDocument()
     expect(within(side).getByText(/user-42/)).toBeInTheDocument()
   })
 
@@ -220,7 +220,7 @@ describe('CalendarTab', () => {
 
   it('editing a task due date from the detail dialog PATCHes with the version and reloads', async () => {
     vi.mocked(tasksApi.update).mockResolvedValue({
-      id: 't2', projectId: 'p1', name: 'Old task', description: null, dueDate: '2026-09-05', assigneeId: null, status: 'TODO', archived: false, createdAt: '', updatedAt: '', version: 1,
+      id: 't2', projectId: 'p1', name: 'Old task', description: null, dueDate: '2026-09-05', assigneeId: null, status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 1,
     })
     renderCalendar()
     await screen.findByRole('grid')
@@ -261,7 +261,7 @@ describe('CalendarTab', () => {
 
   it('changing a task status from the detail dialog goes through the shared status control and reloads', async () => {
     vi.mocked(tasksApi.update).mockResolvedValue({
-      id: 't1', projectId: 'p1', name: 'Ship release notes', description: null, dueDate: '2026-09-19', assigneeId: 'user-42', status: 'COMPLETED', archived: false, createdAt: '', updatedAt: '', version: 1,
+      id: 't1', projectId: 'p1', name: 'Ship release notes', description: null, dueDate: '2026-09-19', assigneeId: 'user-42', status: 'COMPLETED', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 1,
     })
     renderCalendar()
     await screen.findByRole('grid')

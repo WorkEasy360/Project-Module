@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { IdentityWidget } from '../common/IdentityWidget'
+import { NotificationBell } from '../common/NotificationBell'
+import { TimerChip } from '../common/TimerChip'
+import { openAssistant } from '../assistant/AssistantPanel'
 import { IconButton } from '../common/IconButton'
 import { Icon } from '../common/Icon'
 import { useSidebar } from '../../context/SidebarContext'
@@ -20,9 +23,8 @@ function useBreadcrumb(): string[] {
 /**
  * Top bar: hamburger, breadcrumb, global search, theme toggle and the identity control.
  *
- * Search is real and scoped to what the backend offers: inside a project it opens that
- * project's search (the `/projects/{id}/search` API); elsewhere it filters the projects list by
- * name. Ctrl/Cmd+K focuses the box, "/" still jumps straight to project search.
+ * Inside a project, search opens that project's search; elsewhere it searches projects and tasks
+ * across everything the person belongs to. Ctrl/Cmd+K focuses the box, "/" still jumps straight to project search.
  */
 export function Header() {
   const { toggle, collapsed, isMobile } = useSidebar()
@@ -58,7 +60,7 @@ export function Header() {
     if (projectId) {
       navigate(`/projects/${projectId}/search${q ? `?q=${encodeURIComponent(q)}` : ''}`)
     } else {
-      navigate(`/projects${q ? `?q=${encodeURIComponent(q)}` : ''}`)
+      navigate(`/search${q ? `?q=${encodeURIComponent(q)}` : ''}`)
     }
   }
 
@@ -88,8 +90,8 @@ export function Header() {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder={projectId ? 'Search this project…' : 'Search projects…'}
-          aria-label={projectId ? 'Search this project' : 'Search projects'}
+          placeholder={projectId ? 'Search this project…' : 'Search projects and tasks…'}
+          aria-label={projectId ? 'Search this project' : 'Search projects and tasks'}
         />
         <kbd aria-hidden="true">Ctrl K</kbd>
       </form>
@@ -101,6 +103,12 @@ export function Header() {
         label={resolved === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
         onClick={toggleTheme}
       />
+      <button type="button" className="guide-me" onClick={() => openAssistant('Guide me: what can I do in WorkEasyProject, and where do I start?')}>
+        <Icon name="help" size={16} />
+        <span>Guide me</span>
+      </button>
+      <TimerChip />
+      <NotificationBell />
       <IdentityWidget />
     </header>
   )

@@ -1,5 +1,6 @@
 package com.projectmodule.project.application;
 
+import com.projectmodule.account.infrastructure.UserAccountRepository;
 import com.projectmodule.common.context.RequestContext;
 import com.projectmodule.common.exception.BusinessRuleViolationException;
 import com.projectmodule.common.exception.ConflictException;
@@ -9,6 +10,7 @@ import com.projectmodule.project.api.dto.AddMemberRequest;
 import com.projectmodule.project.api.dto.ChangeMemberRoleRequest;
 import com.projectmodule.project.application.authorization.ProjectAuthorizationService;
 import com.projectmodule.project.application.authorization.ProjectPermission;
+import com.projectmodule.project.domain.Project;
 import com.projectmodule.project.domain.ProjectMember;
 import com.projectmodule.project.domain.ProjectRole;
 import com.projectmodule.project.infrastructure.ProjectMemberRepository;
@@ -38,10 +40,13 @@ public class ProjectMemberApplicationService {
     private final ProjectMemberRepository projectMemberRepository;
     private final ProjectApplicationService projectApplicationService;
     private final ProjectAuthorizationService projectAuthorizationService;
+    private final UserAccountRepository userAccountRepository;
 
     public ProjectMemberApplicationService(ProjectMemberRepository projectMemberRepository,
                                            ProjectApplicationService projectApplicationService,
-                                           ProjectAuthorizationService projectAuthorizationService) {
+                                           ProjectAuthorizationService projectAuthorizationService,
+                                           UserAccountRepository userAccountRepository) {
+        this.userAccountRepository = userAccountRepository;
         this.projectMemberRepository = projectMemberRepository;
         this.projectApplicationService = projectApplicationService;
         this.projectAuthorizationService = projectAuthorizationService;
@@ -58,7 +63,7 @@ public class ProjectMemberApplicationService {
 
     @Transactional
     public ProjectMember addMember(RequestContext context, UUID projectId, AddMemberRequest request) {
-        projectApplicationService.findActiveProjectInCallerOrganization(context, projectId);
+        Project project = projectApplicationService.findActiveProjectInCallerOrganization(context, projectId);
         projectAuthorizationService.requirePermission(
                 context.requireUserId(), projectId, ProjectPermission.MANAGE_MEMBERS);
 
@@ -69,6 +74,7 @@ public class ProjectMemberApplicationService {
         }
 
         ExternalUserId newMemberId = ExternalUserId.of(request.userId());
+        requireSameWorkspace(project, newMemberId);
         if (projectMemberRepository.existsByProjectIdAndUserId(projectId, newMemberId.value())) {
             throw new ConflictException(
                     "User " + newMemberId + " is already a member of project " + projectId);
@@ -113,6 +119,19 @@ public class ProjectMemberApplicationService {
         }
 
         projectMemberRepository.delete(member);
+    }
+
+    /**
+     * Keeps a project's members inside its workspace. An id with no account is allowed, because
+     * members from before sign-in existed have none.
+     */
+    private void requireSameWorkspace(Project project, ExternalUserId userId) {
+        boolean inAnotherWorkspace = userAccountRepository.findById(userId.value())
+                .filter(account -> !account.getOrganizationId().equals(project.getOrganizationId().value()))
+                .isPresent();
+        if (inAnotherWorkspace) {
+            throw new BusinessRuleViolationException("This person is not in your workspace");
+        }
     }
 
     private ProjectMember findMemberInProject(UUID projectId, UUID memberId) {

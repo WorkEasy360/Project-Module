@@ -131,7 +131,7 @@ class ProjectCommentPersistenceTest {
             entityManager.clear();
 
             Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "createdAt"));
-            var page = commentRepository.findByProjectIdAndArchivedAtIsNull(project.getId(), pageable);
+            var page = commentRepository.findProjectLevelComments(project.getId(), pageable);
 
             assertThat(page.getContent())
                     .extracting(ProjectComment::getBody)

@@ -29,14 +29,25 @@ public class RequestContextFactory {
                 ? Optional.of(OrganizationId.fromString(organizationIdHeader.trim()))
                 : Optional.empty();
 
-        String correlationId = hasText(correlationIdHeader)
-                ? correlationIdHeader.trim()
-                : UUID.randomUUID().toString();
-
         // Always HUMAN: actor type is never taken from a caller-supplied header, so a client
         // cannot present itself as the AI or as an automation run.
         return new ImmutableRequestContext(
-                userId, organizationId, correlationId, ActorType.HUMAN);
+                userId, organizationId, correlationIdFrom(correlationIdHeader), ActorType.HUMAN);
+    }
+
+    /** A context for a caller whose credential has been verified. */
+    public RequestContext authenticated(AuthenticatedIdentity identity, String correlationIdHeader) {
+        return new ImmutableRequestContext(Optional.of(identity.userId()), Optional.of(identity.organizationId()),
+                correlationIdFrom(correlationIdHeader), ActorType.HUMAN);
+    }
+
+    /** A context for a caller with no verified identity; protected operations will answer 401. */
+    public RequestContext anonymous(String correlationIdHeader) {
+        return ImmutableRequestContext.anonymous(correlationIdFrom(correlationIdHeader));
+    }
+
+    private static String correlationIdFrom(String correlationIdHeader) {
+        return hasText(correlationIdHeader) ? correlationIdHeader.trim() : UUID.randomUUID().toString();
     }
 
     private static boolean hasText(String value) {

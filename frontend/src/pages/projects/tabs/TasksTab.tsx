@@ -6,15 +6,19 @@ import { tasksApi } from '../../../api/tasks'
 import { DataTable, type Column } from '../../../components/common/DataTable'
 import { CreateTaskDialog } from '../CreateTaskDialog'
 import { ConfirmDialog } from '../../../components/common/ConfirmDialog'
-import { TextField, SelectField } from '../../../components/forms/fields'
-import { TaskStatusBadge, ArchivedBadge } from '../../../components/common/Badge'
+import { SelectField } from '../../../components/forms/fields'
+import { ProjectPersonField } from '../../../components/forms/ProjectPersonField'
+import { usePeople } from '../../../context/PeopleContext'
+import { TaskStatusBadge, ArchivedBadge, PriorityBadge } from '../../../components/common/Badge'
 import { TaskStatusControl } from '../../../components/task/TaskStatusControl'
-import { formatDate } from '../../../utils/format'
+import { formatDate, humanizeToken } from '../../../utils/format'
+import { downloadCsv, toCsv } from '../../../utils/csv'
 import { TASK_SORT_FIELDS, TASK_STATUSES, type Task, type TaskListQuery, type TaskSortField } from '../../../types/work'
 import type { SortDirection } from '../../../types/common'
 
 export function TasksTab() {
   const { project, can } = useProjectWorkspace()
+  const { nameOf } = usePeople()
   const [statusFilter, setStatusFilter] = useState('')
   const [assigneeFilter, setAssigneeFilter] = useState('')
   const [showArchived, setShowArchived] = useState(false)
@@ -50,6 +54,22 @@ export function TasksTab() {
     })
   }
 
+  function exportCsv() {
+    const rows = (data ?? []).map((t) => [
+      t.name,
+      humanizeToken(t.status),
+      humanizeToken(t.priority),
+      t.assigneeId ? nameOf(t.assigneeId) : '',
+      t.startDate,
+      t.dueDate,
+      t.tags.join('; '),
+    ])
+    downloadCsv(
+      `${project.name}-tasks.csv`,
+      toCsv(['Task', 'Status', 'Priority', 'Assignee', 'Start date', 'Due date', 'Tags'], rows),
+    )
+  }
+
   async function handleBulkArchive() {
     const response = await tasksApi.bulkArchive(project.id, { ids: Array.from(selected) })
     const failed = response.results.filter((r) => !r.succeeded)
@@ -81,9 +101,16 @@ export function TasksTab() {
       key: 'name',
       header: 'Name',
       render: (t) => (
-        <Link to={`../tasks/${t.id}`} relative="path">
-          {t.name}
-        </Link>
+        <span className="task-name-cell">
+          <Link to={`../tasks/${t.id}`} relative="path">
+            {t.name}
+          </Link>
+          {t.tags.map((tag) => (
+            <span key={tag} className="task-tag">
+              {tag}
+            </span>
+          ))}
+        </span>
       ),
     },
     {
@@ -92,12 +119,13 @@ export function TasksTab() {
       render: (t) => (
         <span className="status-cell">
           <TaskStatusBadge status={t.status} />
-          {can('EDIT_PROJECT') && !t.archived && <TaskStatusControl task={t} onChanged={reload} compact />}
+          {can('EDIT_TASKS') && !t.archived && <TaskStatusControl task={t} onChanged={reload} compact />}
         </span>
       ),
     },
+    { key: 'priority', header: 'Priority', render: (t) => <PriorityBadge priority={t.priority} /> },
     { key: 'dueDate', header: 'Due', render: (t) => formatDate(t.dueDate) },
-    { key: 'assignee', header: 'Assignee', render: (t) => t.assigneeId ?? '—' },
+    { key: 'assignee', header: 'Assignee', render: (t) => (t.assigneeId ? nameOf(t.assigneeId) : '—') },
     { key: 'archived', header: '', render: (t) => (t.archived ? <ArchivedBadge /> : null) },
   ]
 
@@ -106,34 +134,36 @@ export function TasksTab() {
       <div className="filter-bar">
         <SelectField
           id="task-status-filter"
-          label="Filter by status"
+          label="Status"
           value={statusFilter}
           onChange={setStatusFilter}
           allowEmpty
           emptyLabel="All statuses"
-          options={TASK_STATUSES.map((s) => ({ value: s, label: s }))}
+          options={TASK_STATUSES.map((s) => ({ value: s, label: humanizeToken(s) }))}
         />
-        <TextField
+        <ProjectPersonField
           id="task-assignee-filter"
-          label="Assignee ID"
+          label="Assignee"
+          projectId={project.id}
           value={assigneeFilter}
           onChange={setAssigneeFilter}
+          emptyLabel="Anyone"
         />
         <SelectField
           id="task-sortby"
           label="Sort by"
           value={sortBy}
           onChange={setSortBy}
-          options={TASK_SORT_FIELDS.map((s) => ({ value: s, label: s }))}
+          options={TASK_SORT_FIELDS.map((s) => ({ value: s, label: humanizeToken(s) }))}
         />
         <SelectField
           id="task-sortdir"
-          label="Direction"
+          label="Order"
           value={sortDir}
           onChange={setSortDir}
           options={[
-            { value: 'ASC', label: 'Ascending' },
-            { value: 'DESC', label: 'Descending' },
+            { value: 'ASC', label: 'Oldest / A–Z first' },
+            { value: 'DESC', label: 'Newest / Z–A first' },
           ]}
         />
         <label className="checkbox-row">
@@ -141,12 +171,17 @@ export function TasksTab() {
           Show archived
         </label>
         <div className="spacer" />
-        {can('EDIT_PROJECT') && selected.size > 0 && (
+        {can('EDIT_TASKS') && selected.size > 0 && (
           <button className="btn btn-sm btn-danger" onClick={() => setBulkArchiveOpen(true)}>
             Archive {selected.size} selected
           </button>
         )}
-        {can('EDIT_PROJECT') && (
+        {data && data.length > 0 && (
+          <button className="btn" onClick={exportCsv}>
+            Export CSV
+          </button>
+        )}
+        {can('EDIT_TASKS') && (
           <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
             New Task
           </button>
@@ -169,7 +204,7 @@ export function TasksTab() {
             : 'Create your first task to start organizing project work.'
         }
         emptyAction={
-          can('EDIT_PROJECT') && !statusFilter && !assigneeFilter ? (
+          can('EDIT_TASKS') && !statusFilter && !assigneeFilter ? (
             <button className="btn btn-primary" onClick={() => setCreateOpen(true)}>
               Create Task
             </button>

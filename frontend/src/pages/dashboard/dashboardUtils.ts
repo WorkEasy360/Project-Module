@@ -390,3 +390,37 @@ export function pendingRecommendations(results: ProjectRecommendations[], limit 
   }
   return out.sort((a, b) => (a.recommendation.createdAt < b.recommendation.createdAt ? 1 : -1)).slice(0, limit)
 }
+
+export interface NextStep {
+  task: Task
+  projectName: string
+  reason: string
+}
+
+/**
+ * The one task most worth doing next: the person's own first, then anyone's. Blocked work comes
+ * first, then anything past due, then work already started, then the earliest due date.
+ */
+export function nextStepFor(items: LoadedProject[], meId: string | null, today: string): NextStep | null {
+  const open = items.flatMap(({ project, tasks }) =>
+    (tasks ?? [])
+      .filter((task) => !task.archived && task.status !== 'COMPLETED')
+      .map((task) => ({ task, projectName: project.name })),
+  )
+  const mine = meId ? open.filter((o) => o.task.assigneeId === meId) : []
+  const pool = mine.length > 0 ? mine : open
+  if (pool.length === 0) return null
+  const rank = (task: Task) =>
+    task.status === 'BLOCKED' ? 0 : task.dueDate && task.dueDate < today ? 1 : task.status === 'IN_PROGRESS' ? 2 : 3
+  const sorted = [...pool].sort(
+    (a, b) => rank(a.task) - rank(b.task) || (a.task.dueDate ?? '9999').localeCompare(b.task.dueDate ?? '9999'),
+  )
+  const { task, projectName } = sorted[0]
+  const reasons = [
+    "It's blocked, so it may be holding other work up.",
+    `It was due ${task.dueDate}, so it's past its date.`,
+    "You've started it, so it's the quickest to finish.",
+    task.dueDate ? `It's the next thing due, on ${task.dueDate}.` : "It's open and has no due date yet.",
+  ]
+  return { task, projectName, reason: reasons[rank(task)] }
+}

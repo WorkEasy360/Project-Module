@@ -53,6 +53,28 @@
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
 
+        <!--
+          Password hashing (BCrypt) only. This is the standalone crypto jar: it brings no filter
+          chain, no auto-configuration and no change to how requests are handled.
+        -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
+        <!-- Email: optional at runtime, sends only when spring.mail.host is set -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- Claude, for the in-app assistant. Used only when ANTHROPIC_API_KEY is set. -->
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>3.3.0</version>
+        </dependency>
+
         <!-- Actuator: health / metrics -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

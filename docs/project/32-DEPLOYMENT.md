@@ -5,34 +5,46 @@ settings the application requires, and how the local and cloud databases are kep
 
 ## Pipeline
 
-`.github/workflows/deploy.yml` runs on every push to `main`:
+`.github/workflows/deploy.yml` runs on every push to `main` (or by hand, with "Run workflow"). It
+is written so that customers using the product never notice a release:
 
-1. Checks out the repository, installs Corretto 21.
-2. `mvn clean package -DskipTests` → produces `target/project-module-0.0.1-SNAPSHOT.jar`.
-   That one command now also builds the React frontend: `frontend-maven-plugin` downloads the
-   pinned Node, runs `npm ci` against `frontend/package-lock.json` and then `npm run build`
-   (which is `tsc -b && vite build`). The built files are copied to `target/classes/static` and
-   travel inside the jar. A type error or a failed bundle fails Maven, which fails the workflow.
-3. `einaregilsson/beanstalk-deploy@v21` uploads that jar to Elastic Beanstalk.
+1. **Test.** All frontend tests, the type check, and all backend tests against a real PostgreSQL.
+   If anything fails, nothing is deployed.
+2. **Check, then back up.** It checks:
+   - the environment must be Ready
+   - enhanced health reporting must be on
+   - the current version is recorded
 
-The workflow file itself needed no change for this: the frontend build hangs off the Maven
-lifecycle, and the artifact path was already the literal jar name.
+   Then it takes an RDS snapshot named `before-<run>-<attempt>-<time>` and waits for it to be
+   available. Nothing in AWS changes before this point.
+3. **Immutable deployment.** The environment's deployment policy is set to Immutable. Elastic
+   Beanstalk then starts the new version on fresh instances and checks its health before moving
+   traffic to it. On a single-instance environment it moves the Elastic IP. If the new version is
+   unhealthy, it is discarded and the old one keeps serving.
+4. **Live check, and roll back if needed.** It checks the live site's health, the new page title
+   and the sign-in configuration. If that fails, the previous version is deployed back
+   automatically.
 
-| Setting | Value |
-|---|---|
-| Application | `Project-Module` |
-| Environment | `Project-Module-env` |
-| Region | `eu-north-1` |
-| Artifact | `target/project-module-0.0.1-SNAPSHOT.jar` (matches `artifactId` + `version` in `pom.xml`) |
-| Version label | `v<github.run_number>` |
+The deployment is a bundle, not a bare jar:
+- `application.jar`
+- `Procfile`
+- `.platform/nginx/conf.d/workeasy.conf`, which raises nginx's upload limit to 26 MB for 25 MB
+  attachments, and its proxy timeout to 120 s so the assistant can plan large projects
 
-The artifact path is a literal filename because the deploy action does not expand wildcards.
-If `pom.xml`'s `artifactId` or `version` ever changes, this path must change with it.
+The bundle's extra files are in `deploy/`.
 
-**One deployment serves both.** The jar contains the API and the UI, so the environment URL
-serves the application and `/api/v1/**` on the same origin. The backend remains API-only in its
-architecture: it has no view layer, no session and no server-rendered pages, and simply serves
-the built files as static resources from the classpath.
+Database migrations must stay backward compatible: add tables and columns with defaults; never drop
+or rename in the same release. During an immutable deployment the old and new versions briefly
+share the database.
+
+The assistant's key: add a repository secret `ANTHROPIC_API_KEY` (GitHub → Settings → Secrets and
+variables → Actions). The next deployment passes it to the environment, with no extra restart.
+Without it, the assistant shows "not set up yet".
+
+Repository secrets the workflow uses:
+- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Besides deploying, they need permission to
+  describe the environment and RDS instances, and to create RDS snapshots.
+- `ANTHROPIC_API_KEY` (optional).
 
 ## Required environment properties
 
@@ -86,7 +98,7 @@ The environment URL now opens the application. The API is unchanged and shares t
 | `/` | The React application (`200 text/html`). |
 | `/assets/...` | The hashed JavaScript and CSS bundles the entry page references. |
 | `/actuator/health` | `200 {"status":"UP"}`. Reports `DOWN` if the database is unreachable, so it is a real health signal. |
-| `/api/v1/dashboard` | `401` without identity headers, `200` with `X-User-Id` and `X-Org-Id`. A `200` here proves the database is connected. |
+| `/api/v1/dashboard` | `401` without a session token, `200` with `Authorization: Bearer <token>`. A `200` here proves the database is connected. |
 | `/swagger-ui.html` | API documentation. |
 | `/api/v1/<anything unmapped>` | `404` as a problem document, never the application HTML. |
 | `/<anything unmapped>` | `404` as a problem document. The UI uses `HashRouter`, so its routes live in the fragment (`/#/projects`) and the browser never asks the server for them. There is deliberately no catch-all rewriting unknown paths to `index.html`, because that would turn genuine API and server errors into a silent HTML page. |
@@ -127,10 +139,9 @@ application has no UI, and the tests that serve it skip rather than pass vacuous
 
 ## What this does not change
 
-- **No authentication was added.** Serving the UI from the same origin grants nothing. Every API
-  request is still authorised by the `X-User-Id` / `X-Org-Id` pair that an upstream gateway is
-  expected to supply, and those headers remain identity context, not proof of authentication.
-  Membership and cross-organisation checks are untouched.
+- **Authentication is separate.** Serving the UI from the same origin grants nothing. People sign
+  in with email and password; see `33-AUTHENTICATION.md`, including the step that keeps access to
+  existing data before deploying. Membership and cross-organisation checks are untouched.
 - **The AI provider is still unavailable.** `UnavailableAIProviderAdapter` throws
   `IntegrationUnavailableException`, so AI requests return `503 integration-unavailable` rather
   than inventing an answer. Nothing in this packaging changes that.
@@ -138,8 +149,9 @@ application has no UI, and the tests that serve it skip rather than pass vacuous
 
 ## Remaining manual steps
 
-- The environment serves **HTTP, not HTTPS**. Identity headers, and now the whole UI, travel in
-  clear text. Adding TLS needs a certificate and a load balancer, which costs money.
+- The Elastic Beanstalk URL itself serves **HTTP, not HTTPS**. Passwords and session tokens would
+  travel in clear text there, so sign in only through `https://ops.workeasy360.com`, where
+  Cloudflare terminates TLS. The Cloudflare-to-origin leg should also be confirmed as encrypted.
 - The RDS instance accepts connections on 5432 from the public internet. It should be restricted
   to the Elastic Beanstalk instances' security group.
 - The health check path recommendation below still applies.

@@ -115,6 +115,18 @@ export const FEATURES: FeatureDefinition[] = [
     order: 26,
   },
   {
+    id: 'timesheet',
+    name: 'Timesheet',
+    description: 'The time you have logged, week by week.',
+    scope: 'workspace',
+    tier: 'CORE',
+    category: 'Daily work',
+    route: '/timesheet',
+    icon: 'clock',
+    releaseState: 'AVAILABLE',
+    order: 27,
+  },
+  {
     id: 'workspace-reports',
     name: 'Reports',
     description: 'Summary reports for each of your projects, side by side.',
@@ -406,7 +418,7 @@ export const FEATURES: FeatureDefinition[] = [
     category: 'Project control',
     route: 'activity',
     icon: 'activity',
-    releaseState: 'COMING_SOON',
+    releaseState: 'AVAILABLE',
     order: 80,
   },
 

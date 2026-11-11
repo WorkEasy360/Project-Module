@@ -26,7 +26,7 @@ const ME = 'me-user'
 
 const t = (over: Partial<Task>): Task => ({
   id: 'x', projectId: 'p1', name: 'x', description: null, dueDate: null, assigneeId: null, status: 'TODO',
-  archived: false, createdAt: '', updatedAt: '', version: 0, ...over,
+  archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0, ...over,
 })
 const projects: ProjectSummary[] = [
   { id: 'p1', name: 'Website Redesign', status: 'ACTIVE', priority: 'HIGH', ownerId: 'u', updatedAt: '' },

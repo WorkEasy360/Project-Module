@@ -1,10 +1,12 @@
 package com.projectmodule.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.projectmodule.common.context.BearerTokenAuthenticator;
 import com.projectmodule.common.context.ImmutableRequestContext;
 import com.projectmodule.common.context.RequestContext;
 import com.projectmodule.common.context.RequestContextFactory;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,10 +16,8 @@ import org.springframework.core.Ordered;
 import org.springframework.web.context.WebApplicationContext;
 
 /**
- * Wires the caller-identity boundary.
- *
- * <p>Note what is not here: no credential checking, no token parsing, no session handling.
- * This module consumes an identity that has already been authenticated elsewhere.
+ * Wires the caller-identity boundary. Credentials themselves are handled by the {@code account}
+ * package, behind {@link BearerTokenAuthenticator}.
  */
 @Configuration
 public class RequestContextConfiguration {
@@ -30,10 +30,13 @@ public class RequestContextConfiguration {
     /** Registered early so the context is available to everything downstream. */
     @Bean
     public FilterRegistrationBean<RequestContextFilter> requestContextFilterRegistration(
-            RequestContextFactory factory, ObjectMapper objectMapper) {
+            RequestContextFactory factory,
+            ObjectMapper objectMapper,
+            BearerTokenAuthenticator authenticator,
+            @Value("${projectmodule.auth.trust-identity-headers:false}") boolean trustIdentityHeaders) {
 
-        FilterRegistrationBean<RequestContextFilter> registration =
-                new FilterRegistrationBean<>(new RequestContextFilter(factory, objectMapper));
+        FilterRegistrationBean<RequestContextFilter> registration = new FilterRegistrationBean<>(
+                new RequestContextFilter(factory, objectMapper, authenticator, trustIdentityHeaders));
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
         registration.addUrlPatterns("/*");
         return registration;

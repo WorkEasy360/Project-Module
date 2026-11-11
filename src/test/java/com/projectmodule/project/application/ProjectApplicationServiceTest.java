@@ -245,13 +245,13 @@ class ProjectApplicationServiceTest {
             Project project = Project.create(ORG, "Apollo", USER, ProjectPriority.MEDIUM);
             Pageable pageable = PageRequest.of(0, 20);
             Page<Project> page = new PageImpl<>(List.of(project), pageable, 1);
-            when(projectRepository.findByOrganizationIdAndArchivedAtIsNull(ORG.value(), pageable))
+            when(projectRepository.findVisibleToUser(eq(ORG.value()), any(UUID.class), eq(pageable)))
                     .thenReturn(page);
 
             Page<Project> result = service.listProjects(context, pageable);
 
             assertThat(result.getContent()).containsExactly(project);
-            verify(projectRepository).findByOrganizationIdAndArchivedAtIsNull(eq(ORG.value()), eq(pageable));
+            verify(projectRepository).findVisibleToUser(eq(ORG.value()), any(UUID.class), eq(pageable));
         }
 
         @Test

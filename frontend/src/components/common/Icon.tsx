@@ -5,6 +5,11 @@ import type { SVGProps } from 'react'
  * the same 20x20 viewBox / stroke weight so they line up regardless of which is used.
  */
 export type IconName =
+  | 'mic'
+  | 'speaker'
+  | 'help'
+  | 'bell'
+  | 'paperclip'
   | 'dashboard'
   | 'projects'
   | 'template'
@@ -55,6 +60,31 @@ export type IconName =
   | 'eyeOff'
 
 const PATHS: Record<IconName, React.ReactNode> = {
+  mic: (
+    <>
+      <rect x="7.5" y="2.5" width="5" height="9" rx="2.5" />
+      <path d="M4.5 9.5a5.5 5.5 0 0 0 11 0M10 15v2.5" />
+    </>
+  ),
+  speaker: (
+    <>
+      <path d="M3.5 7.5h3l4-3.5v12l-4-3.5h-3z" />
+      <path d="M13.5 7a4 4 0 0 1 0 6M15.5 5a7 7 0 0 1 0 10" />
+    </>
+  ),
+  help: (
+    <>
+      <circle cx="10" cy="10" r="7.5" />
+      <path d="M7.8 7.6a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.5v.4M10 14.4v.1" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M5 8.5a5 5 0 0 1 10 0c0 4.5 1.8 5.5 1.8 5.5H3.2S5 13 5 8.5z" />
+      <path d="M8.5 16.8a1.7 1.7 0 0 0 3 0" />
+    </>
+  ),
+  paperclip: <path d="M16.2 9.4l-6.1 6.1a3.7 3.7 0 0 1-5.2-5.2l6.4-6.4a2.5 2.5 0 0 1 3.5 3.5l-6.3 6.3a1.2 1.2 0 0 1-1.7-1.7l5.7-5.7" />,
   settings: (
     <>
       <circle cx="10" cy="10" r="2.6" />

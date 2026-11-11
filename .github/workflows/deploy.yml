@@ -1,33 +1,250 @@
 name: Deploy to AWS Elastic Beanstalk
 
+# Every push to main is a production release, so this workflow protects customers who are using
+# the product while it runs:
+#   1. All frontend and backend tests must pass (backend against a real PostgreSQL).
+#   2. The environment must be healthy, and the production database is snapshotted before
+#      anything changes.
+#   3. The release is deployed "immutable": Elastic Beanstalk starts the new version on fresh
+#      instances, checks it is healthy, and only then moves traffic to it. If the new version is
+#      unhealthy, the old one keeps serving and nobody notices.
+#   4. After the switch, the live site is checked. If that check fails, the previous version is
+#      deployed back automatically.
+# If any step fails before the deployment, nothing in AWS has changed except the snapshot.
+
 on:
   push:
     branches:
-      - main # Change this to 'master' if your default branch is master
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: eu-north-1
+  EB_APPLICATION: Project-Module
+  EB_ENVIRONMENT: Project-Module-env
+  SITE_URL: https://ops.workeasy360.com
 
 jobs:
-  deploy:
+  test:
+    name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci-only
+          POSTGRES_DB: projectmodule_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Java 21
-      uses: actions/setup-java@v3
-      with:
-        java-version: '21'
-        distribution: 'corretto'
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+          cache: maven
 
-    - name: Build with Maven
-      run: mvn clean package -DskipTests
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
-    - name: Deploy to Elastic Beanstalk
-      uses: einaregilsson/beanstalk-deploy@v21
-      with:
-        aws_access_key: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws_secret_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        application_name: Project-Module
-        environment_name: Project-Module-env
-        version_label: "v${{ github.run_number }}"
-        region: eu-north-1
-        deployment_package: target/project-module-0.0.1-SNAPSHOT.jar
+      - name: Frontend tests and type check
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npx tsc -b
+          npx vitest run
+
+      - name: Backend tests (real PostgreSQL)
+        env:
+          PROJECTMODULE_TEST_DB_URL: jdbc:postgresql://localhost:5432/projectmodule_test
+          PROJECTMODULE_TEST_DB_USERNAME: postgres
+          PROJECTMODULE_TEST_DB_PASSWORD: ci-only
+        run: mvn -B -DskipFrontend=true test
+
+  deploy:
+    name: Deploy without downtime
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: eu-north-1
+      VERSION_LABEL: v${{ github.run_number }}-${{ github.run_attempt }}-${{ github.sha }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'corretto'
+          cache: maven
+
+      - name: Build
+        run: mvn -B clean package -DskipTests
+
+      - name: Assemble the deployment bundle
+        run: |
+          rm -rf bundle bundle.zip
+          mkdir bundle
+          cp target/project-module-0.0.1-SNAPSHOT.jar bundle/application.jar
+          cp -r deploy/. bundle/
+          (cd bundle && zip -qr ../bundle.zip .)
+          unzip -l bundle.zip
+
+      - name: Check the environment is healthy (read only)
+        run: |
+          set -euo pipefail
+          read -r STATUS HEALTH CURRENT <<<"$(aws elasticbeanstalk describe-environments \
+            --application-name "$EB_APPLICATION" --environment-names "$EB_ENVIRONMENT" \
+            --query 'Environments[0].[Status,Health,VersionLabel]' --output text)"
+          echo "Environment status: $STATUS, health: $HEALTH, running: $CURRENT"
+          if [ "$STATUS" != "Ready" ]; then
+            echo "::error::The environment is busy ($STATUS). Nothing was changed. Run this workflow again when it is Ready."
+            exit 1
+          fi
+          echo "PREVIOUS_VERSION=$CURRENT" >> "$GITHUB_ENV"
+          setting() {
+            aws elasticbeanstalk describe-configuration-settings \
+              --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
+              --query "ConfigurationSettings[0].OptionSettings[?Namespace=='$1' && OptionName=='$2'].Value | [0]" --output text
+          }
+          echo "Environment type: $(setting aws:elasticbeanstalk:environment EnvironmentType)"
+          echo "Deployment policy: $(setting aws:elasticbeanstalk:command DeploymentPolicy)"
+          HEALTH_SYSTEM="$(setting aws:elasticbeanstalk:healthreporting:system SystemType)"
+          echo "Health reporting: $HEALTH_SYSTEM"
+          if [ "$HEALTH_SYSTEM" != "enhanced" ]; then
+            echo "::error::A no-downtime (immutable) deployment needs enhanced health reporting, and this environment uses '$HEALTH_SYSTEM'. Nothing was changed."
+            exit 1
+          fi
+          DB_URL="$(setting aws:elasticbeanstalk:application:environment PROJECTMODULE_DB_URL)"
+          echo "::add-mask::$DB_URL"
+          DB_HOST="$(echo "$DB_URL" | sed -E 's#^jdbc:postgresql://([^:/]+).*#\1#')"
+          echo "::add-mask::$DB_HOST"
+          echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
+
+      - name: Back up the production database
+        run: |
+          set -euo pipefail
+          INSTANCE="$(aws rds describe-db-instances \
+            --query "DBInstances[?Endpoint.Address=='$DB_HOST'].DBInstanceIdentifier | [0]" --output text)"
+          if [ -z "$INSTANCE" ] || [ "$INSTANCE" = "None" ]; then
+            echo "::error::Could not find the production database to back up. Nothing was changed."
+            exit 1
+          fi
+          SNAPSHOT="before-${{ github.run_number }}-${{ github.run_attempt }}-$(date -u +%Y%m%d%H%M)"
+          echo "Snapshotting $INSTANCE as $SNAPSHOT"
+          aws rds create-db-snapshot --db-instance-identifier "$INSTANCE" --db-snapshot-identifier "$SNAPSHOT" > /dev/null
+          aws rds wait db-snapshot-available --db-snapshot-identifier "$SNAPSHOT"
+          echo "Backup ready: $SNAPSHOT"
+
+      - name: Use immutable deployments (no downtime)
+        run: |
+          set -euo pipefail
+          POLICY="$(aws elasticbeanstalk describe-configuration-settings \
+            --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
+            --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:elasticbeanstalk:command' && OptionName=='DeploymentPolicy'].Value | [0]" \
+            --output text)"
+          if [ "$POLICY" != "Immutable" ]; then
+            echo "Switching the deployment policy from $POLICY to Immutable (a setting only; no restart)"
+            aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" \
+              --option-settings Namespace=aws:elasticbeanstalk:command,OptionName=DeploymentPolicy,Value=Immutable > /dev/null
+            aws elasticbeanstalk wait environment-updated --environment-names "$EB_ENVIRONMENT"
+          fi
+
+      - name: Deploy the new version
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          BUCKET="$(aws elasticbeanstalk create-storage-location --query S3Bucket --output text)"
+          KEY="$EB_APPLICATION/$VERSION_LABEL.zip"
+          aws s3 cp bundle.zip "s3://$BUCKET/$KEY" --only-show-errors
+          aws elasticbeanstalk create-application-version --application-name "$EB_APPLICATION" \
+            --version-label "$VERSION_LABEL" --source-bundle "S3Bucket=$BUCKET,S3Key=$KEY" \
+            --description "${{ github.sha }}" --process > /dev/null
+          for i in $(seq 1 30); do
+            STATE="$(aws elasticbeanstalk describe-application-versions --application-name "$EB_APPLICATION" \
+              --version-labels "$VERSION_LABEL" --query 'ApplicationVersions[0].Status' --output text)"
+            [ "$STATE" = "PROCESSED" ] && break
+            if [ "$STATE" = "FAILED" ]; then echo "::error::The bundle was rejected. Nothing was deployed."; exit 1; fi
+            sleep 5
+          done
+          echo "DEPLOY_STARTED=true" >> "$GITHUB_ENV"
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            # The assistant's key goes in with this same deployment, so it adds no extra restart.
+            aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --version-label "$VERSION_LABEL" \
+              --option-settings "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ANTHROPIC_API_KEY,Value=$ANTHROPIC_API_KEY" > /dev/null
+          else
+            aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --version-label "$VERSION_LABEL" > /dev/null
+          fi
+          echo "Deploying $VERSION_LABEL. The current version keeps serving until the new one is healthy."
+          for i in $(seq 1 120); do
+            read -r STATUS HEALTH RUNNING <<<"$(aws elasticbeanstalk describe-environments \
+              --environment-names "$EB_ENVIRONMENT" --query 'Environments[0].[Status,Health,VersionLabel]' --output text)"
+            echo "$(date -u +%H:%M:%S) status $STATUS, health $HEALTH, running $RUNNING"
+            [ "$STATUS" = "Ready" ] && break
+            sleep 15
+          done
+          if [ "$RUNNING" != "$VERSION_LABEL" ]; then
+            echo "::error::Elastic Beanstalk did not switch to the new version, so the previous one is still serving."
+            aws elasticbeanstalk describe-events --environment-name "$EB_ENVIRONMENT" --max-items 15 \
+              --query 'Events[].[EventDate,Severity,Message]' --output text || true
+            exit 1
+          fi
+
+      - name: Check the live site
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do
+            if curl -fsS --max-time 10 "$SITE_URL/actuator/health" | grep -q '"UP"' \
+              && curl -fsS --max-time 10 "$SITE_URL/" | grep -q '<title>WorkEasyProject</title>' \
+              && curl -fsS --max-time 10 "$SITE_URL/api/v1/auth/config" | grep -q 'legacyHandover'; then
+              echo "The new version is live and healthy."
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "::error::The live site did not pass its checks."
+          exit 1
+
+      - name: Put the previous version back
+        if: failure() && env.DEPLOY_STARTED == 'true' && env.PREVIOUS_VERSION != ''
+        run: |
+          RUNNING="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+            --query 'Environments[0].VersionLabel' --output text)"
+          if [ "$RUNNING" = "$PREVIOUS_VERSION" ]; then
+            echo "The previous version $PREVIOUS_VERSION is still serving; nothing to put back."
+            exit 0
+          fi
+          echo "Redeploying $PREVIOUS_VERSION"
+          aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --version-label "$PREVIOUS_VERSION" > /dev/null
+          for i in $(seq 1 120); do
+            STATUS="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+              --query 'Environments[0].Status' --output text)"
+            [ "$STATUS" = "Ready" ] && break
+            sleep 15
+          done
+          echo "Rolled back to $PREVIOUS_VERSION."

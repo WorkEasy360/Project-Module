@@ -41,7 +41,7 @@ const projects = [
 const ok: ProjectHealth = { overdueItemCount: 0, unresolvedRiskCount: 0, unresolvedIssueCount: 0, blockedTaskCount: 0, brokenDependencyCount: 0 }
 const healthById: Record<string, ProjectHealth> = { p1: { ...ok, overdueItemCount: 1 }, p2: ok, p3: { ...ok, blockedTaskCount: 1 } }
 const t = (over: Partial<Task>): Task => ({
-  id: 'x', projectId: 'p1', name: 'x', description: null, dueDate: null, assigneeId: null, status: 'TODO', archived: false, createdAt: '', updatedAt: '', version: 0, ...over,
+  id: 'x', projectId: 'p1', name: 'x', description: null, dueDate: null, assigneeId: null, status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0, ...over,
 })
 const tasksById: Record<string, Task[]> = {
   p1: [
@@ -113,7 +113,7 @@ describe('DashboardPage (reference layout)', () => {
     expect(await screen.findByRole('heading', { name: /Good morning, 11111111!/ })).toBeInTheDocument()
     const total = await screen.findByRole('link', { name: /Total Projects/ })
     expect(total).toHaveTextContent('3')
-    expect(screen.getByRole('button', { name: /Active$/ })).toHaveTextContent('2')
+    expect(screen.getByRole('button', { name: /^Active/ })).toHaveTextContent('2')
     expect(screen.getByRole('button', { name: /Planning/ })).toHaveTextContent('1')
     expect(screen.getByRole('button', { name: /Completed/ })).toHaveTextContent('0')
     // The backend has no trend data: no percentages or arrows on the stat cards.
@@ -131,7 +131,7 @@ describe('DashboardPage (reference layout)', () => {
     expect(rows[0]).toHaveTextContent('Fix authentication bug')
     expect(rows[0]).toHaveTextContent('Website Redesign')
     // A TODO task past its due date keeps its stored status; "past due" is the derived marker.
-    expect(rows[0]).toHaveTextContent('Todo')
+    expect(rows[0]).toHaveTextContent('To Do')
     expect(rows[0]).toHaveTextContent('past due')
     expect(rows[0]).not.toHaveTextContent('Overdue')
     expect(within(rows[0]).getByRole('link', { name: 'Fix authentication bug' })).toHaveAttribute('href', '/projects/p1/tasks/t1')

@@ -12,18 +12,28 @@ import com.projectmodule.work.domain.event.TaskCreated;
 import com.projectmodule.work.domain.event.TaskDomainEvent;
 import com.projectmodule.work.domain.event.TaskOverdue;
 import com.projectmodule.work.domain.event.TaskUpdated;
+import com.projectmodule.project.domain.ProjectPriority;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import jakarta.persistence.Transient;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -45,6 +55,7 @@ import java.util.UUID;
 public class Task extends BaseEntity {
 
     private static final int NAME_MAX_LENGTH = 200;
+    private static final int TAG_MAX_LENGTH = 40;
 
     /** Events raised since the last {@link #pullDomainEvents()}. Never persisted. */
     @Transient
@@ -68,6 +79,26 @@ public class Task extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private TaskStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "priority", nullable = false, length = 20)
+    private ProjectPriority priority = ProjectPriority.MEDIUM;
+
+    @Column(name = "start_date")
+    private LocalDate startDate;
+
+    @Column(name = "estimate_minutes")
+    private Integer estimateMinutes;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "recurrence", nullable = false, length = 20)
+    private TaskRecurrence recurrence = TaskRecurrence.NONE;
+
+    // Eager: responses are mapped after the transaction ends, and tasks have only a few tags.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "task_tags", joinColumns = @JoinColumn(name = "task_id"))
+    @Column(name = "tag", length = TAG_MAX_LENGTH)
+    private Set<String> tags = new LinkedHashSet<>();
 
     @Column(name = "archived_at")
     private Instant archivedAt;
@@ -138,9 +169,108 @@ public class Task extends BaseEntity {
         registerEvent(new TaskUpdated(getId()));
     }
 
+    /** Sets the task's priority. A plain edit: the caller records the update. */
+    public void prioritize(ProjectPriority newPriority) {
+        requireNotArchived("set the priority of");
+        this.priority = Objects.requireNonNull(newPriority, "priority is required");
+    }
+
+    /** Sets when work should begin. A plain edit: the caller records the update. */
+    public void scheduleStart(LocalDate newStartDate) {
+        requireNotArchived("schedule");
+        this.startDate = newStartDate;
+    }
+
+    /** Sets the planned effort, in minutes. A plain edit: the caller records the update. */
+    public void estimate(Integer minutes) {
+        requireNotArchived("estimate");
+        if (minutes != null && minutes < 0) {
+            throw new ValidationException("Estimate must not be negative");
+        }
+        this.estimateMinutes = minutes;
+    }
+
+    /** Sets how the task repeats. A plain edit: the caller records the update. */
+    public void repeat(TaskRecurrence newRecurrence) {
+        requireNotArchived("set the recurrence of");
+        this.recurrence = Objects.requireNonNull(newRecurrence, "recurrence is required");
+    }
+
+    /** Replaces the task's tags. Blank entries and duplicates, ignoring case, are dropped. */
+    public void tag(Collection<String> newTags) {
+        requireNotArchived("tag");
+        Set<String> cleaned = new LinkedHashSet<>();
+        Set<String> seen = new HashSet<>();
+        for (String candidate : newTags) {
+            String trimmed = candidate == null ? "" : candidate.trim();
+            if (trimmed.length() > TAG_MAX_LENGTH) {
+                throw new ValidationException("A tag must be at most " + TAG_MAX_LENGTH + " characters");
+            }
+            if (!trimmed.isEmpty() && seen.add(trimmed.toLowerCase(Locale.ROOT))) {
+                cleaned.add(trimmed);
+            }
+        }
+        this.tags.clear();
+        this.tags.addAll(cleaned);
+    }
+
+    /** Checks the start and due dates are in order. Called once all of an edit has been applied. */
+    public void requireDatesInOrder() {
+        if (startDate != null && dueDate != null && dueDate.isBefore(startDate)) {
+            throw new ValidationException("Due date must not be before the start date");
+        }
+    }
+
     /**
-     * Marks the task reached. There is no event for leaving {@link TaskStatus#COMPLETED} once
-     * set.
+     * Creates the task's next occurrence, if it repeats and has a date to repeat from, and stops
+     * this one repeating, so reopening and completing it again cannot create a second one.
+     */
+    public Optional<Task> spawnNextOccurrence() {
+        if (recurrence == TaskRecurrence.NONE || dueDate == null) {
+            return Optional.empty();
+        }
+        Task next = new Task(UuidV7.generate(), projectId, name, recurrence.next(dueDate),
+                getAssigneeId().orElse(null));
+        next.description = description;
+        next.priority = priority;
+        next.startDate = startDate == null ? null : recurrence.next(startDate);
+        next.estimateMinutes = estimateMinutes;
+        next.recurrence = recurrence;
+        next.tags.addAll(tags);
+        this.recurrence = TaskRecurrence.NONE;
+        return Optional.of(next);
+    }
+
+    /**
+     * Marks that work has begun. This also brings back a task that was completed too early.
+     *
+     * @throws BusinessRuleViolationException if it is already in progress
+     */
+    public void startWork() {
+        requireNotArchived("start");
+        if (status == TaskStatus.IN_PROGRESS) {
+            throw new BusinessRuleViolationException("Task is already in progress");
+        }
+        this.status = TaskStatus.IN_PROGRESS;
+        registerEvent(new TaskUpdated(getId()));
+    }
+
+    /**
+     * Puts the task back to the start, from any other status.
+     *
+     * @throws BusinessRuleViolationException if it is already there
+     */
+    public void reopen() {
+        requireNotArchived("reopen");
+        if (status == TaskStatus.TODO) {
+            throw new BusinessRuleViolationException("Task is already to do");
+        }
+        this.status = TaskStatus.TODO;
+        registerEvent(new TaskUpdated(getId()));
+    }
+
+    /**
+     * Marks the task finished.
      *
      * @throws BusinessRuleViolationException if it is already completed
      */
@@ -154,8 +284,7 @@ public class Task extends BaseEntity {
     }
 
     /**
-     * Flags the task as blocked. There is no {@code task.unblocked} event, so there is no
-     * reverse transition out of this state in this slice.
+     * Flags the task as blocked. {@link #startWork()} or {@link #reopen()} clears the flag.
      *
      * @throws BusinessRuleViolationException if it is already blocked, or already completed
      */
@@ -172,7 +301,7 @@ public class Task extends BaseEntity {
     }
 
     /**
-     * Flags the task as overdue. There is no reverse-transition event in this slice.
+     * Flags the task as overdue. {@link #startWork()} or {@link #reopen()} clears the flag.
      *
      * @throws BusinessRuleViolationException if it is already overdue, or already completed
      */
@@ -256,6 +385,26 @@ public class Task extends BaseEntity {
 
     public TaskStatus getStatus() {
         return status;
+    }
+
+    public ProjectPriority getPriority() {
+        return priority;
+    }
+
+    public Optional<LocalDate> getStartDate() {
+        return Optional.ofNullable(startDate);
+    }
+
+    public Optional<Integer> getEstimateMinutes() {
+        return Optional.ofNullable(estimateMinutes);
+    }
+
+    public TaskRecurrence getRecurrence() {
+        return recurrence;
+    }
+
+    public List<String> getTags() {
+        return tags.stream().sorted(String.CASE_INSENSITIVE_ORDER).toList();
     }
 
     public Optional<Instant> getArchivedAt() {

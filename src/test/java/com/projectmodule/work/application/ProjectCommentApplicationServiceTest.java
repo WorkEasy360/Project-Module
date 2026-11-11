@@ -63,7 +63,11 @@ class ProjectCommentApplicationServiceTest {
     @BeforeEach
     void setUp() {
         service = new ProjectCommentApplicationService(
-                commentRepository, projectApplicationService, projectAuthorizationService);
+                commentRepository, projectApplicationService, projectAuthorizationService,
+                org.mockito.Mockito.mock(TaskApplicationService.class),
+                org.mockito.Mockito.mock(com.projectmodule.project.infrastructure.ProjectMemberRepository.class),
+                org.mockito.Mockito.mock(com.projectmodule.collaboration.infrastructure.ProjectActivityRepository.class),
+                org.mockito.Mockito.mock(TaskNotifier.class));
         authorContext = new ImmutableRequestContext(
                 Optional.of(AUTHOR), Optional.of(ORG), "corr-1", ActorType.HUMAN);
         otherMemberContext = new ImmutableRequestContext(
@@ -130,7 +134,7 @@ class ProjectCommentApplicationServiceTest {
             Pageable pageable = PageRequest.of(0, 20);
             when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
                     .thenReturn(project);
-            when(commentRepository.findByProjectIdAndArchivedAtIsNull(project.getId(), pageable))
+            when(commentRepository.findProjectLevelComments(project.getId(), pageable))
                     .thenReturn(new PageImpl<>(List.of(comment), pageable, 1));
 
             var page = service.listComments(authorContext, project.getId(), pageable);

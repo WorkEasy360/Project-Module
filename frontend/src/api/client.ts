@@ -1,4 +1,4 @@
-import { getIdentity } from '../context/identityStore'
+import { getIdentity, setIdentity } from '../context/identityStore'
 import type { ProblemDetail } from '../types/common'
 
 /**
@@ -102,9 +102,8 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers: Record<string, string> = {
     'X-Correlation-Id': newCorrelationId(),
   }
-  if (identity) {
-    headers['X-User-Id'] = identity.userId
-    headers['X-Org-Id'] = identity.orgId
+  if (identity?.token) {
+    headers['Authorization'] = `Bearer ${identity.token}`
   }
   if (options.body !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -129,11 +128,59 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const data = text ? (JSON.parse(text) as unknown) : undefined
 
   if (!response.ok) {
+    // The session has expired or was ended elsewhere. Clearing it sends the app to the sign-in page.
+    if (response.status === 401 && identity?.token && getIdentity()?.token === identity.token) {
+      setIdentity(null)
+    }
     const problem = (data as ProblemDetail | undefined) ?? null
     throw new ApiError(response.status, problem, `Request failed with status ${response.status}`)
   }
 
   return data as T
+}
+
+async function sendFile(path: string, init: RequestInit): Promise<Response> {
+  const identity = getIdentity()
+  const headers: Record<string, string> = { 'X-Correlation-Id': newCorrelationId() }
+  if (identity?.token) headers['Authorization'] = `Bearer ${identity.token}`
+  let response: Response
+  try {
+    response = await fetch(`${BASE_URL}${API_PREFIX}${path}`, { ...init, headers })
+  } catch (cause) {
+    throw new NetworkError(cause)
+  }
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    let problem: ProblemDetail | null = null
+    try {
+      problem = text ? (JSON.parse(text) as ProblemDetail) : null
+    } catch {
+      // A proxy in front of the app can answer with a page rather than JSON.
+    }
+    const message =
+      response.status === 413 ? 'This file is too large to upload.' : `Request failed with status ${response.status}`
+    throw new ApiError(response.status, problem, message)
+  }
+  return response
+}
+
+/** Sends one file as multipart form data. The browser sets the content type and its boundary. */
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await sendFile(path, { method: 'POST', body: form })
+  return (await response.json()) as T
+}
+
+/** Fetches a protected file and hands it to the browser to save. */
+export async function downloadFile(path: string, fileName: string): Promise<void> {
+  const response = await sendFile(path, { method: 'GET' })
+  const url = URL.createObjectURL(await response.blob())
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 export const api = {

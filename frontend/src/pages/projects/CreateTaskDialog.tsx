@@ -1,17 +1,17 @@
 import { useState } from 'react'
 import { Modal } from '../../components/common/Modal'
 import { TextField, TextareaField, FormActions } from '../../components/forms/fields'
+import { ProjectPersonField } from '../../components/forms/ProjectPersonField'
+import { EMPTY_PLAN, planToRequest, TaskPlanningInputs, type TaskPlan } from '../../components/task/TaskPlanningFields'
 import { InlineError } from '../../components/common/ErrorState'
 import { toUserMessage } from '../../api/errorMessage'
 import { tasksApi } from '../../api/tasks'
 import type { Task } from '../../types/work'
 
 /**
- * Task creation kept deliberately small: a name is all that's required. Everything the backend
- * accepts beyond that (description, due date, assignee) sits behind "More options" so a
- * first-time user isn't confronted with a form. Subtasks, checklist items and dependencies are
- * added from the task's own page after creation — that's how the backend models them (separate
- * nested resources), not fields on the task itself.
+ * Task creation kept deliberately small: a name is all that's required. Priority, dates, tags and
+ * the rest sit behind "More options" so nobody is confronted with a long form. Subtasks, files and
+ * dependencies are added from the task's own page once it exists.
  */
 export function CreateTaskDialog({
   projectId,
@@ -29,6 +29,7 @@ export function CreateTaskDialog({
   const [description, setDescription] = useState('')
   const [dueDate, setDueDate] = useState(initialDueDate)
   const [assigneeId, setAssigneeId] = useState('')
+  const [plan, setPlan] = useState<TaskPlan>(EMPTY_PLAN)
   const [showMore, setShowMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -43,6 +44,7 @@ export function CreateTaskDialog({
         description: description || null,
         dueDate: dueDate || null,
         assigneeId: assigneeId || null,
+        ...planToRequest(plan),
       })
       onCreated(task)
     } catch (err) {
@@ -67,12 +69,12 @@ export function CreateTaskDialog({
         />
         <div className="form-row">
           <TextField id="task-due" label="Due date" type="date" value={dueDate} onChange={setDueDate} />
-          <TextField
+          <ProjectPersonField
             id="task-assignee"
-            label="Assignee (user ID)"
+            label="Assignee"
+            projectId={projectId}
             value={assigneeId}
             onChange={setAssigneeId}
-            hint="Optional — leave blank for unassigned."
           />
         </div>
 
@@ -81,13 +83,16 @@ export function CreateTaskDialog({
             More options
           </button>
         ) : (
-          <TextareaField
-            id="task-description"
-            label="Description"
-            value={description}
-            onChange={setDescription}
-            hint="Subtasks, checklist items and dependencies can be added once the task exists."
-          />
+          <>
+            <TaskPlanningInputs idPrefix="task" plan={plan} onChange={setPlan} />
+            <TextareaField
+              id="task-description"
+              label="Description"
+              value={description}
+              onChange={setDescription}
+              hint="Subtasks, checklist items and files can be added once the task exists."
+            />
+          </>
         )}
 
         <FormActions>

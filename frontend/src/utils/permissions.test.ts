@@ -22,12 +22,21 @@ describe('permissionsForRole', () => {
   })
 
   it('grants an OWNER every permission', () => {
-    expect(permissionsForRole('OWNER').size).toBe(4)
+    expect(permissionsForRole('OWNER').size).toBe(5)
     expect(hasPermission('OWNER', 'ARCHIVE_PROJECT')).toBe(true)
   })
 
   it('grants no permissions when no role is known', () => {
     expect(permissionsForRole(null).size).toBe(0)
     expect(hasPermission(null, 'VIEW_PROJECT')).toBe(false)
+  })
+})
+
+describe('task work', () => {
+  it('members can work on tasks but viewers cannot', () => {
+    expect(hasPermission('MEMBER', 'EDIT_TASKS')).toBe(true)
+    expect(hasPermission('MANAGER', 'EDIT_TASKS')).toBe(true)
+    expect(hasPermission('OWNER', 'EDIT_TASKS')).toBe(true)
+    expect(hasPermission('VIEWER', 'EDIT_TASKS')).toBe(false)
   })
 })

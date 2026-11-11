@@ -3,10 +3,10 @@ package com.projectmodule.common.context;
 /**
  * Inbound headers that carry caller identity from the gateway.
  *
- * <p>These headers are trusted. They are only safe if this service is unreachable except
- * through the gateway that sets them; anything able to reach it directly could otherwise
- * assert any identity. Restricting ingress is a deployment control and forms part of the
- * contract with whoever owns Authentication.
+ * <p>The user and organization headers are ignored unless
+ * {@code projectmodule.auth.trust-identity-headers} is true. They are only safe to trust if this
+ * service is unreachable except through a gateway that sets them; anything able to reach it
+ * directly could otherwise assert any identity.
  */
 public final class RequestContextHeaders {
 

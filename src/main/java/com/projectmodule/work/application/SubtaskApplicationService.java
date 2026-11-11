@@ -46,7 +46,7 @@ public class SubtaskApplicationService {
     public Subtask createSubtask(RequestContext context, UUID taskId, CreateSubtaskRequest request) {
         Task task = taskApplicationService.findActiveTaskInCallerOrganization(context, taskId);
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         Subtask subtask = Subtask.create(taskId, request.name());
         subtask.describe(request.description());
@@ -67,7 +67,7 @@ public class SubtaskApplicationService {
         Subtask subtask = findActiveSubtask(subtaskId);
         Task task = taskApplicationService.findActiveTaskInCallerOrganization(context, subtask.getTaskId());
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         if (subtask.getVersion() != request.version()) {
             throw new ConflictException(
@@ -97,7 +97,7 @@ public class SubtaskApplicationService {
         Subtask subtask = findActiveSubtask(subtaskId);
         Task task = taskApplicationService.findActiveTaskInCallerOrganization(context, subtask.getTaskId());
         projectAuthorizationService.requirePermission(
-                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_PROJECT);
+                context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
         subtask.archive(context.requireUserId());
         subtaskRepository.save(subtask);

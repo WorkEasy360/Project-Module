@@ -18,8 +18,7 @@ import java.util.UUID;
  *
  * <p>Specified in {@code docs/project/10-COMMENT-SPEC.md} (approved), since
  * {@code docs/project/01-SPEC.md}/{@code 03-DATABASE.md} document {@code ProjectComment} only as
- * a bare entity name. Per the approved specification: comments attach only to a Project (not to
- * Task/Risk/Issue/Decision), there is no threading/replies, no status/lifecycle beyond
+ * a bare entity name. A comment attaches to a Project and optionally to one of its Tasks. There is no threading/replies, no status/lifecycle beyond
  * soft-archive, and no domain events — the approved spec defines none for Comment.
  *
  * <p>{@code authorId} is never supplied by a caller: it is always the identity that created the
@@ -33,6 +32,10 @@ public class ProjectComment extends BaseEntity {
 
     @Column(name = "project_id", nullable = false, updatable = false)
     private UUID projectId;
+
+    /** The task this comment is on, or null for a comment on the project itself. */
+    @Column(name = "task_id", updatable = false)
+    private UUID taskId;
 
     @Column(name = "author_id", nullable = false, updatable = false)
     private UUID authorId;
@@ -64,6 +67,21 @@ public class ProjectComment extends BaseEntity {
      */
     public static ProjectComment create(UUID projectId, ExternalUserId authorId, String body) {
         return new ProjectComment(UuidV7.generate(), projectId, authorId, body);
+    }
+
+    /**
+     * Posts a comment on a task.
+     *
+     * @throws ValidationException if the body is blank
+     */
+    public static ProjectComment createOnTask(UUID projectId, UUID taskId, ExternalUserId authorId, String body) {
+        ProjectComment comment = create(projectId, authorId, body);
+        comment.taskId = Objects.requireNonNull(taskId, "taskId is required");
+        return comment;
+    }
+
+    public Optional<UUID> getTaskId() {
+        return Optional.ofNullable(taskId);
     }
 
     /**

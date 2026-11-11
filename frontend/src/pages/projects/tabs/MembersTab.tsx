@@ -5,12 +5,13 @@ import { membersApi } from '../../../api/members'
 import { DataTable, type Column } from '../../../components/common/DataTable'
 import { Modal } from '../../../components/common/Modal'
 import { ConfirmDialog } from '../../../components/common/ConfirmDialog'
-import { TextField, SelectField, FormActions } from '../../../components/forms/fields'
+import { SelectField, FormActions } from '../../../components/forms/fields'
+import { usePeople } from '../../../context/PeopleContext'
 import { InlineError } from '../../../components/common/ErrorState'
 import { toUserMessage } from '../../../api/errorMessage'
 import { ASSIGNABLE_PROJECT_ROLES, type ProjectMember, type ProjectRole } from '../../../types/project'
 import { Badge } from '../../../components/common/Badge'
-import { formatDateTime } from '../../../utils/format'
+import { formatDateTime, humanizeToken } from '../../../utils/format'
 
 export function MembersTab() {
   const { project, can } = useProjectWorkspace()
@@ -18,10 +19,15 @@ export function MembersTab() {
   const [addOpen, setAddOpen] = useState(false)
   const [editMember, setEditMember] = useState<ProjectMember | null>(null)
   const [removeMember, setRemoveMember] = useState<ProjectMember | null>(null)
+  const { nameOf } = usePeople()
 
   const columns: Column<ProjectMember>[] = [
-    { key: 'userId', header: 'User', render: (m) => m.userId },
-    { key: 'role', header: 'Role', render: (m) => <Badge tone={m.role === 'OWNER' ? 'primary' : 'neutral'}>{m.role}</Badge> },
+    { key: 'userId', header: 'Name', render: (m) => nameOf(m.userId) },
+    {
+      key: 'role',
+      header: 'Role',
+      render: (m) => <Badge tone={m.role === 'OWNER' ? 'primary' : 'neutral'}>{humanizeToken(m.role)}</Badge>,
+    },
     { key: 'joinedAt', header: 'Joined', render: (m) => formatDateTime(m.joinedAt) },
     {
       key: 'actions',
@@ -63,7 +69,12 @@ export function MembersTab() {
       />
 
       {addOpen && (
-        <AddMemberDialog projectId={project.id} onClose={() => setAddOpen(false)} onAdded={reload} />
+        <AddMemberDialog
+          projectId={project.id}
+          existingUserIds={(data ?? []).map((m) => m.userId)}
+          onClose={() => setAddOpen(false)}
+          onAdded={reload}
+        />
       )}
       {editMember && (
         <ChangeRoleDialog
@@ -76,7 +87,7 @@ export function MembersTab() {
       {removeMember && (
         <ConfirmDialog
           title="Remove member"
-          message={`Remove this member from the project?`}
+          message={`Remove ${nameOf(removeMember.userId)} from the project?`}
           confirmLabel="Remove"
           onConfirm={async () => {
             await membersApi.remove(project.id, removeMember.id)
@@ -91,13 +102,17 @@ export function MembersTab() {
 
 function AddMemberDialog({
   projectId,
+  existingUserIds,
   onClose,
   onAdded,
 }: {
   projectId: string
+  existingUserIds: string[]
   onClose: () => void
   onAdded: () => void
 }) {
+  const { people } = usePeople()
+  const available = people.filter((person) => !existingUserIds.includes(person.id))
   const [userId, setUserId] = useState('')
   const [role, setRole] = useState<ProjectRole>('MEMBER')
   const [error, setError] = useState<string | null>(null)
@@ -122,14 +137,24 @@ function AddMemberDialog({
     <Modal title="Add Member" onClose={onClose}>
       <form onSubmit={handleSubmit} className="form-grid">
         {error && <InlineError message={error} />}
-        <TextField id="member-userId" label="User ID (UUID)" value={userId} onChange={setUserId} required />
+        <SelectField
+          id="member-userId"
+          label="Person"
+          value={userId}
+          onChange={setUserId}
+          required
+          allowEmpty
+          emptyLabel={available.length === 0 ? 'Everyone is already on this project' : 'Choose a person'}
+          options={available.map((person) => ({ value: person.id, label: `${person.name} (${person.email})` }))}
+          hint="Someone missing? Admins can invite them from My Team."
+        />
         <SelectField
           id="member-role"
           label="Role"
           value={role}
           onChange={setRole}
           required
-          options={ASSIGNABLE_PROJECT_ROLES.map((r) => ({ value: r, label: r }))}
+          options={ASSIGNABLE_PROJECT_ROLES.map((r) => ({ value: r, label: humanizeToken(r) }))}
         />
         <FormActions>
           <button type="button" className="btn" onClick={onClose} disabled={submitting}>
@@ -184,7 +209,7 @@ function ChangeRoleDialog({
           value={role}
           onChange={setRole}
           required
-          options={ASSIGNABLE_PROJECT_ROLES.map((r) => ({ value: r, label: r }))}
+          options={ASSIGNABLE_PROJECT_ROLES.map((r) => ({ value: r, label: humanizeToken(r) }))}
         />
         <FormActions>
           <button type="button" className="btn" onClick={onClose} disabled={submitting}>

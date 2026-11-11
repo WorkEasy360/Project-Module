@@ -172,10 +172,10 @@ class TaskControllerTest {
 
         mockMvc.perform(get("/api/v1/projects/{projectId}/tasks/board", projectId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.columns", org.hamcrest.Matchers.hasSize(4)))
+                .andExpect(jsonPath("$.columns", org.hamcrest.Matchers.hasSize(TaskStatus.values().length)))
                 .andExpect(jsonPath("$.columns[0].status").value("TODO"))
                 .andExpect(jsonPath("$.columns[0].tasks[0].name").value("Implement login"))
-                .andExpect(jsonPath("$.columns[1].status").value("BLOCKED"))
+                .andExpect(jsonPath("$.columns[1].status").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.columns[1].tasks", org.hamcrest.Matchers.hasSize(0)));
     }
 
@@ -215,7 +215,7 @@ class TaskControllerTest {
 
         mockMvc.perform(patch("/api/v1/tasks/{id}", id)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"status\":\"IN_PROGRESS\",\"version\":0}"))
+                        .content("{\"status\":\"NOT_A_STATUS\",\"version\":0}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value("https://errors.projectmodule/validation-failed"));
 

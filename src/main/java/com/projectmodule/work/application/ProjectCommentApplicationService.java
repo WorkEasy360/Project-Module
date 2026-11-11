@@ -1,5 +1,8 @@
 package com.projectmodule.work.application;
 
+import com.projectmodule.collaboration.domain.ActivityType;
+import com.projectmodule.collaboration.domain.ProjectActivity;
+import com.projectmodule.collaboration.infrastructure.ProjectActivityRepository;
 import com.projectmodule.common.context.RequestContext;
 import com.projectmodule.common.exception.AuthorizationException;
 import com.projectmodule.common.exception.ConflictException;
@@ -10,8 +13,11 @@ import com.projectmodule.project.application.authorization.ProjectAuthorizationS
 import com.projectmodule.project.application.authorization.ProjectPermission;
 import com.projectmodule.work.api.dto.CreateCommentRequest;
 import com.projectmodule.work.api.dto.UpdateCommentRequest;
+import com.projectmodule.project.infrastructure.ProjectMemberRepository;
 import com.projectmodule.work.domain.ProjectComment;
+import com.projectmodule.work.domain.Task;
 import com.projectmodule.work.infrastructure.ProjectCommentRepository;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -33,10 +39,8 @@ import org.springframework.transaction.annotation.Transactional;
  * the author check is an identity comparison ({@link ProjectComment#isAuthoredBy}), not a
  * permission.
  *
- * <p>Like {@link IssueApplicationService}/{@link DecisionApplicationService}, this has no
- * {@link WorkEventRecorder} dependency: the approved specification defines no Comment events, so
- * there is nothing to record. Comment mutations do not appear in the outbox or the project
- * activity audit trail.
+ * <p>The approved specification defines no Comment events, so nothing goes to the outbox. A new
+ * comment is added to the project's activity feed, and tells whoever should hear about it.
  */
 @Service
 public class ProjectCommentApplicationService {
@@ -44,13 +48,56 @@ public class ProjectCommentApplicationService {
     private final ProjectCommentRepository commentRepository;
     private final ProjectApplicationService projectApplicationService;
     private final ProjectAuthorizationService projectAuthorizationService;
+    private final TaskApplicationService taskApplicationService;
+    private final ProjectMemberRepository projectMemberRepository;
+    private final ProjectActivityRepository projectActivityRepository;
+    private final TaskNotifier taskNotifier;
 
     public ProjectCommentApplicationService(ProjectCommentRepository commentRepository,
                                             ProjectApplicationService projectApplicationService,
-                                            ProjectAuthorizationService projectAuthorizationService) {
+                                            ProjectAuthorizationService projectAuthorizationService,
+                                            TaskApplicationService taskApplicationService,
+                                            ProjectMemberRepository projectMemberRepository,
+                                            ProjectActivityRepository projectActivityRepository,
+                                            TaskNotifier taskNotifier) {
         this.commentRepository = commentRepository;
         this.projectApplicationService = projectApplicationService;
         this.projectAuthorizationService = projectAuthorizationService;
+        this.taskApplicationService = taskApplicationService;
+        this.projectMemberRepository = projectMemberRepository;
+        this.projectActivityRepository = projectActivityRepository;
+        this.taskNotifier = taskNotifier;
+    }
+
+    /** Comments on a task, oldest first. */
+    @Transactional(readOnly = true)
+    public List<ProjectComment> listTaskComments(RequestContext context, UUID taskId) {
+        Task task = taskApplicationService.getTask(context, taskId);
+        return commentRepository.findByTaskIdAndArchivedAtIsNullOrderByCreatedAtAsc(task.getId());
+    }
+
+    /** Posts a comment on a task and tells its followers and anyone mentioned. */
+    @Transactional
+    public ProjectComment createTaskComment(RequestContext context, UUID taskId, CreateCommentRequest request) {
+        Task task = taskApplicationService.getTask(context, taskId);
+        ExternalUserId authorId = context.requireUserId();
+
+        ProjectComment comment = commentRepository.save(
+                ProjectComment.createOnTask(task.getProjectId(), task.getId(), authorId, request.body()));
+        projectActivityRepository.save(ProjectActivity.record(task.getProjectId(), ActivityType.COMMENT_ADDED, context,
+                "Commented on task \"" + task.getName() + "\"", null));
+        taskNotifier.commented(task, authorId.value(), onlyProjectMembers(task.getProjectId(), request.mentions()));
+        return comment;
+    }
+
+    /** Only people on the project can be told about it, whatever a request names. */
+    private List<UUID> onlyProjectMembers(UUID projectId, List<UUID> mentions) {
+        if (mentions == null || mentions.isEmpty()) {
+            return List.of();
+        }
+        return mentions.stream()
+                .filter(person -> projectMemberRepository.existsByProjectIdAndUserId(projectId, person))
+                .toList();
     }
 
     @Transactional
@@ -59,9 +106,11 @@ public class ProjectCommentApplicationService {
         ExternalUserId authorId = context.requireUserId();
         projectAuthorizationService.requirePermission(authorId, projectId, ProjectPermission.VIEW_PROJECT);
 
-        ProjectComment comment = ProjectComment.create(projectId, authorId, request.body());
-
-        return commentRepository.save(comment);
+        ProjectComment comment = commentRepository.save(ProjectComment.create(projectId, authorId, request.body()));
+        projectActivityRepository.save(ProjectActivity.record(projectId, ActivityType.COMMENT_ADDED, context,
+                "Commented on the project", null));
+        taskNotifier.mentionedInProject(projectId, authorId.value(), onlyProjectMembers(projectId, request.mentions()));
+        return comment;
     }
 
     @Transactional(readOnly = true)
@@ -69,7 +118,7 @@ public class ProjectCommentApplicationService {
         projectApplicationService.findActiveProjectInCallerOrganization(context, projectId);
         projectAuthorizationService.requirePermission(
                 context.requireUserId(), projectId, ProjectPermission.VIEW_PROJECT);
-        return commentRepository.findByProjectIdAndArchivedAtIsNull(projectId, pageable);
+        return commentRepository.findProjectLevelComments(projectId, pageable);
     }
 
     @Transactional

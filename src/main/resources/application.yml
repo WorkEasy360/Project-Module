@@ -16,6 +16,15 @@ spring:
   application:
     name: project-module
 
+  # Attachments. Keep in step with AttachmentApplicationService.MAX_FILE_BYTES.
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 26MB
+
+  # Email is optional. Set SPRING_MAIL_HOST (and SPRING_MAIL_USERNAME, SPRING_MAIL_PASSWORD,
+  # SPRING_MAIL_PORT) to turn it on; without a host the app sends nothing and works normally.
+
   datasource:
     # Credentials come from the environment only. Never commit a secret to this file.
     url: ${PROJECTMODULE_DB_URL}
@@ -56,6 +65,17 @@ springdoc:
     path: /swagger-ui.html
 
 projectmodule:
+  # The public address, used for links in emails.
+  app-base-url: ${PROJECTMODULE_APP_BASE_URL:https://ops.workeasy360.com}
+  mail:
+    from: ${PROJECTMODULE_MAIL_FROM:noreply@workeasy360.com}
+  auth:
+    # From Google Cloud. "Sign in with Google" appears only when this is set. Public, not a secret.
+    google-client-id: ${PROJECTMODULE_GOOGLE_CLIENT_ID:}
+    # Callers sign in with email and password and present a session token. Set this to true ONLY
+    # if a gateway sets X-User-Id and X-Org-Id and this service cannot be reached except through
+    # it: otherwise anyone could claim to be anyone by sending those headers.
+    trust-identity-headers: ${PROJECTMODULE_AUTH_TRUST_IDENTITY_HEADERS:false}
   cors:
     # Comma-separated origins allowed to call /api/v1/** from a browser (see ApiConfiguration).
     #

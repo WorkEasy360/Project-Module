@@ -102,16 +102,32 @@ export interface UpdateTaskListRequest {
 
 // ---------- Task ----------
 
-export type TaskStatus = 'TODO' | 'BLOCKED' | 'OVERDUE' | 'COMPLETED'
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'OVERDUE' | 'COMPLETED'
 
-export const TASK_STATUSES: TaskStatus[] = ['TODO', 'BLOCKED', 'OVERDUE', 'COMPLETED']
+export const TASK_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'BLOCKED', 'OVERDUE', 'COMPLETED']
 
-/** The domain only allows forward transitions away from TODO; never back to TODO. */
+/** A task can move from any status to any other. */
 export const TASK_STATUS_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  TODO: ['BLOCKED', 'OVERDUE', 'COMPLETED'],
-  BLOCKED: ['OVERDUE', 'COMPLETED'],
-  OVERDUE: ['BLOCKED', 'COMPLETED'],
-  COMPLETED: [],
+  TODO: ['IN_PROGRESS', 'BLOCKED', 'OVERDUE', 'COMPLETED'],
+  IN_PROGRESS: ['TODO', 'BLOCKED', 'OVERDUE', 'COMPLETED'],
+  BLOCKED: ['TODO', 'IN_PROGRESS', 'OVERDUE', 'COMPLETED'],
+  OVERDUE: ['TODO', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED'],
+  COMPLETED: ['TODO', 'IN_PROGRESS'],
+}
+
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
+export const TASK_PRIORITIES: TaskPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+
+export type TaskRecurrence = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'
+export const TASK_RECURRENCES: TaskRecurrence[] = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY']
+
+/** The optional planning fields a task can be created or edited with. */
+export interface TaskPlanningFields {
+  startDate?: string | null
+  priority?: TaskPriority | null
+  estimateMinutes?: number | null
+  recurrence?: TaskRecurrence | null
+  tags?: string[] | null
 }
 
 export type TaskSortField = 'CREATED_AT' | 'DUE_DATE' | 'NAME' | 'STATUS'
@@ -130,16 +146,21 @@ export interface Task {
   createdAt: string
   updatedAt: string
   version: number
+  startDate: string | null
+  priority: TaskPriority
+  estimateMinutes: number | null
+  recurrence: TaskRecurrence
+  tags: string[]
 }
 
-export interface CreateTaskRequest {
+export interface CreateTaskRequest extends TaskPlanningFields {
   name: string
   description?: string | null
   dueDate?: string | null
   assigneeId?: string | null
 }
 
-export interface UpdateTaskRequest {
+export interface UpdateTaskRequest extends TaskPlanningFields {
   name?: string | null
   description?: string | null
   dueDate?: string | null
@@ -391,6 +412,7 @@ export interface Comment {
 
 export interface CreateCommentRequest {
   body: string
+  mentions?: string[]
 }
 
 export interface UpdateCommentRequest {
@@ -484,6 +506,7 @@ export interface GanttPoint {
   id: string
   name: string
   date: string | null
+  startDate?: string | null
 }
 
 export interface Gantt {

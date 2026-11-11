@@ -1,3 +1,4 @@
+import { usePeople } from '../../../../context/PeopleContext'
 import { Icon, type IconName } from '../../../../components/common/Icon'
 import { Badge } from '../../../../components/common/Badge'
 import { humanizeToken, formatDate } from '../../../../utils/format'
@@ -28,6 +29,7 @@ export function EventChip({ entry, onSelect }: { entry: EnrichedEntry; onSelect:
 
 /** Fuller card used in the day panel and agenda view. */
 export function EventCard({ entry, onSelect }: { entry: EnrichedEntry; onSelect: (e: EnrichedEntry) => void }) {
+  const { nameOf } = usePeople()
   const tone = entryTone(entry)
   const when =
     entry.entityType === 'PHASE'
@@ -53,7 +55,7 @@ export function EventCard({ entry, onSelect }: { entry: EnrichedEntry; onSelect:
           {entry.assigneeId && (
             <>
               <span aria-hidden="true">·</span>
-              <span className="mono">{entry.assigneeId.slice(0, 8)}…</span>
+              <span>{nameOf(entry.assigneeId)}</span>
             </>
           )}
         </span>

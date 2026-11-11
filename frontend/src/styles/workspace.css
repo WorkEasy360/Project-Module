@@ -780,3 +780,130 @@
     display: block;
   }
 }
+
+/* Workspace members panel (My Team) */
+.ws-people-panel {
+  margin-bottom: 20px;
+}
+.ws-panel-head {
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.ws-subhead {
+  margin: 18px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+.ws-directory {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ws-directory-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--color-border);
+}
+.ws-directory-row:first-child {
+  border-top: 0;
+}
+.ws-directory-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 13.5px;
+}
+.ws-directory-name .text-muted {
+  overflow: hidden;
+  font-size: 12.5px;
+  text-overflow: ellipsis;
+}
+.ws-invite-link {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.ws-invite-link input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Timesheet */
+.ts-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.ts-range {
+  font-size: 14px;
+}
+.ts-total {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+.ts-days {
+  display: grid;
+  gap: 12px;
+}
+.ts-day {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+.ts-day header {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 13px;
+  font-weight: 600;
+}
+.ts-day ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ts-day li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--color-border);
+  font-size: 13px;
+}
+.ts-day li:first-child {
+  border-top: 0;
+}
+.ts-entry-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 180px;
+}
+.ts-entry-name .text-faint {
+  font-size: 12px;
+}
+.ws-results {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  padding: 2px 14px;
+}
+
+.ws-list-title {
+  margin: 8px 0 12px;
+  font-size: 16px;
+}
+.ws-details > summary {
+  margin: 4px 0 12px;
+  color: var(--color-primary);
+  font-size: 13.5px;
+  cursor: pointer;
+}

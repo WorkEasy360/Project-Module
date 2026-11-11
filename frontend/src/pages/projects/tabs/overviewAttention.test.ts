@@ -4,7 +4,7 @@ import type { DelayedItem, Task } from '../../../types/work'
 
 const task = (over: Partial<Task>): Task => ({
   id: 't', projectId: 'p', name: 'T', description: null, dueDate: null, assigneeId: null, status: 'TODO',
-  archived: false, createdAt: '', updatedAt: '', version: 0, ...over,
+  archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0, ...over,
 })
 const delayed = (over: Partial<DelayedItem>): DelayedItem => ({ entityType: 'TASK', id: 'd', name: 'D', dueDate: '2026-09-01', daysOverdue: 3, ...over })
 

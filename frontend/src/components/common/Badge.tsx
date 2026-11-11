@@ -8,6 +8,7 @@ export function Badge({ tone = 'neutral', children }: { tone?: BadgeTone; childr
 
 const TASK_STATUS_TONE: Record<string, BadgeTone> = {
   TODO: 'neutral',
+  IN_PROGRESS: 'info',
   BLOCKED: 'danger',
   OVERDUE: 'warning',
   COMPLETED: 'success',

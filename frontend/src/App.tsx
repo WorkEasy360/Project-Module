@@ -36,6 +36,8 @@ import { MyTasksPage } from './pages/workspace/MyTasksPage'
 import { WorkspaceCalendarPage } from './pages/workspace/WorkspaceCalendarPage'
 import { TeamPage } from './pages/workspace/TeamPage'
 import { WorkspaceReportsPage } from './pages/workspace/WorkspaceReportsPage'
+import { TimesheetPage } from './pages/workspace/TimesheetPage'
+import { SearchResultsPage } from './pages/workspace/SearchResultsPage'
 import { WorkspaceAutomationsPage } from './pages/workspace/WorkspaceAutomationsPage'
 import { SettingsPage } from './pages/workspace/SettingsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
@@ -48,6 +50,8 @@ function App() {
         <HashRouter>
           <Routes>
             <Route path="sign-in" element={<SignInPage />} />
+            <Route path="join/:inviteToken" element={<SignInPage />} />
+            <Route path="reset/:resetToken" element={<SignInPage />} />
             <Route element={<AppLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
@@ -55,6 +59,8 @@ function App() {
               <Route path="tasks" element={<MyTasksPage />} />
               <Route path="calendar" element={<WorkspaceCalendarPage />} />
               <Route path="team" element={<TeamPage />} />
+              <Route path="timesheet" element={<TimesheetPage />} />
+              <Route path="search" element={<SearchResultsPage />} />
               <Route path="reports" element={<WorkspaceReportsPage />} />
               <Route path="templates" element={<TemplatesPage />} />
               <Route path="automations" element={<WorkspaceAutomationsPage />} />

@@ -27,7 +27,7 @@ const projects = [
   { id: 'p2', name: 'Mobile App', status: 'PLANNING', priority: 'MEDIUM', ownerId: 'u', updatedAt: '2026-09-09T00:00:00Z' },
 ] as const
 const t = (over: Partial<Task>): Task => ({
-  id: 'x', projectId: 'p1', name: 'x', description: null, dueDate: null, assigneeId: null, status: 'TODO', archived: false, createdAt: '', updatedAt: '', version: 0, ...over,
+  id: 'x', projectId: 'p1', name: 'x', description: null, dueDate: null, assigneeId: null, status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0, ...over,
 })
 const m = (over: Partial<Milestone>): Milestone => ({
   id: 'm', projectId: 'p1', phaseId: null, name: 'M', description: null, dueDate: null, status: 'PENDING', archived: false, createdAt: '', updatedAt: '', version: 0, ...over,
@@ -101,7 +101,7 @@ describe('WorkspaceCalendarPage', () => {
     expect(side()).toHaveTextContent(D('2026-09-19'))
     expect(within(side()).getByText('Ship release notes')).toBeInTheDocument()
     expect(within(side()).getByText('Website Redesign')).toBeInTheDocument()
-    expect(within(side()).getByText('Todo')).toBeInTheDocument()
+    expect(within(side()).getByText('To Do')).toBeInTheDocument()
     expect(within(side()).getByText(/user-42/)).toBeInTheDocument()
 
     const glance = screen.getByLabelText('This month at a glance')

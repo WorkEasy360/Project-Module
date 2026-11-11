@@ -12,5 +12,6 @@ public record CommentResponse(
         boolean archived,
         Instant createdAt,
         Instant updatedAt,
-        long version) {
+        long version,
+        UUID taskId) {
 }

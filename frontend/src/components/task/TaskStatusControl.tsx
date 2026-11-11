@@ -7,8 +7,8 @@ import { humanizeToken } from '../../utils/format'
 
 /**
  * The one explicit "change status" control, shared by the task page, the task list and the
- * board card. Offers only the transitions the backend allows from the task's current status
- * (never back to TODO), sends the task's version for optimistic locking, and reports the
+ * board card. Offers only the transitions the backend allows from the task's current status,
+ * sends the task's version for optimistic locking, and reports the
  * backend's own message on 409/422 rather than pretending the move happened.
  */
 export function TaskStatusControl({

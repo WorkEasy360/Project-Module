@@ -5,6 +5,7 @@ import { useAsyncData } from '../../hooks/useAsyncData'
 import { projectsApi } from '../../api/projects'
 import { membersApi } from '../../api/members'
 import { useIdentity } from '../../context/IdentityContext'
+import { usePeople } from '../../context/PeopleContext'
 import { useSidebar } from '../../context/SidebarContext'
 import { ProjectWorkspaceContext } from '../../context/ProjectWorkspaceContext'
 import { hasPermission, type ProjectPermission } from '../../utils/permissions'
@@ -24,6 +25,7 @@ import { EditProjectDialog } from './EditProjectDialog'
 export function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>()
   const { identity } = useIdentity()
+  const { nameOf } = usePeople()
   const { isMobile } = useSidebar()
   const [editOpen, setEditOpen] = useState(false)
 
@@ -74,10 +76,10 @@ export function ProjectWorkspace() {
                 </span>
               </span>
             )}
-            <span className="pj-meta-item" title={`Owner ${project.ownerId}`}>
+            <span className="pj-meta-item" title="Project owner">
               <Icon name="user" size={13} />
               <span>
-                Owner <span className="mono">{project.ownerId.slice(0, 8)}…</span>
+                Owner {nameOf(project.ownerId)}
               </span>
             </span>
           </div>

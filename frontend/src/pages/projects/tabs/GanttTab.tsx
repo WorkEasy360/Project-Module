@@ -30,6 +30,8 @@ export function GanttTab() {
     for (const point of [...data.tasks, ...data.milestones]) {
       const d = toTime(point.date)
       if (d !== null) times.push(d)
+      const s = toTime(point.startDate ?? null)
+      if (s !== null) times.push(s)
     }
     if (times.length === 0) return null
     const min = Math.min(...times)
@@ -51,6 +53,8 @@ export function GanttTab() {
     )
   }
 
+  const taskName = (id: string) => data?.tasks.find((task) => task.id === id)?.name ?? 'A task without a due date'
+
   function percent(time: number): number {
     if (!range) return 0
     return ((time - range.min) / (range.max - range.min)) * 100
@@ -59,8 +63,7 @@ export function GanttTab() {
   return (
     <div>
       <p className="text-muted">
-        Phases render as date-range bars. Tasks and milestones (no task start date exists in this
-        backend) render as single points on their due date.
+        Phases, and tasks with a start date, show as bars. Everything else shows as a point on its due date.
       </p>
       <div className="gantt-scroll">
         <div className="gantt-inner">
@@ -82,7 +85,7 @@ export function GanttTab() {
           <ul className="list-plain">
             {data.dependencies.map((d) => (
               <li key={d.id}>
-                <code>{d.dependentTaskId}</code> depends on <code>{d.prerequisiteTaskId}</code>{' '}
+                {taskName(d.dependentTaskId)} depends on {taskName(d.prerequisiteTaskId)}{' '}
                 {d.broken && <span className="badge badge-danger">Broken</span>}
               </li>
             ))}
@@ -122,13 +125,21 @@ function GanttPointRow({
   kind: string
 }) {
   const d = toTime(point.date)
+  const s = toTime(point.startDate ?? null)
   return (
     <div className="gantt-row">
       <div className="gantt-row-label">
         {point.name} <span className="text-faint">({kind})</span>
       </div>
       <div className="gantt-row-track">
-        {d !== null && (
+        {d !== null && s !== null && (
+          <div
+            className="gantt-bar gantt-bar-task"
+            style={{ left: `${percent(s)}%`, width: `${Math.max(percent(d) - percent(s), 0.5)}%` }}
+            title={`${formatDate(point.startDate ?? null)} – ${formatDate(point.date)}`}
+          />
+        )}
+        {d !== null && s === null && (
           <div className="gantt-point" style={{ left: `${percent(d)}%` }} title={formatDate(point.date)} />
         )}
       </div>

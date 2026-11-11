@@ -29,6 +29,7 @@ import {
   applyFilters,
   collectAttentionTasks,
   greetingForHour,
+  nextStepFor,
   hasActiveFilters,
   healthLevel,
   latestDueDate,
@@ -89,7 +90,11 @@ export function DashboardPage() {
 
   return (
     <div className="hb">
-      <HeroSection greeting={greetingForHour(new Date().getHours())} name={identity ? identity.userId.slice(0, 8) : null} />
+      <HeroSection
+        greeting={greetingForHour(new Date().getHours())}
+        name={identity ? (identity.name?.split(' ')[0] ?? identity.userId.slice(0, 8)) : null}
+        nextStep={projects.data ? nextStepFor(loaded, identity?.userId ?? null, today) : undefined}
+      />
 
       {/* ---------- Summary cards ---------- */}
       <section className="hb-stats rise-in" aria-label="Summary">
@@ -102,10 +107,10 @@ export function DashboardPage() {
           ))}
         {summary.data && (
           <>
-            <StatCard icon="projects" tone="blue" value={summary.data.activeProjectCount} label="Total Projects" hint="All projects that are not archived, in any status. Opens the project list." to="/projects" />
-            <StatCard icon="overview" tone="purple" value={summary.data.byStatus.ACTIVE} label="Active" hint="Projects whose status is Active. Filters the list below." active={filters.status === 'ACTIVE'} onClick={() => toggleStatus('ACTIVE')} />
-            <StatCard icon="phase" tone="amber" value={summary.data.byStatus.PLANNING} label="Planning" hint="Projects still in planning. Filters the list below." active={filters.status === 'PLANNING'} onClick={() => toggleStatus('PLANNING')} />
-            <StatCard icon="check" tone="green" value={summary.data.byStatus.COMPLETED} label="Completed" hint="Projects marked completed. Filters the list below." active={filters.status === 'COMPLETED'} onClick={() => toggleStatus('COMPLETED')} />
+            <StatCard icon="projects" tone="blue" value={summary.data.activeProjectCount} label="Total Projects" caption="In your workspace" hint="All projects that are not archived, in any status. Opens the project list." to="/projects" />
+            <StatCard icon="overview" tone="purple" value={summary.data.byStatus.ACTIVE} label="Active" caption="Under way now" hint="Projects whose status is Active. Filters the list below." active={filters.status === 'ACTIVE'} onClick={() => toggleStatus('ACTIVE')} />
+            <StatCard icon="phase" tone="amber" value={summary.data.byStatus.PLANNING} label="Planning" caption="Getting ready" hint="Projects still in planning. Filters the list below." active={filters.status === 'PLANNING'} onClick={() => toggleStatus('PLANNING')} />
+            <StatCard icon="check" tone="green" value={summary.data.byStatus.COMPLETED} label="Completed" caption="Finished" hint="Projects marked completed. Filters the list below." active={filters.status === 'COMPLETED'} onClick={() => toggleStatus('COMPLETED')} />
           </>
         )}
       </section>
@@ -318,7 +323,9 @@ function StatCard({
   to,
   onClick,
   active,
+  caption,
 }: {
+  caption: string
   icon: IconName
   tone: (typeof CARD_TONES)[number]
   value: number
@@ -330,18 +337,14 @@ function StatCard({
 }) {
   const body = (
     <>
-      <span className="hb-stat-icon">
-        <Icon name={icon} size={22} />
-      </span>
-      <span className="hb-stat-text">
-        <span className="hb-stat-value">{value}</span>
+      <span className="hb-stat-top">
         <span className="hb-stat-label">{label}</span>
+        <span className="hb-stat-icon">
+          <Icon name={icon} size={18} />
+        </span>
       </span>
-      {/* Decorative only — the backend has no trend data, so there is no sparkline or delta. */}
-      <svg className="hb-stat-wave" viewBox="0 0 200 60" preserveAspectRatio="none" aria-hidden="true" focusable="false">
-        <path d="M0 42 C 28 18, 58 58, 96 34 S 160 8, 200 30 V60 H0 Z" fill="currentColor" />
-        <path d="M0 52 C 40 30, 70 62, 110 44 S 172 22, 200 40 V60 H0 Z" fill="currentColor" opacity="0.6" />
-      </svg>
+      <span className="hb-stat-value">{value}</span>
+      <span className="hb-stat-caption">{caption}</span>
     </>
   )
   const cls = `hb-stat card-tone-${tone}${active ? ' active' : ''}`

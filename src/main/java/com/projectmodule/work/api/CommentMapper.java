@@ -17,6 +17,7 @@ public class CommentMapper {
                 comment.isArchived(),
                 comment.getCreatedAt(),
                 comment.getUpdatedAt(),
-                comment.getVersion());
+                comment.getVersion(),
+                comment.getTaskId().orElse(null));
     }
 }

@@ -39,7 +39,17 @@ export function WorkspaceReportsPage() {
   )
   const totals = useMemo(() => sumReports(loadedReports), [loadedReports])
 
-  const header = <PageHeader title="Reports" description="Summary reports for each of your projects, side by side." />
+  const header = (
+    <PageHeader
+      title="Reports"
+      description="Summary reports for each of your projects, side by side."
+      actions={
+        <button type="button" className="btn no-print" onClick={() => window.print()}>
+          Print or save as PDF
+        </button>
+      }
+    />
+  )
 
   if (projectsState.loading) {
     return (

@@ -103,6 +103,23 @@ public class TaskController {
         return new KanbanBoardResponse(columns);
     }
 
+    @GetMapping("/tasks/{id}/followers")
+    public List<UUID> listFollowers(@PathVariable UUID id) {
+        return taskApplicationService.listFollowers(requestContext, id);
+    }
+
+    @PostMapping("/tasks/{id}/followers/me")
+    public ResponseEntity<Void> follow(@PathVariable UUID id) {
+        taskApplicationService.setFollowing(requestContext, id, true);
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/tasks/{id}/followers/me")
+    public ResponseEntity<Void> unfollow(@PathVariable UUID id) {
+        taskApplicationService.setFollowing(requestContext, id, false);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/tasks/{id}")
     public TaskResponse getTask(@PathVariable UUID id) {
         return taskMapper.toResponse(taskApplicationService.getTask(requestContext, id));

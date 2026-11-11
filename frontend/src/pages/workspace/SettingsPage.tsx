@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import '../../styles/workspace.css'
 import { useIdentity } from '../../context/IdentityContext'
@@ -10,7 +10,13 @@ import { Icon, type IconName } from '../../components/common/Icon'
 import { Badge, type BadgeTone } from '../../components/common/Badge'
 import { FEATURES, groupByCategory, type FeatureDefinition, type ReleaseState } from '../../features/registry'
 import { humanizeToken } from '../../utils/format'
-import { API_BASE_URL } from '../../api/client'
+import { API_BASE_URL, ApiError } from '../../api/client'
+import { authApi } from '../../api/auth'
+import { toUserMessage } from '../../api/errorMessage'
+import { Modal } from '../../components/common/Modal'
+import { InlineError } from '../../components/common/ErrorState'
+import { FormActions, TextField } from '../../components/forms/fields'
+import { usePeople } from '../../context/PeopleContext'
 
 /** Empty means the API is served from the same origin as this page (the packaged deployment). */
 const API_BASE_LABEL = API_BASE_URL === '' ? 'Same origin as this page' : API_BASE_URL
@@ -28,17 +34,16 @@ const RELEASE_TONE: Record<ReleaseState, BadgeTone> = {
 }
 
 /**
- * Settings: only things this frontend really controls. Identity is the X-User-Id / X-Org-Id
- * header pair (there is no login or profile API), theme and sidebar state are per-browser
- * preferences, and the feature list is the registry the navigation is built from. Nothing here
- * is a fake preference: the backend has no notification, profile or account settings.
+ * Settings: only things this frontend really controls. The account is who is signed in, theme and
+ * sidebar state are per-browser preferences, and the feature list is the registry the navigation
+ * is built from. Nothing here is a fake preference: the backend has no notification settings.
  */
 export function SettingsPage() {
   return (
     <div className="ws-page rise-in">
-      <PageHeader title="Settings" description="Your identity, appearance and workspace preferences." />
+      <PageHeader title="Settings" description="Your account, appearance and workspace preferences." />
       <div className="ws-settings">
-        <IdentitySection />
+        <AccountSection />
         <AppearanceSection />
         <NavigationSection />
         <AboutSection />
@@ -79,78 +84,126 @@ function Section({
   )
 }
 
-function IdentitySection() {
-  const { identity, openPrompt, clearIdentity } = useIdentity()
+function AccountSection() {
+  const { identity, clearIdentity } = useIdentity()
+  const [dialog, setDialog] = useState<'profile' | 'password' | null>(null)
   return (
-    <Section id="identity" icon="user" title="Identity" description="Who the API sees you as.">
+    <Section id="account" icon="user" title="Account" description="Who you are signed in as.">
       <div className="ws-row">
         <div className="ws-row-label">
-          <strong>User ID</strong>
-          <span>Sent as the X-User-Id header</span>
+          <strong>Name</strong>
         </div>
-        <CopyValue label="user ID" value={identity?.userId ?? null} />
+        <span>{identity?.name ?? <span className="text-faint">Not set</span>}</span>
       </div>
       <div className="ws-row">
         <div className="ws-row-label">
-          <strong>Organization ID</strong>
-          <span>Sent as the X-Org-Id header</span>
+          <strong>Email</strong>
         </div>
-        <CopyValue label="organization ID" value={identity?.orgId ?? null} />
+        <span>{identity?.email ?? <span className="text-faint">Not set</span>}</span>
       </div>
-      <p className="ws-hint">
-        This app has no login of its own. These two identifiers are sent with every request as the X-User-Id and
-        X-Org-Id headers and are stored only in this browser; the backend decides what they may do.
-      </p>
       <div className="page-actions">
-        <button type="button" className="btn" onClick={openPrompt}>
-          {identity ? 'Change identity' : 'Set identity'}
-        </button>
+        {identity && (
+          <>
+            <button type="button" className="btn" onClick={() => setDialog('profile')}>
+              Edit name
+            </button>
+            <button type="button" className="btn" onClick={() => setDialog('password')}>
+              Change password
+            </button>
+          </>
+        )}
         {identity && (
           <button type="button" className="btn btn-danger" onClick={clearIdentity}>
             <Icon name="logout" size={15} /> Sign out
           </button>
         )}
       </div>
+      {dialog === 'profile' && <EditNameDialog onClose={() => setDialog(null)} />}
+      {dialog === 'password' && <ChangePasswordDialog onClose={() => setDialog(null)} />}
     </Section>
   )
 }
 
-function CopyValue({ label, value }: { label: string; value: string | null }) {
-  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+function EditNameDialog({ onClose }: { onClose: () => void }) {
+  const { identity, setIdentity } = useIdentity()
+  const { reload } = usePeople()
+  const [name, setName] = useState(identity?.name ?? '')
+  const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (state === 'idle') return
-    const timer = window.setTimeout(() => setState('idle'), 2000)
-    return () => window.clearTimeout(timer)
-  }, [state])
-
-  if (!value) return <span className="text-faint">Not set</span>
-
-  async function copy() {
+  async function save(event: React.FormEvent) {
+    event.preventDefault()
     try {
-      if (!navigator.clipboard) throw new Error('Clipboard unavailable')
-      await navigator.clipboard.writeText(value as string)
-      setState('copied')
-    } catch {
-      setState('failed')
+      const account = await authApi.updateProfile(name.trim())
+      if (identity) setIdentity({ ...identity, name: account.name })
+      reload()
+      onClose()
+    } catch (err) {
+      setError(toUserMessage(err))
     }
   }
 
   return (
-    <span className="ws-copy">
-      <code className="ws-code">{value}</code>
-      <button type="button" className="btn btn-sm" onClick={copy} aria-label={`Copy ${label}`}>
-        {state === 'copied' ? (
-          <>
-            <Icon name="check" size={14} /> Copied
-          </>
-        ) : state === 'failed' ? (
-          'Copy failed'
-        ) : (
-          'Copy'
-        )}
-      </button>
-    </span>
+    <Modal title="Edit name" onClose={onClose}>
+      <form className="form-grid" onSubmit={save}>
+        {error && <InlineError message={error} />}
+        <TextField id="profile-name" label="Name" value={name} onChange={setName} required maxLength={120} />
+        <FormActions>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={!name.trim()}>
+            Save
+          </button>
+        </FormActions>
+      </form>
+    </Modal>
+  )
+}
+
+function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const { clearIdentity } = useIdentity()
+  const [current, setCurrent] = useState('')
+  const [next, setNext] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  async function save(event: React.FormEvent) {
+    event.preventDefault()
+    if (next.length < 8) {
+      setError('Your new password must be at least 8 characters.')
+      return
+    }
+    try {
+      await authApi.changePassword({ currentPassword: current, newPassword: next })
+      // Every session has now ended, including this one, so the person signs in again.
+      clearIdentity()
+    } catch (err) {
+      setError(err instanceof ApiError && err.problem?.detail ? err.problem.detail : toUserMessage(err))
+    }
+  }
+
+  return (
+    <Modal title="Change password" onClose={onClose}>
+      <form className="form-grid" onSubmit={save}>
+        {error && <InlineError message={error} />}
+        <div className="form-field">
+          <label htmlFor="current-password">Current password</label>
+          <input id="current-password" type="password" autoComplete="current-password" value={current} onChange={(e) => setCurrent(e.target.value)} required />
+        </div>
+        <div className="form-field">
+          <label htmlFor="new-password">New password</label>
+          <input id="new-password" type="password" autoComplete="new-password" value={next} onChange={(e) => setNext(e.target.value)} required />
+          <span className="hint">You will be signed out everywhere and sign in again with this one.</span>
+        </div>
+        <FormActions>
+          <button type="button" className="btn" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={!current || !next}>
+            Change password
+          </button>
+        </FormActions>
+      </form>
+    </Modal>
   )
 }
 
@@ -210,6 +263,8 @@ function FeaturesSection() {
       description="Everything this app can do, and where it lives. Read-only."
       span
     >
+      <details className="ws-details">
+        <summary>Show all features</summary>
       <div className="ws-feature-groups">
         {workspace.map(([category, items]) => (
           <div className="ws-feature-group" key={`w-${category}`}>
@@ -224,6 +279,7 @@ function FeaturesSection() {
           </div>
         ))}
       </div>
+      </details>
       <p className="ws-hint">
         Project features open from inside a project (Projects → a project → its tabs). Availability comes from
         the feature registry, not from a per-user setting.
@@ -264,13 +320,9 @@ function AboutSection() {
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>Stored in this browser</strong>
-          <span>Identity headers, theme and sidebar preference — nothing else</span>
+          <span>Your sign-in session, theme and sidebar preference — nothing else</span>
         </div>
       </div>
-      <p className="ws-hint">
-        WorkEasy360 keeps no account, profile or notification settings: the backend has no such APIs, so none
-        are shown here.
-      </p>
     </Section>
   )
 }

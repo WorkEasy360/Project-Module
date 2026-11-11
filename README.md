@@ -54,6 +54,10 @@ OpenAPI UI: `http://localhost:8080/swagger-ui.html`.
 | `PROJECTMODULE_DB_PASSWORD` | yes | Database password — never commit it |
 | `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed to call the API. Defaults to the Vite dev/preview ports (`http://localhost:5173,http://localhost:4173`), which is what the `npm run dev` workflow needs. A packaged deployment serves the UI from the same origin as the API, so it needs no CORS and no value here. Set it only when a frontend is hosted on a different origin. |
 | `SPRING_PROFILES_ACTIVE` | no | `local` for the developer profile above |
+| `SPRING_MAIL_HOST` and related | no | Turns on email. See [`docs/project/34-DAILY-WORK-FEATURES.md`](docs/project/34-DAILY-WORK-FEATURES.md) |
+| `PROJECTMODULE_GOOGLE_CLIENT_ID` | no | Turns on "Sign in with Google" |
+| `PROJECTMODULE_APP_BASE_URL` | no | The public address used in email links |
+| `ANTHROPIC_API_KEY` | no | Turns on the in-app assistant. See [`docs/project/35-ASSISTANT.md`](docs/project/35-ASSISTANT.md) |
 
 ### Backend tests
 
@@ -96,18 +100,18 @@ Then open <http://localhost:8080/> — the UI and the API are on one origin, exa
 deployed environment. Add `-DskipFrontend=true` for a faster backend-only build; the packaged
 application then has no UI and the tests that serve it are skipped rather than passing vacuously.
 
-The app has no login screen by design: the backend expects an upstream gateway to supply
-`X-User-Id` and `X-Org-Id` headers. The frontend asks for those two UUIDs once ("Set identity",
-top-right) and sends them on every request. See [`frontend/README.md`](frontend/README.md) for
-the architecture, the feature registry (how to add a screen without touching navigation), and
-the full route list.
+Create an account on the sign-in page, or use `POST /api/v1/auth/register`. See
+[`frontend/README.md`](frontend/README.md) for the architecture, the feature registry (how to add a
+screen without touching navigation), and the full route list.
 
 ## Identity, authorization and organizations
 
-Users and organizations are external, opaque identifiers (`ExternalUserId`, `OrganizationId`).
-Authorization is per project via `ProjectMember` roles (`OWNER`, `MANAGER`, `MEMBER`,
-`VIEWER`); every request is checked server-side. The module never stores or authenticates
-users itself.
+People sign in with email and password; see
+[`docs/project/33-AUTHENTICATION.md`](docs/project/33-AUTHENTICATION.md). The `account` package is
+the only code that handles credentials. Everything else sees user and organization ids
+(`ExternalUserId`, `OrganizationId`) through `RequestContext`. Authorization is per project via
+`ProjectMember` roles (`OWNER`, `MANAGER`, `MEMBER`, `VIEWER`); every request is checked
+server-side.
 
 ## Deployment notes
 

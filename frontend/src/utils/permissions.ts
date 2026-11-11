@@ -1,6 +1,6 @@
 import type { ProjectRole } from '../types/project'
 
-export type ProjectPermission = 'VIEW_PROJECT' | 'EDIT_PROJECT' | 'ARCHIVE_PROJECT' | 'MANAGE_MEMBERS'
+export type ProjectPermission = 'VIEW_PROJECT' | 'EDIT_PROJECT' | 'EDIT_TASKS' | 'ARCHIVE_PROJECT' | 'MANAGE_MEMBERS'
 
 /**
  * Mirrors ProjectAuthorizationServiceImpl's in-code role -> permission matrix, for UX only (to
@@ -10,9 +10,9 @@ export type ProjectPermission = 'VIEW_PROJECT' | 'EDIT_PROJECT' | 'ARCHIVE_PROJE
  */
 const ROLE_PERMISSIONS: Record<ProjectRole, ProjectPermission[]> = {
   VIEWER: ['VIEW_PROJECT'],
-  MEMBER: ['VIEW_PROJECT'],
-  MANAGER: ['VIEW_PROJECT', 'EDIT_PROJECT', 'MANAGE_MEMBERS'],
-  OWNER: ['VIEW_PROJECT', 'EDIT_PROJECT', 'MANAGE_MEMBERS', 'ARCHIVE_PROJECT'],
+  MEMBER: ['VIEW_PROJECT', 'EDIT_TASKS'],
+  MANAGER: ['VIEW_PROJECT', 'EDIT_PROJECT', 'EDIT_TASKS', 'MANAGE_MEMBERS'],
+  OWNER: ['VIEW_PROJECT', 'EDIT_PROJECT', 'EDIT_TASKS', 'MANAGE_MEMBERS', 'ARCHIVE_PROJECT'],
 }
 
 export function permissionsForRole(role: ProjectRole | null): Set<ProjectPermission> {

@@ -56,21 +56,13 @@ The backend only accepts cross-origin browser requests from origins listed in
 app's Vite dev (`5173`) and preview (`4173`) ports. If you serve the built frontend from another
 origin, set the backend's `PROJECTMODULE_CORS_ALLOWED_ORIGINS` environment variable to match.
 
-## Identity — there is no login screen
+## Signing in
 
-This backend has no authentication of its own: every request must carry `X-User-Id` and
-`X-Org-Id` headers, which a real deployment's upstream gateway would inject. Since this frontend
-talks to the backend directly, it asks you for those two values once (top-right of the header,
-"Set identity") and resends them on every request. They are stored only in `localStorage` in your
-browser — this is a developer/operator convenience, not an authentication system, and it grants
-nothing by itself: the backend still authorizes (or rejects) every request based on the project
-membership rows for the user id you provide.
-
-To use the app you need at least one organization id and one user id that the backend already
-knows about (e.g. one you created a project with, or one added as a project member) — the
-frontend cannot create organizations or users; those concepts are entirely external to this
-module (`ExternalUserId` / `OrganizationId` are opaque identifiers here, per the backend's own
-architecture).
+Create an account or sign in with email and password on the sign-in page. The backend returns a
+session token, which the API client sends as `Authorization: Bearer <token>`. "Remember me" keeps
+it in `localStorage`; otherwise it lasts for this tab only, in `sessionStorage`. When the backend
+stops accepting a token, the client clears it and the app returns to the sign-in page. See
+`docs/project/33-AUTHENTICATION.md`.
 
 ## Architecture
 
@@ -78,7 +70,7 @@ architecture).
 React UI  →  src/api/*  →  fetch(`${VITE_API_BASE_URL}/api/v1/...`)  →  Spring Boot REST API
 ```
 
-- `src/api/client.ts` — the single fetch wrapper. Attaches identity headers, throws `ApiError`
+- `src/api/client.ts` — the single fetch wrapper. Attaches the session token, throws `ApiError`
   (carrying the backend's RFC 9457 `ProblemDetail`) on any non-2xx response, and `NetworkError`
   when the request never reaches the server.
 - `src/api/*.ts` — one thin module per backend controller area (projects, tasks, risks,
@@ -86,7 +78,7 @@ React UI  →  src/api/*  →  fetch(`${VITE_API_BASE_URL}/api/v1/...`)  →  Sp
   called that isn't in the backend's actual controllers.
 - `src/types/*.ts` — TypeScript types mirroring the backend's request/response DTOs and enums
   exactly (field names, nullability, and enum values were read from the Java source, not guessed).
-- `src/context/IdentityContext.tsx` — the dev identity switcher described above.
+- `src/context/IdentityContext.tsx` — who is signed in, and signing out.
 - `src/context/ProjectWorkspaceContext.tsx` — shares the loaded `Project`, the caller's derived
   role, and a `can(permission)` check across every tab of a project workspace. This client-side
   permission check is UX only (hides/disables actions); the backend re-checks authorization on
@@ -106,7 +98,9 @@ React UI  →  src/api/*  →  fetch(`${VITE_API_BASE_URL}/api/v1/...`)  →  Sp
 ## Routes
 
 ```
+/sign-in, /join/:token, /reset/:token           → signing in, joining by invitation, resetting a password
 /dashboard                                     → Home
+/tasks, /calendar, /team, /timesheet, /reports, /automations, /settings, /search
 /projects
 /templates
 /projects/:projectId                          → redirects to overview
@@ -126,7 +120,7 @@ React UI  →  src/api/*  →  fetch(`${VITE_API_BASE_URL}/api/v1/...`)  →  Sp
 /projects/:projectId/dependencies              → dependency analysis (cycles/blocked/broken)
 /projects/:projectId/members
 /projects/:projectId/comments
-/projects/:projectId/activity                  → shows "not available" — see below
+/projects/:projectId/activity                  → who did what on the project
 /projects/:projectId/custom-fields
 /projects/:projectId/search
 /projects/:projectId/health
@@ -161,8 +155,6 @@ Future modules (time tracking, budgets, files, a client portal…) slot in the s
 
 ## Modules that are intentionally not implemented (or partially so)
 
-- **Activity / Audit feed** — the backend records `ProjectActivity` internally but exposes no
-  REST endpoint for it. The Activity tab says so explicitly; nothing is simulated.
 - **AI Actions / Approvals, AI-driven project creation, and P6 Agents** — not implemented, because
   the backend itself has not implemented them (see `docs/project/27-AI-ACTIONS-SPEC.md` and
   `docs/project/29-AGENTS-SPEC.md` — both are open specifications with no corresponding API). The

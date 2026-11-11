@@ -1,3 +1,5 @@
+import { usePeople } from '../../../context/PeopleContext'
+import { initials } from '../../../utils/format'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../../../components/common/Icon'
@@ -15,6 +17,9 @@ import {
   type LoadedProject,
 } from '../dashboardUtils'
 
+/** A single item needs no filtering, so the filter row appears only once there is more than one. */
+const SHOW_FILTERS_ABOVE = 1
+
 /**
  * "Needs Attention": overdue and blocked tasks across the loaded projects, with working search,
  * status/project/assignee filters and sorting — all client-side over real task lists. Rows open
@@ -29,6 +34,7 @@ export function AttentionPanel({
   attention: AttentionTask[]
   loading: boolean
 }) {
+  const { nameOf } = usePeople()
   const [filters, setFilters] = useState(EMPTY_ATTENTION_FILTERS)
   const [sort, setSort] = useState<AttentionSort>('dueDate,ASC')
 
@@ -62,6 +68,7 @@ export function AttentionPanel({
         </Link>
       </header>
 
+      {attention.length > SHOW_FILTERS_ABOVE && (
       <div className="hb-filters" role="search" aria-label="Filter attention items">
         <div className="hb-search">
           <Icon name="search" size={15} className="hb-search-icon" />
@@ -93,7 +100,7 @@ export function AttentionPanel({
           <option value="">Assignee</option>
           {assigneeOptions.map((id) => (
             <option key={id} value={id}>
-              {id.slice(0, 8)}…
+              {nameOf(id)}
             </option>
           ))}
         </select>
@@ -105,6 +112,7 @@ export function AttentionPanel({
           ))}
         </select>
       </div>
+      )}
 
       {loading && (
         <ul className="hb-task-list" aria-hidden="true">
@@ -162,8 +170,8 @@ export function AttentionPanel({
               <span className="hb-task-date">
                 <Icon name="calendar" size={14} /> {task.dueDate ? formatDate(task.dueDate) : 'No due date'}
               </span>
-              <span className="hb-avatar" title={task.assigneeId ? `Assignee ${task.assigneeId}` : 'Unassigned'} aria-label={task.assigneeId ? `Assignee ${task.assigneeId.slice(0, 8)}` : 'Unassigned'}>
-                {initialOf(task.assigneeId)}
+              <span className="hb-avatar" title={task.assigneeId ? nameOf(task.assigneeId) : 'Unassigned'} aria-label={task.assigneeId ? `Assignee ${nameOf(task.assigneeId)}` : 'Unassigned'}>
+                {task.assigneeId ? initials(nameOf(task.assigneeId)) : initialOf(null)}
               </span>
               <Link to={`/projects/${task.projectId}/tasks/${task.id}`} className="icon-btn hb-task-open" aria-label={`Open ${task.name}`} title="Open task">
                 <Icon name="chevronRight" size={16} />

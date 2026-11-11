@@ -1,24 +1,25 @@
+import { usePeople } from '../../../context/PeopleContext'
+import { useProjectPeople } from '../../../components/forms/ProjectPersonField'
+import { MentionComposer } from '../../../components/task/MentionComposer'
 import { useState } from 'react'
 import { useProjectWorkspace } from '../../../context/ProjectWorkspaceContext'
 import { useIdentity } from '../../../context/IdentityContext'
 import { useAsyncData } from '../../../hooks/useAsyncData'
 import { commentsApi } from '../../../api/comments'
 import { LoadingState } from '../../../components/common/LoadingState'
-import { ErrorState, InlineError } from '../../../components/common/ErrorState'
+import { ErrorState } from '../../../components/common/ErrorState'
 import { EmptyState } from '../../../components/common/EmptyState'
 import { Pagination } from '../../../components/common/Pagination'
 import { ConfirmDialog } from '../../../components/common/ConfirmDialog'
 import { formatDateTime } from '../../../utils/format'
-import { toUserMessage } from '../../../api/errorMessage'
 import type { Comment } from '../../../types/work'
 
 export function CommentsTab() {
+  const { nameOf } = usePeople()
   const { project, can } = useProjectWorkspace()
   const { identity } = useIdentity()
   const [page, setPage] = useState(0)
-  const [newBody, setNewBody] = useState('')
-  const [postError, setPostError] = useState<string | null>(null)
-  const [posting, setPosting] = useState(false)
+  const people = useProjectPeople(project.id)
   const [editing, setEditing] = useState<Comment | null>(null)
   const [editBody, setEditBody] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Comment | null>(null)
@@ -27,22 +28,6 @@ export function CommentsTab() {
     () => commentsApi.list(project.id, page, 20),
     [project.id, page],
   )
-
-  async function handlePost(event: React.FormEvent) {
-    event.preventDefault()
-    if (!newBody.trim()) return
-    setPosting(true)
-    setPostError(null)
-    try {
-      await commentsApi.create(project.id, { body: newBody })
-      setNewBody('')
-      reload()
-    } catch (err) {
-      setPostError(toUserMessage(err))
-    } finally {
-      setPosting(false)
-    }
-  }
 
   async function handleSaveEdit() {
     if (!editing) return
@@ -54,23 +39,16 @@ export function CommentsTab() {
   return (
     <div>
       <div className="card">
-        <form onSubmit={handlePost} className="form-grid">
-          {postError && <InlineError message={postError} />}
-          <div className="form-field">
-            <label htmlFor="new-comment">Add a comment</label>
-            <textarea
-              id="new-comment"
-              value={newBody}
-              onChange={(e) => setNewBody(e.target.value)}
-              placeholder="Write a comment…"
-            />
-          </div>
-          <div className="form-actions">
-            <button type="submit" className="btn btn-primary" disabled={posting || !newBody.trim()}>
-              {posting ? 'Posting…' : 'Post Comment'}
-            </button>
-          </div>
-        </form>
+        <MentionComposer
+          id="new-comment"
+          label="Add a comment"
+          people={people.filter((person) => person.value !== identity?.userId)}
+          submitLabel="Post comment"
+          onSubmit={async (body, mentions) => {
+            await commentsApi.create(project.id, { body, mentions })
+            reload()
+          }}
+        />
       </div>
 
       {loading && <LoadingState />}
@@ -86,7 +64,7 @@ export function CommentsTab() {
               <li key={c.id} className="comment-item">
                 <div className="comment-meta">
                   <span>
-                    {c.authorId} · {formatDateTime(c.createdAt)}
+                    {nameOf(c.authorId)} · {formatDateTime(c.createdAt)}
                     {c.updatedAt !== c.createdAt && ' (edited)'}
                   </span>
                   <span className="page-actions">
