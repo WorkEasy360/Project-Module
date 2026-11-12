@@ -1,1 +1,1 @@
-web: java -jar application.jar
+web: java -XX:MaxRAMPercentage=60 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -jar application.jar
