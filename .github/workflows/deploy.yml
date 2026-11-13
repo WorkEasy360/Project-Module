@@ -145,6 +145,38 @@ jobs:
           echo "::add-mask::$DB_HOST"
           echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
 
+      - name: Check the assistant key (never printed)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -uo pipefail
+          if [ -z "$ANTHROPIC_API_KEY" ]; then
+            echo "No ANTHROPIC_API_KEY secret: the assistant stays off."
+            exit 0
+          fi
+          # The same clean-up the app does: take the sk-ant- key out of whatever was pasted.
+          KEY="$(printf '%s' "$ANTHROPIC_API_KEY" | grep -oE 'sk-ant-[A-Za-z0-9_-]+' | head -1)"
+          [ -z "$KEY" ] && KEY="$(printf '%s' "$ANTHROPIC_API_KEY" | tr -d '[:space:]')"
+          echo "::add-mask::$KEY"
+          echo "Key shape: length ${#KEY}, starts with ${KEY:0:11}, capital letters: $(printf '%s' "$KEY" | tr -cd 'A-Z' | wc -c)"
+          CODE="$(curl -s -o answer.json -w '%{http_code}' --max-time 60 https://api.anthropic.com/v1/messages \
+            -H "x-api-key: $KEY" -H 'anthropic-version: 2023-06-01' -H 'content-type: application/json' \
+            -d '{"model":"claude-opus-5-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}')"
+          echo "Anthropic answered HTTP $CODE: $(grep -oE '"type":"[a-z_]+"' answer.json | tail -1)"
+          rm -f answer.json
+          SERVER="$(aws elasticbeanstalk describe-configuration-settings \
+            --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
+            --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:elasticbeanstalk:application:environment' && OptionName=='ANTHROPIC_API_KEY'].Value | [0]" \
+            --output text)"
+          echo "::add-mask::$SERVER"
+          if [ "$SERVER" = "$ANTHROPIC_API_KEY" ]; then echo "The server's key matches the GitHub secret."
+          elif [ -z "$SERVER" ] || [ "$SERVER" = "None" ]; then echo "The server has no key yet."
+          else echo "The server's key differs from the GitHub secret (length ${#SERVER}); this deploy replaces it."; fi
+          if [ "$CODE" = "401" ] || [ "$CODE" = "403" ]; then
+            echo "::error::Anthropic does not accept the ANTHROPIC_API_KEY secret (HTTP $CODE). Nothing was deployed. Save the key again in GitHub, copied exactly."
+            exit 1
+          fi
+
       - name: Make sure a database backup exists
         run: |
           set -euo pipefail
