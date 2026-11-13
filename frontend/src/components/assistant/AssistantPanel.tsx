@@ -238,6 +238,11 @@ export function AssistantPanel() {
    * says "stop" (or clicks the microphone, or closes the panel).
    */
   function startVoiceChat() {
+    // Browsers allow the microphone only on secure (https) pages.
+    if (window.isSecureContext === false) {
+      addNote('Voice chat needs a secure address that starts with https://. Open the app through its https address to talk to me; typing works here.')
+      return
+    }
     stopSpeaking()
     voiceChatRef.current = true
     setVoiceChat(true)

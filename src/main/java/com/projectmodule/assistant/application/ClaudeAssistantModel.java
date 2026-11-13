@@ -21,11 +21,31 @@ public class ClaudeAssistantModel implements AssistantModel {
     public ClaudeAssistantModel(@Value("${ANTHROPIC_API_KEY:}") String apiKey,
                                 @Value("${projectmodule.assistant.model:claude-opus-5-5}") String modelId) {
         this.modelId = modelId;
-        this.client = apiKey.isBlank() ? null : AnthropicOkHttpClient.builder()
-                .apiKey(apiKey)
+        String key = cleanKey(apiKey);
+        this.client = key.isEmpty() ? null : AnthropicOkHttpClient.builder()
+                .apiKey(key)
                 // A chat reply should not keep someone waiting for minutes; the SDK still retries.
                 .timeout(Duration.ofSeconds(90))
                 .build();
+    }
+
+    /**
+     * The key as people paste it into a settings screen: possibly with spaces, a line break,
+     * quotes, or the header name copied from a curl example ("x-api-key: sk-ant-...").
+     */
+    static String cleanKey(String raw) {
+        if (raw == null) {
+            return "";
+        }
+        // A whole curl line or header pasted in: take the key itself.
+        java.util.regex.Matcher anthropicKey = java.util.regex.Pattern.compile("sk-ant-[A-Za-z0-9_-]+").matcher(raw);
+        if (anthropicKey.find()) {
+            return anthropicKey.group();
+        }
+        String key = raw.strip();
+        key = key.replaceFirst("(?i)^(x-api-key\\s*:|authorization\\s*:\\s*bearer|bearer)\\s*", "");
+        key = key.replaceAll("^[\"']+|[\"']+$", "");
+        return key.replaceAll("\\s+", "");
     }
 
     @Override

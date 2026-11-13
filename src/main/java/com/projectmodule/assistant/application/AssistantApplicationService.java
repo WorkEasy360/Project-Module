@@ -4,6 +4,7 @@ import com.anthropic.core.JsonValue;
 import com.anthropic.core.ObjectMappers;
 import com.anthropic.errors.AnthropicException;
 import com.anthropic.errors.AnthropicServiceException;
+import com.anthropic.errors.BadRequestException;
 import com.anthropic.errors.RateLimitException;
 import com.anthropic.models.messages.CacheControlEphemeral;
 import com.anthropic.models.messages.ContentBlock;
@@ -265,6 +266,61 @@ public class AssistantApplicationService {
     }
 
     private Message send(RequestContext context, List<MessageParam> history, boolean lastCall) {
+        try {
+            return sendOnce(context, history, lastCall, true);
+        } catch (BadRequestException e) {
+            if (!rejectsOptionalFeatures(e)) {
+                throw failure(e);
+            }
+            // The optional beta features are not available to this API key: answer without them.
+            log.warn("assistant: optional API features refused, retrying without them");
+            try {
+                return sendOnce(context, history, lastCall, false);
+            } catch (AnthropicException retry) {
+                throw failure(retry);
+            }
+        } catch (AnthropicException e) {
+            throw failure(e);
+        }
+    }
+
+    private static boolean rejectsOptionalFeatures(BadRequestException e) {
+        String detail = String.valueOf(e.getMessage()).toLowerCase(java.util.Locale.ROOT);
+        return detail.contains("anthropic-beta") || detail.contains("block_binding") || detail.contains("fallbacks")
+                || detail.contains("extra inputs are not permitted") || detail.contains("beta");
+    }
+
+    /** What the person is told, by cause, so an administrator can act on it. */
+    private IntegrationUnavailableException failure(AnthropicException e) {
+        if (e instanceof RateLimitException) {
+            return IntegrationUnavailableException.withMessage("The assistant is busy right now. Try again in a minute.", e);
+        }
+        if (e instanceof AnthropicServiceException service) {
+            int status = service.statusCode();
+            String detail = String.valueOf(e.getMessage());
+            log.warn("assistant model call failed: status {}: {}", status, detail.length() > 300 ? detail.substring(0, 300) : detail);
+            String lower = detail.toLowerCase(java.util.Locale.ROOT);
+            String message;
+            if (status == 401) {
+                message = "The assistant's API key was not accepted. An administrator needs to check ANTHROPIC_API_KEY on the server.";
+            } else if (status == 403) {
+                message = "The assistant's API key is not allowed to do this. An administrator needs to check the Anthropic account.";
+            } else if (lower.contains("credit balance") || lower.contains("billing")) {
+                message = "The assistant's Anthropic account has no credit left. An administrator needs to add credit.";
+            } else if (status == 404) {
+                message = "The assistant's model is not available to this API key. An administrator needs to check the model setting.";
+            } else if (status >= 500) {
+                message = "The assistant's service is having trouble right now. Try again in a minute.";
+            } else {
+                message = "The assistant could not answer right now (error " + status + ").";
+            }
+            return IntegrationUnavailableException.withMessage(message, e);
+        }
+        log.warn("assistant model call failed: {}", e.getClass().getSimpleName());
+        return IntegrationUnavailableException.withMessage("The assistant could not be reached.", e);
+    }
+
+    private Message sendOnce(RequestContext context, List<MessageParam> history, boolean lastCall, boolean optionalFeatures) {
         MessageCreateParams.Builder params = MessageCreateParams.builder()
                 .model(model.modelId())
                 .maxTokens(MAX_TOKENS)
@@ -282,31 +338,23 @@ public class AssistantApplicationService {
         // A conversation saved before the instructions or tools changed (a new release) carries
         // thinking blocks bound to the old ones. Without this the API rejects every later message in
         // it; with it, the API drops just those stale blocks and the conversation carries on.
-        List<String> betas = new ArrayList<>(List.of(THINKING_BINDING_BETA));
-        params.putAdditionalBodyProperty("thinking", JsonValue.from(Map.of(
-                "type", "adaptive",
-                "block_binding", Map.of("prefix_mismatch_behavior", "drop_block"))));
-        if (refusalFallback) {
-            // If a safety classifier declines, the API retries on a suitable model instead of stopping.
-            betas.add(REFUSAL_FALLBACK_BETA);
-            params.putAdditionalBodyProperty("fallbacks", JsonValue.from("default"));
+        if (optionalFeatures) {
+            List<String> betas = new ArrayList<>(List.of(THINKING_BINDING_BETA));
+            params.putAdditionalBodyProperty("thinking", JsonValue.from(Map.of(
+                    "type", "adaptive",
+                    "block_binding", Map.of("prefix_mismatch_behavior", "drop_block"))));
+            if (refusalFallback) {
+                // If a safety classifier declines, the API retries on a suitable model instead of stopping.
+                betas.add(REFUSAL_FALLBACK_BETA);
+                params.putAdditionalBodyProperty("fallbacks", JsonValue.from("default"));
+            }
+            params.putAdditionalHeader("anthropic-beta", String.join(",", betas));
         }
-        params.putAdditionalHeader("anthropic-beta", String.join(",", betas));
-        try {
-            Message response = model.send(params.build());
-            log.debug("assistant reply: stop={} input={} cached={} output={}", response.stopReason().orElse(null),
-                    response.usage().inputTokens(), response.usage().cacheReadInputTokens().orElse(0L),
-                    response.usage().outputTokens());
-            return response;
-        } catch (RateLimitException e) {
-            throw IntegrationUnavailableException.withMessage("The assistant is busy right now. Try again in a minute.", e);
-        } catch (AnthropicServiceException e) {
-            log.warn("assistant model call failed: status {}", e.statusCode());
-            throw IntegrationUnavailableException.withMessage("The assistant could not answer right now.", e);
-        } catch (AnthropicException e) {
-            log.warn("assistant model call failed: {}", e.getClass().getSimpleName());
-            throw IntegrationUnavailableException.withMessage("The assistant could not be reached.", e);
-        }
+        Message response = model.send(params.build());
+        log.debug("assistant reply: stop={} input={} cached={} output={}", response.stopReason().orElse(null),
+                response.usage().inputTokens(), response.usage().cacheReadInputTokens().orElse(0L),
+                response.usage().outputTokens());
+        return response;
     }
 
     private String aboutCaller(RequestContext context) {
