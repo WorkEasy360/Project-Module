@@ -154,11 +154,14 @@ jobs:
             echo "No ANTHROPIC_API_KEY secret: the assistant stays off."
             exit 0
           fi
+          RAW="$ANTHROPIC_API_KEY"
+          echo "Saved secret: ${#RAW} characters, contains sk-ant-: $(printf '%s' "$RAW" | grep -c 'sk-ant-' || true), non-ASCII characters: $(printf '%s' "$RAW" | LC_ALL=C tr -d '\0-\177' | wc -c), spaces or line breaks: $(printf '%s' "$RAW" | tr -cd ' \t\r\n' | wc -c)"
           # The same clean-up the app does: take the sk-ant- key out of whatever was pasted.
-          KEY="$(printf '%s' "$ANTHROPIC_API_KEY" | grep -oE 'sk-ant-[A-Za-z0-9_-]+' | head -1)"
-          [ -z "$KEY" ] && KEY="$(printf '%s' "$ANTHROPIC_API_KEY" | tr -d '[:space:]')"
+          KEY="$(printf '%s' "$RAW" | grep -oE 'sk-ant-[A-Za-z0-9_-]+' | head -1 || true)"
+          if [ -z "$KEY" ]; then KEY="$(printf '%s' "$RAW" | tr -d '[:space:]')"; fi
           echo "::add-mask::$KEY"
-          echo "Key shape: length ${#KEY}, starts with ${KEY:0:11}, capital letters: $(printf '%s' "$KEY" | tr -cd 'A-Z' | wc -c)"
+          case "$KEY" in sk-ant-*) START="${KEY:0:11}" ;; *) START="(not an Anthropic key)" ;; esac
+          echo "Key used: length ${#KEY}, starts with $START, capital letters: $(printf '%s' "$KEY" | tr -cd 'A-Z' | wc -c)"
           CODE="$(curl -s -o answer.json -w '%{http_code}' --max-time 60 https://api.anthropic.com/v1/messages \
             -H "x-api-key: $KEY" -H 'anthropic-version: 2023-06-01' -H 'content-type: application/json' \
             -d '{"model":"claude-opus-5-5","max_tokens":8,"messages":[{"role":"user","content":"hi"}]}')"
