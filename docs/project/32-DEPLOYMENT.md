@@ -5,38 +5,44 @@ settings the application requires, and how the local and cloud databases are kep
 
 ## Pipeline
 
-`.github/workflows/deploy.yml` runs on every push to `main` (or by hand, with "Run workflow"). It
-is written so that customers using the product never notice a release:
+`.github/workflows/deploy.yml` runs on every push to `main` (or by hand with "Run workflow").
+
+The environment is a **single t3.micro instance** in an account with an **8-vCPU limit**. A release
+therefore updates that instance in place, and the app restarts once, for about one to two minutes.
 
 1. **Test.** All frontend tests, the type check, and all backend tests against a real PostgreSQL.
    If anything fails, nothing is deployed.
-2. **Check, then back up.** It checks:
-   - the environment must be Ready
-   - it must have a service role, so enhanced health reporting can be turned on
-   - the current version is recorded
+2. **Check and back up.** The environment must be Ready. A database backup must exist: an RDS
+   snapshot, or, since the deploy user `github-deployer` may not take snapshots, RDS automated
+   backups restorable to within the last 15 minutes. The log gives the restore point.
+3. **Deploy in place.** The deployment policy is set to AllAtOnce, so no extra instance is
+   launched. Then the new version is deployed to the existing instance.
+4. **Check the instance and roll back if needed.** The new version is checked directly at the
+   environment's address (not through Cloudflare). If the check fails, the previous version is
+   deployed back.
 
-   Then it takes an RDS snapshot named `before-<run>-<attempt>-<time>` and waits for it to be
-   available. Nothing in AWS changes before this point.
-3. **Immutable deployment.** Enhanced health reporting is turned on if it is off (once), and the
-   environment's deployment policy is set to Immutable. Elastic
-   Beanstalk then starts the new version on fresh instances and checks its health before moving
-   traffic to it. On a single-instance environment it moves the Elastic IP. If the new version is
-   unhealthy, it is discarded and the old one keeps serving.
-4. **Live check, and roll back if needed.** It checks the live site's health, the new page title
-   and the sign-in configuration. If that fails, the previous version is deployed back
-   automatically.
+**Do not change the health reporting type, instance type or other launch settings from the
+pipeline.** Those make Elastic Beanstalk replace the instance. On 11 November 2026 turning on
+enhanced health did exactly that. With the vCPU limit no replacement could start, and the site was
+down until a new instance came up. An immutable or rolling deployment also needs a second instance,
+which this account cannot launch. If no-downtime releases are wanted later, first raise the EC2
+vCPU limit and give the instances the permissions enhanced health needs.
+
+`.github/workflows/recover.yml` is a manual workflow: `diagnose` (read only), `restore`,
+`cleanup`, `restart` and `rebuild`.
 
 The deployment is a bundle, not a bare jar:
 - `application.jar`
-- `Procfile`
+- `Procfile`, which caps Java at 60% of memory
+- `.ebextensions/01-swap.config`, which adds a 1 GB swap file once
 - `.platform/nginx/conf.d/workeasy.conf`, which raises nginx's upload limit to 26 MB for 25 MB
   attachments, and its proxy timeout to 120 s so the assistant can plan large projects
 
 The bundle's extra files are in `deploy/`.
 
 Database migrations must stay backward compatible: add tables and columns with defaults; never drop
-or rename in the same release. During an immutable deployment the old and new versions briefly
-share the database.
+or rename in the same release. That way a roll-back to the previous version still works on the
+upgraded database.
 
 The assistant's key: add a repository secret `ANTHROPIC_API_KEY` (GitHub → Settings → Secrets and
 variables → Actions). The next deployment passes it to the environment, with no extra restart.
@@ -44,7 +50,8 @@ Without it, the assistant shows "not set up yet".
 
 Repository secrets the workflow uses:
 - `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`. Besides deploying, they need permission to
-  describe the environment and RDS instances, and to create RDS snapshots.
+  describe the environment and RDS instances. Permission to create RDS snapshots is optional;
+  without it, the pipeline relies on RDS automated backups.
 - `ANTHROPIC_API_KEY` (optional).
 
 ## Required environment properties

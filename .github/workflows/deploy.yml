@@ -1,16 +1,18 @@
 name: Deploy to AWS Elastic Beanstalk
 
-# Every push to main is a production release, so this workflow protects customers who are using
-# the product while it runs:
+# Every push to main is a production release. The environment is a single small instance in an
+# account with an 8-vCPU limit, so the release updates that instance in place: no extra
+# instances are launched, and no setting that would make Elastic Beanstalk replace the instance is
+# changed (on 2026-11-11 changing the health reporting type did exactly that and took the site
+# down). The app restarts once, for about one to two minutes.
+#
 #   1. All frontend and backend tests must pass (backend against a real PostgreSQL).
-#   2. The environment must be healthy, and the production database is snapshotted before
-#      anything changes.
-#   3. The release is deployed "immutable": Elastic Beanstalk starts the new version on fresh
-#      instances, checks it is healthy, and only then moves traffic to it. If the new version is
-#      unhealthy, the old one keeps serving and nobody notices.
-#   4. After the switch, the live site is checked. If that check fails, the previous version is
-#      deployed back automatically.
-# If any step fails before the deployment, nothing in AWS has changed except the snapshot.
+#   2. The environment must be Ready, and a database backup must exist (a snapshot, or RDS
+#      automated backups that can restore to a time just before the release).
+#   3. The bundle is deployed to the existing instance (deployment policy "AllAtOnce").
+#   4. The new version is checked directly on the instance (not through Cloudflare). If that
+#      check fails, the previous version is deployed back automatically.
+# If any step fails before the deployment, nothing in AWS has changed.
 
 on:
   push:
@@ -29,7 +31,6 @@ env:
   AWS_REGION: eu-north-1
   EB_APPLICATION: Project-Module
   EB_ENVIRONMENT: Project-Module-env
-  SITE_URL: https://ops.workeasy360.com
 
 jobs:
   test:
@@ -82,10 +83,10 @@ jobs:
         run: mvn -B -DskipFrontend=true test
 
   deploy:
-    name: Deploy without downtime
+    name: Deploy
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     env:
       AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -114,18 +115,19 @@ jobs:
           (cd bundle && zip -qr ../bundle.zip .)
           unzip -l bundle.zip
 
-      - name: Check the environment is healthy (read only)
+      - name: Check the environment (read only)
         run: |
           set -euo pipefail
-          read -r STATUS HEALTH CURRENT <<<"$(aws elasticbeanstalk describe-environments \
+          read -r STATUS HEALTH CURRENT ENDPOINT <<<"$(aws elasticbeanstalk describe-environments \
             --application-name "$EB_APPLICATION" --environment-names "$EB_ENVIRONMENT" \
-            --query 'Environments[0].[Status,Health,VersionLabel]' --output text)"
+            --query 'Environments[0].[Status,Health,VersionLabel,EndpointURL]' --output text)"
           echo "Environment status: $STATUS, health: $HEALTH, running: $CURRENT"
           if [ "$STATUS" != "Ready" ]; then
             echo "::error::The environment is busy ($STATUS). Nothing was changed. Run this workflow again when it is Ready."
             exit 1
           fi
           echo "PREVIOUS_VERSION=$CURRENT" >> "$GITHUB_ENV"
+          echo "INSTANCE_URL=http://$ENDPOINT" >> "$GITHUB_ENV"
           setting() {
             aws elasticbeanstalk describe-configuration-settings \
               --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
@@ -133,14 +135,7 @@ jobs:
           }
           echo "Environment type: $(setting aws:elasticbeanstalk:environment EnvironmentType)"
           echo "Deployment policy: $(setting aws:elasticbeanstalk:command DeploymentPolicy)"
-          HEALTH_SYSTEM="$(setting aws:elasticbeanstalk:healthreporting:system SystemType)"
-          SERVICE_ROLE="$(setting aws:elasticbeanstalk:environment ServiceRole)"
-          echo "Health reporting: $HEALTH_SYSTEM; service role: $SERVICE_ROLE"
-          echo "HEALTH_SYSTEM=$HEALTH_SYSTEM" >> "$GITHUB_ENV"
-          if [ "$HEALTH_SYSTEM" != "enhanced" ] && { [ -z "$SERVICE_ROLE" ] || [ "$SERVICE_ROLE" = "None" ]; }; then
-            echo "::error::Enhanced health reporting (needed for a no-downtime deployment) needs the environment to have a service role, and it has none. Nothing was changed."
-            exit 1
-          fi
+          echo "Health reporting: $(setting aws:elasticbeanstalk:healthreporting:system SystemType)"
           DB_URL="$(setting aws:elasticbeanstalk:application:environment PROJECTMODULE_DB_URL)"
           if [ -z "$DB_URL" ] || [ "$DB_URL" = "None" ]; then
             DB_URL="$(setting aws:elasticbeanstalk:application:environment SPRING_DATASOURCE_URL)"
@@ -150,104 +145,43 @@ jobs:
           echo "::add-mask::$DB_HOST"
           echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
 
-      - name: Back up the production database
+      - name: Make sure a database backup exists
         run: |
           set -euo pipefail
           # Only harmless facts are printed: the repository is public, so its logs are too.
           if [ -z "$DB_HOST" ] || [ "$DB_HOST" = "None" ]; then
-            echo "::error::The environment has no PROJECTMODULE_DB_URL or SPRING_DATASOURCE_URL to find the database by. Nothing was changed."
+            echo "::error::The environment has no database address to find the database by. Nothing was changed."
             exit 1
           fi
           HOST="$(echo "$DB_HOST" | tr '[:upper:]' '[:lower:]')"
-          if ! echo "$HOST" | grep -qE '\.rds\.amazonaws\.com$'; then
-            echo "::error::The database address is not an RDS endpoint, so it cannot be snapshotted here. Nothing was changed."
-            exit 1
-          fi
           DB_REGION="$(echo "$HOST" | sed -E 's#.*\.([a-z0-9-]+)\.rds\.amazonaws\.com$#\1#')"
-          echo "Database region: $DB_REGION"
-          STAMP="before-${{ github.run_number }}-${{ github.run_attempt }}-$(date -u +%Y%m%d%H%M)"
-
           INSTANCE="$(aws rds describe-db-instances --region "$DB_REGION" \
             --query "DBInstances[?Endpoint.Address=='$HOST'].DBInstanceIdentifier | [0]" --output text)"
-          if [ -n "$INSTANCE" ] && [ "$INSTANCE" != "None" ]; then
-            echo "Snapshotting the database instance as $STAMP"
-            if aws rds create-db-snapshot --region "$DB_REGION" --db-instance-identifier "$INSTANCE" \
-                --db-snapshot-identifier "$STAMP" > /dev/null; then
-              aws rds wait db-snapshot-available --region "$DB_REGION" --db-snapshot-identifier "$STAMP"
-              echo "Backup ready: $STAMP"
-              exit 0
-            fi
-            # The deploy credentials may not be allowed to take snapshots. RDS's automated backups
-            # also allow restoring to any second, so accept them if they are on and up to date.
-            echo "A manual snapshot was refused; checking RDS automated backups instead."
-            read -r RETENTION RESTORABLE <<<"$(aws rds describe-db-instances --region "$DB_REGION" \
-              --db-instance-identifier "$INSTANCE" \
-              --query 'DBInstances[0].[BackupRetentionPeriod,LatestRestorableTime]' --output text)"
-            AGE=$(( $(date -u +%s) - $(date -u -d "$RESTORABLE" +%s 2>/dev/null || echo 0) ))
-            if [ "${RETENTION:-0}" -gt 0 ] && [ "$AGE" -lt 900 ]; then
-              echo "Automated backups are on (kept $RETENTION days) and restorable to $RESTORABLE."
-              echo "To undo this release's data changes, restore the database to a point in time before $(date -u +%Y-%m-%dT%H:%M:%SZ)."
-              exit 0
-            fi
-            echo "::error::No backup is possible: snapshots are not allowed for the deploy credentials, and automated backups are off or out of date (retention ${RETENTION:-0} days). Nothing was changed."
+          if [ -z "$INSTANCE" ] || [ "$INSTANCE" = "None" ]; then
+            echo "::error::Could not find the production database. Nothing was changed."
             exit 1
           fi
-
-          CLUSTER="$(aws rds describe-db-clusters --region "$DB_REGION" \
-            --query "DBClusters[?Endpoint=='$HOST' || ReaderEndpoint=='$HOST'].DBClusterIdentifier | [0]" --output text 2>/dev/null || echo None)"
-          if [ -n "$CLUSTER" ] && [ "$CLUSTER" != "None" ]; then
-            echo "Snapshotting the database cluster as $STAMP"
-            aws rds create-db-cluster-snapshot --region "$DB_REGION" --db-cluster-identifier "$CLUSTER" \
-              --db-cluster-snapshot-identifier "$STAMP" > /dev/null
-            aws rds wait db-cluster-snapshot-available --region "$DB_REGION" --db-cluster-snapshot-identifier "$STAMP"
-            echo "Backup ready: $STAMP"
+          STAMP="before-${{ github.run_number }}-${{ github.run_attempt }}-$(date -u +%Y%m%d%H%M)"
+          if aws rds create-db-snapshot --region "$DB_REGION" --db-instance-identifier "$INSTANCE" \
+              --db-snapshot-identifier "$STAMP" > /dev/null 2>&1; then
+            aws rds wait db-snapshot-available --region "$DB_REGION" --db-snapshot-identifier "$STAMP"
+            echo "Backup ready: snapshot $STAMP"
             exit 0
           fi
-
-          COUNT="$(aws rds describe-db-instances --region "$DB_REGION" --query 'length(DBInstances)' --output text)"
-          echo "::error::No database in $DB_REGION has the app's address ($COUNT database instance(s) visible to the deploy credentials). It may be in another AWS account. Nothing was changed."
+          echo "A manual snapshot is not allowed for the deploy credentials; checking RDS automated backups."
+          read -r RETENTION RESTORABLE <<<"$(aws rds describe-db-instances --region "$DB_REGION" \
+            --db-instance-identifier "$INSTANCE" \
+            --query 'DBInstances[0].[BackupRetentionPeriod,LatestRestorableTime]' --output text)"
+          AGE=$(( $(date -u +%s) - $(date -u -d "$RESTORABLE" +%s 2>/dev/null || echo 0) ))
+          if [ "${RETENTION:-0}" -gt 0 ] && [ "$AGE" -lt 900 ]; then
+            echo "Automated backups are on (kept $RETENTION days), restorable to $RESTORABLE."
+            echo "To undo this release's data changes, restore to a point in time before $(date -u +%Y-%m-%dT%H:%M:%SZ)."
+            exit 0
+          fi
+          echo "::error::No database backup is available. Nothing was changed."
           exit 1
 
-      - name: Prepare a no-downtime deployment (enhanced health, immutable)
-        run: |
-          set -euo pipefail
-          POLICY="$(aws elasticbeanstalk describe-configuration-settings \
-            --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
-            --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:elasticbeanstalk:command' && OptionName=='DeploymentPolicy'].Value | [0]" \
-            --output text)"
-          SETTINGS=()
-          if [ "$HEALTH_SYSTEM" != "enhanced" ]; then
-            echo "Turning on enhanced health reporting (one time)"
-            SETTINGS+=("Namespace=aws:elasticbeanstalk:healthreporting:system,OptionName=SystemType,Value=enhanced")
-          fi
-          if [ "$POLICY" != "Immutable" ]; then
-            echo "Switching the deployment policy from $POLICY to Immutable"
-            SETTINGS+=("Namespace=aws:elasticbeanstalk:command,OptionName=DeploymentPolicy,Value=Immutable")
-          fi
-          if [ ${#SETTINGS[@]} -gt 0 ]; then
-            aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --option-settings "${SETTINGS[@]}" > /dev/null
-            for i in $(seq 1 80); do
-              read -r STATUS HEALTH <<<"$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
-                --query 'Environments[0].[Status,Health]' --output text)"
-              echo "$(date -u +%H:%M:%S) status $STATUS, health $HEALTH"
-              [ "$STATUS" = "Ready" ] && break
-              sleep 15
-            done
-            NOW="$(aws elasticbeanstalk describe-configuration-settings \
-              --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
-              --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:elasticbeanstalk:healthreporting:system' && OptionName=='SystemType'].Value | [0]" \
-              --output text)"
-            if [ "$STATUS" != "Ready" ] || [ "$NOW" != "enhanced" ]; then
-              echo "::error::Enhanced health could not be turned on (status $STATUS, health reporting $NOW). The new version was not deployed."
-              aws elasticbeanstalk describe-events --environment-name "$EB_ENVIRONMENT" --max-items 15 \
-                --query 'Events[].[EventDate,Severity,Message]' --output text || true
-              exit 1
-            fi
-            # Give the health agent a moment to report before the deployment relies on it.
-            sleep 60
-          fi
-
-      - name: Deploy the new version
+      - name: Deploy the new version to the existing instance
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: |
@@ -265,42 +199,60 @@ jobs:
             if [ "$STATE" = "FAILED" ]; then echo "::error::The bundle was rejected. Nothing was deployed."; exit 1; fi
             sleep 5
           done
+          # Roll out in place on the existing instance. DeploymentPolicy only says how code is rolled
+          # out; changing it does not replace the instance. It is set on its own first, so this
+          # deployment is sure to use it.
+          POLICY="$(aws elasticbeanstalk describe-configuration-settings \
+            --application-name "$EB_APPLICATION" --environment-name "$EB_ENVIRONMENT" \
+            --query "ConfigurationSettings[0].OptionSettings[?Namespace=='aws:elasticbeanstalk:command' && OptionName=='DeploymentPolicy'].Value | [0]" \
+            --output text)"
+          if [ "$POLICY" != "AllAtOnce" ]; then
+            echo "Setting the deployment policy from $POLICY to AllAtOnce (no extra instances)"
+            aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" \
+              --option-settings Namespace=aws:elasticbeanstalk:command,OptionName=DeploymentPolicy,Value=AllAtOnce > /dev/null
+            for i in $(seq 1 40); do
+              STATUS="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+                --query 'Environments[0].Status' --output text)"
+              [ "$STATUS" = "Ready" ] && break
+              sleep 15
+            done
+          fi
           echo "DEPLOY_STARTED=true" >> "$GITHUB_ENV"
           if [ -n "$ANTHROPIC_API_KEY" ]; then
-            # The assistant's key goes in with this same deployment, so it adds no extra restart.
             aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --version-label "$VERSION_LABEL" \
               --option-settings "Namespace=aws:elasticbeanstalk:application:environment,OptionName=ANTHROPIC_API_KEY,Value=$ANTHROPIC_API_KEY" > /dev/null
           else
             aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --version-label "$VERSION_LABEL" > /dev/null
           fi
-          echo "Deploying $VERSION_LABEL. The current version keeps serving until the new one is healthy."
-          for i in $(seq 1 120); do
+          echo "Deploying $VERSION_LABEL to the existing instance."
+          for i in $(seq 1 80); do
             read -r STATUS HEALTH RUNNING <<<"$(aws elasticbeanstalk describe-environments \
               --environment-names "$EB_ENVIRONMENT" --query 'Environments[0].[Status,Health,VersionLabel]' --output text)"
             echo "$(date -u +%H:%M:%S) status $STATUS, health $HEALTH, running $RUNNING"
             [ "$STATUS" = "Ready" ] && break
             sleep 15
           done
+          aws elasticbeanstalk describe-events --environment-name "$EB_ENVIRONMENT" --max-items 12 \
+            --query 'Events[].[EventDate,Severity,Message]' --output text || true
           if [ "$RUNNING" != "$VERSION_LABEL" ]; then
-            echo "::error::Elastic Beanstalk did not switch to the new version, so the previous one is still serving."
-            aws elasticbeanstalk describe-events --environment-name "$EB_ENVIRONMENT" --max-items 15 \
-              --query 'Events[].[EventDate,Severity,Message]' --output text || true
+            echo "::error::Elastic Beanstalk did not switch to the new version."
             exit 1
           fi
 
-      - name: Check the live site
+      - name: Check the new version on the instance
         run: |
           set -euo pipefail
-          for i in $(seq 1 20); do
-            if curl -fsS --max-time 10 "$SITE_URL/actuator/health" | grep -q '"UP"' \
-              && curl -fsS --max-time 10 "$SITE_URL/" | grep -q '<title>WorkEasyProject</title>' \
-              && curl -fsS --max-time 10 "$SITE_URL/api/v1/auth/config" | grep -q 'legacyHandover'; then
-              echo "The new version is live and healthy."
+          echo "Checking $INSTANCE_URL"
+          for i in $(seq 1 24); do
+            if curl -fsS --max-time 10 "$INSTANCE_URL/actuator/health" | grep -q '"UP"' \
+              && curl -fsS --max-time 10 "$INSTANCE_URL/" | grep -q '<title>WorkEasyProject</title>' \
+              && curl -fsS --max-time 10 "$INSTANCE_URL/api/v1/auth/config" | grep -q 'legacyHandover'; then
+              echo "The new version is running and healthy."
               exit 0
             fi
             sleep 15
           done
-          echo "::error::The live site did not pass its checks."
+          echo "::error::The new version did not pass its checks."
           exit 1
 
       - name: Put the previous version back
@@ -309,12 +261,18 @@ jobs:
           RUNNING="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
             --query 'Environments[0].VersionLabel' --output text)"
           if [ "$RUNNING" = "$PREVIOUS_VERSION" ]; then
-            echo "The previous version $PREVIOUS_VERSION is still serving; nothing to put back."
+            echo "The previous version $PREVIOUS_VERSION is still running; nothing to put back."
             exit 0
           fi
+          for i in $(seq 1 60); do
+            STATUS="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
+              --query 'Environments[0].Status' --output text)"
+            [ "$STATUS" = "Ready" ] && break
+            sleep 15
+          done
           echo "Redeploying $PREVIOUS_VERSION"
           aws elasticbeanstalk update-environment --environment-name "$EB_ENVIRONMENT" --version-label "$PREVIOUS_VERSION" > /dev/null
-          for i in $(seq 1 120); do
+          for i in $(seq 1 80); do
             STATUS="$(aws elasticbeanstalk describe-environments --environment-names "$EB_ENVIRONMENT" \
               --query 'Environments[0].Status' --output text)"
             [ "$STATUS" = "Ready" ] && break
