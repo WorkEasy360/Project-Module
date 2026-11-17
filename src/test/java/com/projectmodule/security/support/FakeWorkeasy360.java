@@ -1,6 +1,7 @@
 package com.projectmodule.security.support;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jose.JOSEObjectType;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.JWSSigner;
@@ -55,7 +56,9 @@ import java.util.function.Function;
  *       the token endpoint, one-time {@code jti}, lifetime of at most 60 s), the redirect URI, a one-time
  *       code, and the PKCE verifier against the challenge it saw in the authorization request;
  *   <li>ID tokens are minted with Nimbus and can be bent in every way a test needs
- *       ({@link IdTokenSpec}).
+ *       ({@link IdTokenSpec});
+ *   <li>so are back-channel logout tokens ({@link LogoutTokenSpec}), and a new signing key can be published
+ *       at any time ({@link #rotateIn()}), as a key rotation would.
  * </ul>
  */
 public final class FakeWorkeasy360 {
@@ -106,6 +109,33 @@ public final class FakeWorkeasy360 {
         public boolean useEc = false;
     }
 
+    /**
+     * Every way a logout token can be shaped or broken. Defaults are a perfectly good token, as Workeasy360
+     * mints one (ADR-069): header {@code typ: logout+jwt}, 120 seconds, a fresh {@code jti}, no nonce.
+     */
+    public static final class LogoutTokenSpec {
+        public static final String EVENT = "http://schemas.openid.net/event/backchannel-logout";
+
+        public String issuer;
+        public Object audience = CLIENT_ID;
+        public String subject;
+        public String sid;
+        public String jti = UUID.randomUUID().toString().replace("-", "");
+        public String typ = "logout_token";
+        /** The JOSE header {@code typ}; {@code null} leaves it out. */
+        public String headerType = "logout+jwt";
+        public Object events = Map.of(EVENT, Map.of());
+        public Instant issuedAt = Instant.now();
+        public Instant expiresAt = Instant.now().plusSeconds(120);
+        public Set<String> omit = new HashSet<>();
+        public Map<String, Object> extra = new LinkedHashMap<>();
+        /** As for ID tokens: NORMAL, HS256_WITH_PUBLIC_KEY, NONE, NO_KID, UNKNOWN_KID, WRONG_KEY. */
+        public String signing = "NORMAL";
+        public boolean useEc = false;
+        /** Sign with this key (RS256, its kid) instead, e.g. one published by {@link #rotateIn()}. */
+        public RSAKey signWith;
+    }
+
     private record Code(Authorization authorization, Consumer<IdTokenSpec> customizer, boolean[] used) {
     }
 
@@ -153,6 +183,8 @@ public final class FakeWorkeasy360 {
     private final ECKey ecSigningKey;
     private final RSAKey otherKey;
     private final List<JWK> registeredClientKeys = new ArrayList<>();
+    /** Keys published in addition to the two signing keys (a rotation in progress). */
+    private final List<RSAKey> rotatedKeys = Collections.synchronizedList(new ArrayList<>());
 
     private final Map<String, Code> codes = new ConcurrentHashMap<>();
     private final Set<String> seenAssertionIds = ConcurrentHashMap.newKeySet();
@@ -171,6 +203,8 @@ public final class FakeWorkeasy360 {
     public volatile String discoveryIssuerOverride;
     public volatile boolean jwksDown;
     public volatile boolean advertiseEndSession = true;
+    /** Publish each key's {@code alg} in the key set, as Workeasy360 does (off: the keys carry none). */
+    public volatile boolean publishKeyAlgorithms;
     /** Send the headers and a few bytes of the body of this endpoint's answer, then stall (see {@link #stall}). */
     public volatile boolean stallDiscovery;
     public volatile boolean stallJwks;
@@ -234,6 +268,17 @@ public final class FakeWorkeasy360 {
         return signingKey;
     }
 
+    /** Publishes a new RSA signing key (a key rotation) and returns it, to sign tokens with. */
+    public RSAKey rotateIn() {
+        try {
+            RSAKey key = new RSAKeyGenerator(2048).keyID("idp-rsa-" + (rotatedKeys.size() + 2)).generate();
+            rotatedKeys.add(key);
+            return key;
+        } catch (Exception exception) {
+            throw new IllegalStateException(exception);
+        }
+    }
+
     /** Public keys of the client credential this fake accepts for client assertions. */
     public void registerClientKey(JWK publicOrPrivate) {
         synchronized (registeredClientKeys) {
@@ -255,6 +300,8 @@ public final class FakeWorkeasy360 {
         discoveryIssuerOverride = null;
         jwksDown = false;
         advertiseEndSession = true;
+        publishKeyAlgorithms = false;
+        rotatedKeys.clear();
         stallDiscovery = false;
         stallJwks = false;
         stallToken = false;
@@ -350,8 +397,16 @@ public final class FakeWorkeasy360 {
             respond(exchange, 503, Map.of("error", "down"));
             return;
         }
-        JWKSet set = new JWKSet(List.of(signingKey.toPublicJWK(), ecSigningKey.toPublicJWK()));
-        respondRaw(exchange, 200, set.toString(true));
+        List<JWK> published = new ArrayList<>(List.of(signingKey.toPublicJWK(), ecSigningKey.toPublicJWK()));
+        synchronized (rotatedKeys) {
+            rotatedKeys.forEach(key -> published.add(key.toPublicJWK()));
+        }
+        if (publishKeyAlgorithms) {
+            published.replaceAll(key -> key instanceof ECKey ec
+                    ? new ECKey.Builder(ec).algorithm(JWSAlgorithm.ES256).build()
+                    : new RSAKey.Builder((RSAKey) key).algorithm(JWSAlgorithm.RS256).build());
+        }
+        respondRaw(exchange, 200, new JWKSet(published).toString(true));
     }
 
     private void token(HttpExchange exchange) throws IOException {
@@ -515,14 +570,40 @@ public final class FakeWorkeasy360 {
         put(claims, spec, "email", spec.email);
         put(claims, spec, "name", spec.name);
         spec.extra.forEach(claims::claim);
-        JWTClaimsSet set = claims.build();
+        return sign(claims.build(), spec.signing, spec.useEc, null, null);
+    }
 
-        switch (spec.signing) {
+    /** A back-channel logout token, as Workeasy360 would POST it (or bent as {@code spec} says). */
+    public String mintLogoutToken(LogoutTokenSpec spec) throws Exception {
+        JWTClaimsSet.Builder claims = new JWTClaimsSet.Builder();
+        put(claims, spec.omit, "iss", spec.issuer != null ? spec.issuer : base);
+        put(claims, spec.omit, "sub", spec.subject);
+        put(claims, spec.omit, "aud", spec.audience);
+        put(claims, spec.omit, "iat", spec.issuedAt == null ? null : Date.from(spec.issuedAt));
+        put(claims, spec.omit, "exp", spec.expiresAt == null ? null : Date.from(spec.expiresAt));
+        put(claims, spec.omit, "jti", spec.jti);
+        put(claims, spec.omit, "typ", spec.typ);
+        put(claims, spec.omit, "events", spec.events);
+        put(claims, spec.omit, "sid", spec.sid);
+        spec.extra.forEach(claims::claim);
+        return sign(claims.build(), spec.signing, spec.useEc,
+                spec.headerType == null ? null : new JOSEObjectType(spec.headerType), spec.signWith);
+    }
+
+    private String sign(JWTClaimsSet set, String signing, boolean useEc, JOSEObjectType type, RSAKey signWith)
+            throws Exception {
+        if (signWith != null) {
+            SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signWith.getKeyID())
+                    .type(type).build(), set);
+            jwt.sign(new RSASSASigner(signWith));
+            return jwt.serialize();
+        }
+        switch (signing) {
             case "NONE":
                 return new PlainJWT(set).serialize();
             case "HS256_WITH_PUBLIC_KEY": {
                 SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.HS256)
-                        .keyID(signingKey.getKeyID()).build(), set);
+                        .keyID(signingKey.getKeyID()).type(type).build(), set);
                 // The classic confusion: the RSA public key, as bytes, used as an HMAC secret.
                 byte[] secret = signingKey.toRSAPublicKey().getEncoded();
                 byte[] padded = secret.length >= 32 ? secret : Base64.getEncoder().encode(secret);
@@ -530,31 +611,32 @@ public final class FakeWorkeasy360 {
                 return jwt.serialize();
             }
             case "NO_KID": {
-                SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).build(), set);
+                SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).type(type).build(), set);
                 jwt.sign(new RSASSASigner(signingKey));
                 return jwt.serialize();
             }
             case "UNKNOWN_KID": {
-                SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("no-such-key").build(), set);
+                SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("no-such-key")
+                        .type(type).build(), set);
                 jwt.sign(new RSASSASigner(signingKey));
                 return jwt.serialize();
             }
             case "WRONG_KEY": {
                 // Right kid, signed by somebody else's private key.
                 SignedJWT jwt = new SignedJWT(new JWSHeader.Builder(JWSAlgorithm.RS256)
-                        .keyID(signingKey.getKeyID()).build(), set);
+                        .keyID(signingKey.getKeyID()).type(type).build(), set);
                 jwt.sign(new RSASSASigner(otherKey));
                 return jwt.serialize();
             }
             default: {
                 JWSSigner signer;
                 JWSHeader header;
-                if (spec.useEc) {
+                if (useEc) {
                     signer = new ECDSASigner(ecSigningKey);
-                    header = new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(ecSigningKey.getKeyID()).build();
+                    header = new JWSHeader.Builder(JWSAlgorithm.ES256).keyID(ecSigningKey.getKeyID()).type(type).build();
                 } else {
                     signer = new RSASSASigner(signingKey);
-                    header = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.getKeyID()).build();
+                    header = new JWSHeader.Builder(JWSAlgorithm.RS256).keyID(signingKey.getKeyID()).type(type).build();
                 }
                 SignedJWT jwt = new SignedJWT(header, set);
                 jwt.sign(signer);
@@ -564,7 +646,11 @@ public final class FakeWorkeasy360 {
     }
 
     private static void put(JWTClaimsSet.Builder builder, IdTokenSpec spec, String name, Object value) {
-        if (value != null && !spec.omit.contains(name)) {
+        put(builder, spec.omit, name, value);
+    }
+
+    private static void put(JWTClaimsSet.Builder builder, Set<String> omit, String name, Object value) {
+        if (value != null && !omit.contains(name)) {
             builder.claim(name, value);
         }
     }

@@ -45,6 +45,11 @@ load starts a sign-in by itself and brings them back to the page they were on, w
 (Workeasy360's own session continues). See `docs/workeasy360-sso.md`, "Sessions, deployment shape and edge
 protection", which also asks for rate limiting of `/api/auth/**` at Cloudflare.
 
+**Back-channel logout** (`docs/workeasy360-sso.md`, "Back-channel logout") is one more reason for a single
+instance: Workeasy360's logout `POST` reaches one instance, which can end only the sessions it holds. Keep
+`POST /api/auth/workeasy360/backchannel-logout` reachable from the internet without a browser challenge: the
+caller is Workeasy360's server.
+
 ## Required environment properties
 
 Elastic Beanstalk's Java SE platform runs the jar behind nginx and expects the application on
@@ -107,6 +112,7 @@ The environment URL now opens the application. The API is unchanged and shares t
 | `/api/v1/dashboard` | `401` without a sign-in session (the old `X-User-Id` / `X-Org-Id` headers are ignored); `200` for a signed-in person. |
 | `/api/auth/session` | `401` without a session; `200` with who is signed in. |
 | `/api/auth/workeasy360/start` | `302` to Workeasy360 (or to `/#/sign-in?sso_error=unavailable` when it cannot be reached). |
+| `POST /api/auth/workeasy360/backchannel-logout` | Workeasy360's back-channel logout. `400 {"error":"invalid_request"}` to anything but a valid logout token, with no session or CSRF token needed; `405` to a `GET`. |
 | `/swagger-ui.html` | API documentation (needs a signed-in session in the same browser). |
 | `/api/v1/<anything unmapped>` | `404` as a problem document, never the application HTML. |
 | `/<anything unmapped>` | `404` as a problem document. The UI uses `HashRouter`, so its routes live in the fragment (`/#/projects`) and the browser never asks the server for them. There is deliberately no catch-all rewriting unknown paths to `index.html`, because that would turn genuine API and server errors into a silent HTML page. |

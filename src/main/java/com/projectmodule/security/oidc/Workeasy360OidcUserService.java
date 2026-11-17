@@ -68,6 +68,15 @@ public class Workeasy360OidcUserService implements OAuth2UserService<OidcUserReq
         public String next() {
             return next;
         }
+
+        /**
+         * The Workeasy360 sign-in that issued the ID token ({@code sid}), or {@code null}. Workeasy360 includes
+         * it only for a product that registered a back-channel logout URI (platform ADR-069).
+         */
+        public String sid() {
+            Object sid = getIdToken().getClaim("sid");
+            return sid instanceof String value && !value.isBlank() && value.length() <= 255 ? value : null;
+        }
     }
 
     @Override

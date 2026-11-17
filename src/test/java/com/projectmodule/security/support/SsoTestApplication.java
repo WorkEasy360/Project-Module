@@ -7,9 +7,13 @@ import com.projectmodule.config.ApiConfiguration;
 import com.projectmodule.config.RequestContextConfiguration;
 import com.projectmodule.dashboard.api.DashboardController;
 import com.projectmodule.security.SecurityConfiguration;
+import com.projectmodule.security.backchannel.BackchannelLogoutController;
+import com.projectmodule.security.backchannel.ReceivedLogoutTokens;
 import com.projectmodule.security.identity.FederatedIdentityStore;
 import com.projectmodule.security.web.AuthController;
+import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -27,9 +31,9 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * The real security chain, the real sign-in classes, the real exception handler and the real dashboard
- * controller, with no database: users are mapped by an in-memory store and the dashboard service is a
- * mock. This is the full-stack configuration the sign-in tests drive with MockMvc, so what they prove is
+ * The real security chain, the real sign-in classes, the real back-channel logout endpoint, the real
+ * exception handler and the real dashboard controller, with no database: users are mapped, and accepted
+ * logout tokens remembered, by in-memory stores, and the dashboard service is a mock. This is the full-stack configuration the sign-in tests drive with MockMvc, so what they prove is
  * what the application's security chain does, not what a test-only chain does.
  */
 @TestConfiguration
@@ -38,7 +42,8 @@ import org.springframework.web.bind.annotation.RestController;
         HibernateJpaAutoConfiguration.class, JpaRepositoriesAutoConfiguration.class, FlywayAutoConfiguration.class})
 @Import({SecurityConfiguration.class, ApiConfiguration.class, RequestContextConfiguration.class,
         GlobalExceptionHandler.class, AuthController.class, DashboardController.class,
-        SsoTestApplication.InMemoryIdentities.class, SsoTestApplication.Probe.class})
+        BackchannelLogoutController.class, SsoTestApplication.InMemoryIdentities.class,
+        SsoTestApplication.InMemoryReceivedLogoutTokens.class, SsoTestApplication.Probe.class})
 public class SsoTestApplication {
 
     /** Same mapping rule as the PostgreSQL store, held in memory. */
@@ -72,6 +77,39 @@ public class SsoTestApplication {
 
         public void clear() {
             byIdentity.clear();
+        }
+    }
+
+    /** Same contract as the PostgreSQL ledger, held in memory; can be told to fail like a database would. */
+    public static class InMemoryReceivedLogoutTokens implements ReceivedLogoutTokens {
+
+        private final Set<String> accepted = ConcurrentHashMap.newKeySet();
+        private volatile RuntimeException failNext;
+
+        @Override
+        public synchronized boolean acceptOnce(String issuer, String jti, Instant keepUntil, Runnable endSessions) {
+            RuntimeException failure = failNext;
+            if (failure != null) {
+                failNext = null;
+                throw failure;
+            }
+            String key = issuer + "|" + jti;
+            if (accepted.contains(key)) {
+                return false;
+            }
+            endSessions.run();
+            accepted.add(key);
+            return true;
+        }
+
+        /** The next call fails as an unreachable database would, recording nothing. */
+        public void failNextWith(RuntimeException failure) {
+            this.failNext = failure;
+        }
+
+        public void clear() {
+            accepted.clear();
+            failNext = null;
         }
     }
 
