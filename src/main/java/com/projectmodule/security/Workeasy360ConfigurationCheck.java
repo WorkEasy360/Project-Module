@@ -106,7 +106,7 @@ public class Workeasy360ConfigurationCheck implements InitializingBean {
                     """
                     Register Easy Project in Workeasy360 (docs/workeasy360-sso.md), then provide:
 
-                        WORKEASY360_ISSUER                e.g. https://app.workeasy360.com
+                        WORKEASY360_ISSUER                e.g. https://accounts.workeasy360.com
                         WORKEASY360_CLIENT_ID
                         WORKEASY360_REDIRECT_URI          https://<this host>/api/auth/callback/workeasy360
                         WORKEASY360_KEY_ID                the credential id printed at registration

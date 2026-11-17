@@ -56,7 +56,7 @@ port 5000, so `SERVER_PORT` must be `5000` (Spring maps it to `server.port`).
 | `PROJECTMODULE_DB_URL` | `jdbc:postgresql://<rds-endpoint>:5432/<database>` |
 | `PROJECTMODULE_DB_USERNAME` | RDS master user |
 | `PROJECTMODULE_DB_PASSWORD` | RDS master password (set in the environment only) |
-| `WORKEASY360_ISSUER` | **Required.** Workeasy360's issuer, e.g. `https://app.workeasy360.com`. The jar **refuses to start** without it and the four settings below. |
+| `WORKEASY360_ISSUER` | **Required.** Workeasy360's issuer, `https://accounts.workeasy360.com` (WorkEasy360 Accounts, platform ADR-067; never `app.`, which serves no discovery document). The jar **refuses to start** without it and the four settings below. |
 | `WORKEASY360_CLIENT_ID` | **Required.** The client id printed by `manage.py connect_product_sso --product easy_project ...`. |
 | `WORKEASY360_REDIRECT_URI` | **Required.** `https://ops.workeasy360.com/api/auth/callback/workeasy360`, exactly as registered. |
 | `WORKEASY360_KEY_ID` | **Required.** The credential id printed at registration. |

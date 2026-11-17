@@ -11,7 +11,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  * <p>Only the issuer is configured about the provider: every endpoint comes from its discovery
  * document at run time.
  *
- * @param issuer            exact issuer identifier, e.g. {@code https://app.workeasy360.com}
+ * @param issuer            exact issuer identifier, e.g. {@code https://accounts.workeasy360.com}
  * @param clientId          this product's client id
  * @param redirectUri       the one registered callback; used verbatim, never derived from a request
  * @param keyId             {@code kid} of the registered public key (the credential id)

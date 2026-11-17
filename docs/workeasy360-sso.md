@@ -207,7 +207,7 @@ All settings are environment variables.
 
 | Variable | Required | Purpose |
 |---|---|---|
-| `WORKEASY360_ISSUER` | yes | Exact issuer identifier, e.g. `https://app.workeasy360.com`. Nothing else about Workeasy360 is configured: every endpoint comes from its discovery document. |
+| `WORKEASY360_ISSUER` | yes | Exact issuer identifier, `https://accounts.workeasy360.com` (WorkEasy360 Accounts, platform ADR-067; never `app.`, which serves no discovery document). Nothing else about Workeasy360 is configured: every endpoint comes from its discovery document. |
 | `WORKEASY360_CLIENT_ID` | yes | The client id `connect_product_sso` printed. |
 | `WORKEASY360_REDIRECT_URI` | yes | `https://ops.workeasy360.com/api/auth/callback/workeasy360`. Must equal the registered URI exactly. |
 | `WORKEASY360_KEY_ID` | yes | The credential id printed at registration (the `kid` of the client assertions). |
