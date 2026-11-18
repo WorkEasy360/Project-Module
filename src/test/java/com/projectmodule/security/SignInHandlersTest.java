@@ -3,6 +3,7 @@ package com.projectmodule.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.projectmodule.security.backchannel.SignInSessions;
+import com.projectmodule.security.support.SsoTestApplication;
 import com.projectmodule.security.web.SignInHandlers;
 import com.projectmodule.security.web.SignedOutMarker;
 import java.time.Clock;
@@ -27,7 +28,8 @@ class SignInHandlersTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
 
         SignInHandlers.success(new HttpSessionSecurityContextRepository(), new SignedOutMarker(true),
-                        new SignInSessions(Clock.systemUTC()))
+                        new SignInSessions(Clock.systemUTC()),
+                        new SsoTestApplication.InMemorySignInRecords(Clock.systemUTC()))
                 .onAuthenticationSuccess(request, response, new TestingAuthenticationToken("intruder", "x"));
 
         assertThat(session.isInvalid()).isTrue();

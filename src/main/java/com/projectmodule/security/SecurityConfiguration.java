@@ -4,6 +4,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.JWK;
 import com.projectmodule.security.backchannel.BackchannelLogoutController;
 import com.projectmodule.security.backchannel.LogoutTokenVerifier;
+import com.projectmodule.security.backchannel.SignInRecordCleanup;
+import com.projectmodule.security.backchannel.SignInRecords;
+import com.projectmodule.security.backchannel.SignInRevocationFilter;
 import com.projectmodule.security.backchannel.SignInSessions;
 import com.projectmodule.security.entitlement.EntitlementClient;
 import com.projectmodule.security.entitlement.EntitlementFilter;
@@ -90,6 +93,9 @@ import java.util.Map;
  *       GETs, not writes.
  *   <li>The back-channel logout endpoint, which Workeasy360's server calls, has a chain of its own ahead of
  *       the browser chain: no session, no cookie, no CSRF token (see {@link #backchannelLogoutFilterChain}).
+ *   <li>Every request that comes with a signed-in session is checked against the shared sign-in record
+ *       ({@link SignInRevocationFilter}), so a session that a logout token ended on any instance is ended on
+ *       this one too.
  * </ul>
  */
 @Configuration
@@ -144,12 +150,22 @@ public class SecurityConfiguration {
     }
 
     /**
-     * Which sessions each Workeasy360 sign-in opened. Also an {@code HttpSessionListener} and
+     * Which of this instance's sessions each Workeasy360 sign-in opened. Also an {@code HttpSessionListener} and
      * {@code HttpSessionIdListener}, which Spring Boot registers with the servlet container.
      */
     @Bean
     public SignInSessions signInSessions(Clock clock) {
         return new SignInSessions(clock);
+    }
+
+    /**
+     * Forgets the shared sign-in record of a session that ends by itself. An {@code HttpSessionListener}, which
+     * Spring Boot registers with the servlet container. The record itself ({@link SignInRecords}) is the
+     * PostgreSQL {@code JdbcSignInRecords} service.
+     */
+    @Bean
+    public SignInRecordCleanup signInRecordCleanup(SignInRecords records) {
+        return new SignInRecordCleanup(records);
     }
 
     @Bean
@@ -197,6 +213,7 @@ public class SecurityConfiguration {
             Clock clock,
             ProviderHttp providerHttp,
             SignInSessions signIns,
+            SignInRecords signInRecords,
             @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookies,
             @Value("${server.servlet.session.cookie.name:JSESSIONID}") String sessionCookieName) throws Exception {
 
@@ -272,7 +289,7 @@ public class SecurityConfiguration {
                                 .userService(request -> {
                                     throw new OAuth2AuthenticationException(new OAuth2Error("refused"));
                                 }))
-                        .successHandler(SignInHandlers.success(contexts, signedOut, signIns))
+                        .successHandler(SignInHandlers.success(contexts, signedOut, signIns, signInRecords))
                         .failureHandler(SignInHandlers.failure()))
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
@@ -283,6 +300,9 @@ public class SecurityConfiguration {
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
                 .addFilterAfter(new CsrfSupport.CsrfCookieFilter(), BasicAuthenticationFilter.class)
                 .addFilterBefore(new NoStoreFilter(), CsrfFilter.class)
+                // Before anything reads who the request is for: a session whose sign-in a logout token ended (on
+                // any instance) is ended here, and the request goes on as anonymous.
+                .addFilterBefore(new SignInRevocationFilter(signInRecords, problems), CsrfFilter.class)
                 .addFilterBefore(new SameOriginWritesFilter(problems), CsrfFilter.class)
                 .addFilterBefore(new SignInEntryFilter(provider), OAuth2AuthorizationRequestRedirectFilter.class)
                 .addFilterAfter(new EntitlementFilter(entitlements, problems), AuthorizationFilter.class);

@@ -22,10 +22,16 @@ import org.springframework.web.bind.annotation.RestController;
  * No browser is involved, so there is no CSRF token, no session and no cookie: the token's signature is the
  * authentication. It has its own security filter chain ({@code SecurityConfiguration}).
  *
+ * <p>The sessions it names end on every instance: the shared {@link SignInRecords} rows are deleted in the
+ * transaction that records the {@code jti}, and each instance's {@link SignInRevocationFilter} ends its own
+ * sessions at their next request. This instance's own sessions are also ended at once ({@link SignInSessions}).
+ *
  * <ul>
- *   <li><strong>200</strong>: the token verified and the sessions it names have ended (or had already).
- *   <li><strong>400</strong> {@code invalid_request}: the token does not verify, or was accepted before
- *       ({@code jti}). Nothing was ended. Workeasy360 does not retry a 400.
+ *   <li><strong>200</strong>: the token verified and the sessions it names have ended (or had already). The same
+ *       token delivered again (its {@code jti} was already acted on; a duplicate, or a retry of a delivery whose
+ *       answer was lost) gets the same 200 and ends nothing more: a {@code jti} is acted on once.
+ *   <li><strong>400</strong> {@code invalid_request}: the token does not verify. Nothing was ended. Workeasy360
+ *       does not retry a 400.
  *   <li><strong>503</strong> {@code temporarily_unavailable}: the key set could not be read, or recording the
  *       token or ending the sessions failed. Nothing was recorded, so Workeasy360's retry is processed afresh.
  * </ul>
@@ -42,12 +48,14 @@ public class BackchannelLogoutController {
 
     private final LogoutTokenVerifier verifier;
     private final ReceivedLogoutTokens received;
+    private final SignInRecords records;
     private final SignInSessions sessions;
 
     public BackchannelLogoutController(LogoutTokenVerifier verifier, ReceivedLogoutTokens received,
-                                       SignInSessions sessions) {
+                                       SignInRecords records, SignInSessions sessions) {
         this.verifier = verifier;
         this.received = received;
+        this.records = records;
         this.sessions = sessions;
     }
 
@@ -65,22 +73,29 @@ public class BackchannelLogoutController {
             return error(HttpStatus.SERVICE_UNAVAILABLE, "temporarily_unavailable");
         }
 
-        int[] ended = new int[1];
+        int[] ended = new int[2];
         boolean accepted;
         try {
-            accepted = received.acceptOnce(token.issuer(), token.jti(), token.keepUntil(),
-                    () -> ended[0] = sessions.end(token.issuer(), token.subject(), token.sid()));
+            // One transaction: the jti, the shared records (every instance), then this instance's own sessions.
+            // If any of it fails, nothing is recorded and the retry is processed afresh.
+            accepted = received.acceptOnce(token.issuer(), token.jti(), token.keepUntil(), () -> {
+                ended[0] = records.end(token.issuer(), token.subject(), token.sid());
+                ended[1] = sessions.end(token.issuer(), token.subject(), token.sid());
+            });
         } catch (RuntimeException failure) {
             log.error("workeasy360.backchannel_logout_failed jti={} type={}", token.jti(),
                     failure.getClass().getSimpleName());
             return error(HttpStatus.SERVICE_UNAVAILABLE, "temporarily_unavailable");
         }
         if (!accepted) {
-            log.warn("workeasy360.logout_token_rejected reason=replayed jti={}", token.jti());
-            return error(HttpStatus.BAD_REQUEST, "invalid_request");
+            // Acted on before (by this instance or another): what it asked for is done. Nothing is ended again, so
+            // a copy cannot end sessions opened since; the answer is the success the first delivery got.
+            log.warn("workeasy360.logout_token_duplicate jti={} sessions_ended=0", token.jti());
+            return ResponseEntity.ok().build();
         }
-        log.info("workeasy360.backchannel_logout jti={} subject={} sign_in={} sessions_ended={}", token.jti(),
-                token.subject() == null ? "-" : token.subject(), token.sid() == null ? "all" : token.sid(), ended[0]);
+        log.info("workeasy360.backchannel_logout jti={} subject={} sign_in={} sessions_ended={} ended_here={}",
+                token.jti(), token.subject() == null ? "-" : token.subject(),
+                token.sid() == null ? "all" : token.sid(), ended[0], ended[1]);
         return ResponseEntity.ok().build();
     }
 

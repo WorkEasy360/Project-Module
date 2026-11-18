@@ -15,14 +15,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Which Easy Project sessions each Workeasy360 sign-in opened, so that a logout token can end them.
+ * Which of this instance's Easy Project sessions each Workeasy360 sign-in opened, so that a logout token
+ * delivered here ends them at once.
  *
  * <p>Easy Project's sessions are the servlet container's own {@code HttpSession}s, held in memory by the
  * instance that created them (there is no Spring Session). This index is therefore in memory too, and lives
  * exactly as long as the sessions it points at: the container reports every session that ends (an idle
  * timeout, a sign-out, an account switch, a session ended here) through {@link HttpSessionListener}, and every
  * change of id through {@link HttpSessionIdListener}. Spring Boot registers this bean with the embedded
- * container as both listeners. A logout token can only reach the sessions of the instance it is delivered to.
+ * container as both listeners.
+ *
+ * <p>This is the local half. Sessions held by the other instances (and sessions a restart brought back) are
+ * reached through the shared {@link SignInRecords}: a logout token deletes their rows, and
+ * {@link SignInRevocationFilter} ends each of them at its next request, wherever it is held.
  *
  * <p>Each session is recorded with the issuer and {@code sub} of the person and the {@code sid} of the
  * Workeasy360 sign-in that opened it (absent when the ID token carried none). A logout token naming a

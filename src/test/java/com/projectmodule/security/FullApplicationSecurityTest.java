@@ -7,7 +7,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.projectmodule.security.backchannel.JdbcReceivedLogoutTokens;
+import com.projectmodule.security.backchannel.JdbcSignInRecords;
 import com.projectmodule.security.backchannel.ReceivedLogoutTokens;
+import com.projectmodule.security.backchannel.SignInRecords;
 import com.projectmodule.security.identity.FederatedIdentityStore;
 import com.projectmodule.security.identity.JpaFederatedIdentityStore;
 import java.util.UUID;
@@ -79,6 +81,8 @@ class FullApplicationSecurityTest {
     @DisplayName("back-channel logout is wired: the PostgreSQL ledger, and no session or CSRF token needed to be refused")
     void backchannelLogout() throws Exception {
         assertThat(context.getBean(ReceivedLogoutTokens.class)).isInstanceOf(JdbcReceivedLogoutTokens.class);
+        assertThat(context.getBean(SignInRecords.class)).as("the sign-in record every instance shares")
+                .isInstanceOf(JdbcSignInRecords.class);
         mvc.perform(post("/api/auth/workeasy360/backchannel-logout")
                         .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                         .param("logout_token", "not-a-logout-token"))

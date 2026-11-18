@@ -279,7 +279,7 @@ class BackchannelLogoutTest extends SsoFlowTestBase {
     }
 
     @Test
-    @DisplayName("a jti is accepted once: the same token replayed later is a 400 and ends nothing")
+    @DisplayName("a jti is acted on once: the same token delivered again later gets the same 200 and ends nothing")
     void replayIsRefused() throws Exception {
         String person = uuid();
         MockHttpSession first = signedIn(person, uuid());
@@ -291,8 +291,10 @@ class BackchannelLogoutTest extends SsoFlowTestBase {
         MockHttpSession later = signedIn(person, uuid());
         MvcResult replay = deliver(logoutToken);
 
-        assertThat(replay.getResponse().getStatus()).isEqualTo(400);
-        assertThat(replay.getResponse().getContentAsString()).contains("\"invalid_request\"");
+        // A duplicate (or a retry whose first answer was lost) is answered with the success the first delivery got;
+        // being acted on once is what protects the person's later sessions.
+        assertThat(replay.getResponse().getStatus()).isEqualTo(200);
+        assertThat(replay.getResponse().getContentAsString()).isEmpty();
         assertThat(signedInStill(later)).as("the person's new session survives the replay").isTrue();
     }
 

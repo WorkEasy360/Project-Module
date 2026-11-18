@@ -3,6 +3,7 @@ package com.projectmodule.security.web;
 import com.projectmodule.security.SignInErrors;
 import com.projectmodule.security.Workeasy360Authentication;
 import com.projectmodule.security.Workeasy360Principal;
+import com.projectmodule.security.backchannel.SignInRecords;
 import com.projectmodule.security.backchannel.SignInSessions;
 import com.projectmodule.security.oidc.NextPath;
 import com.projectmodule.security.oidc.Workeasy360OidcUserService.SignedInUser;
@@ -40,12 +41,15 @@ public final class SignInHandlers {
      * session is again allowed to start a sign-in by itself.
      *
      * <p>The session is recorded against the Workeasy360 sign-in that opened it (the ID token's {@code sid},
-     * when there is one) and the person, so that a back-channel logout can end it. If Workeasy360 has already
-     * ended that sign-in (its logout token overtook the browser on the way back here), the session is ended at
-     * once and the sign-in fails as {@code expired}.
+     * when there is one) and the person, so that a back-channel logout can end it: in this instance's index of
+     * its own sessions ({@link SignInSessions}), and in the record every instance shares ({@link SignInRecords}),
+     * whose id the session keeps. If Workeasy360 has already ended that sign-in (its logout token overtook the
+     * browser on the way back here, whichever instance it reached), the session is ended at once and the sign-in
+     * fails as {@code expired}. If the shared record cannot be written, the session is ended and the sign-in
+     * fails as {@code unavailable}: a session that a logout token could not reach is never handed out.
      */
     public static AuthenticationSuccessHandler success(SecurityContextRepository repository, SignedOutMarker marker,
-                                                       SignInSessions signIns) {
+                                                       SignInSessions signIns, SignInRecords records) {
         return (HttpServletRequest request, HttpServletResponse response, Authentication authentication) -> {
             if (!(authentication.getPrincipal() instanceof SignedInUser user)) {
                 log.error("workeasy360.sign_in_failed code={}", SignInErrors.REFUSED);
@@ -64,15 +68,32 @@ public final class SignInHandlers {
             SecurityContextHolder.setContext(context);
             repository.saveContext(context, request, response);
             HttpSession session = request.getSession(false);
+            String record = null;
+            String refusal = null;
             if (session == null || !signIns.opened(session, principal.issuer(), principal.subject(), user.sid())) {
-                log.warn("workeasy360.sign_in_failed code={} reason=sign_in_already_ended", SignInErrors.EXPIRED);
+                refusal = SignInErrors.EXPIRED;
+            } else {
+                try {
+                    record = records.open(principal.issuer(), principal.subject(), user.sid());
+                    if (record == null) {
+                        refusal = SignInErrors.EXPIRED;
+                    }
+                } catch (RuntimeException failure) {
+                    log.error("workeasy360.sign_in_record_failed type={}", failure.getClass().getSimpleName());
+                    refusal = SignInErrors.UNAVAILABLE;
+                }
+            }
+            if (refusal != null) {
+                log.warn("workeasy360.sign_in_failed code={} reason={}", refusal,
+                        SignInErrors.EXPIRED.equals(refusal) ? "sign_in_already_ended" : "sign_in_not_recorded");
                 SecurityContextHolder.clearContext();
                 if (session != null) {
                     session.invalidate();
                 }
-                fail(response, SignInErrors.EXPIRED);
+                fail(response, refusal);
                 return;
             }
+            session.setAttribute(SignInRecords.SESSION_ATTRIBUTE, record);
             marker.clear(response);
             log.info("workeasy360.sign_in user={} organization={}",
                     user.principal().userId(), user.principal().organizationId());
