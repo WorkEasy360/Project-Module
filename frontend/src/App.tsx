@@ -29,6 +29,7 @@ function App() {
         <HashRouter>
           <Routes>
             <Route path="sign-in" element={<SignInPage />} />
+            <Route path="sign-up" element={<SignInPage initialMode="register" />} />
             <Route path="join/:inviteToken" element={<SignInPage />} />
             <Route path="reset/:resetToken" element={<SignInPage />} />
             <Route element={<AppLayout />}>

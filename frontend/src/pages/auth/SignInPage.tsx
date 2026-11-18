@@ -10,6 +10,7 @@ import { BRAND_NAME, BrandMark, BrandName, OperationsBadge } from '../../compone
 import '../../styles/signin.css'
 import '../../styles/ops.css'
 import '../../styles/signin-ops.css'
+import '../../styles/signin-art.css'
 
 /** The small part of Google's sign-in script this page uses. */
 interface GoogleIdentity {
@@ -37,7 +38,14 @@ function authErrorMessage(error: unknown): string {
  * returns a session token; nothing is stored unless it accepts. "Forgot password" and "Sign in with
  * Google" appear only when this deployment has email and a Google client id configured.
  */
-export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number }) {
+export function SignInPage({
+  successDelayMs = 1100,
+  initialMode = 'sign-in',
+}: {
+  successDelayMs?: number
+  /** 'register' opens straight on account creation (the #/sign-up address). */
+  initialMode?: 'sign-in' | 'register'
+}) {
   const { identity, setIdentity } = useIdentity()
   const { inviteToken, resetToken } = useParams<{ inviteToken: string; resetToken: string }>()
   const navigate = useNavigate()
@@ -46,7 +54,7 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
   // Someone who used the app before email sign-in still has their old ids in this browser.
   const [earlier] = useState(() => (inviteToken || resetToken ? null : getEarlierSignIn()))
   const [mode, setMode] = useState<'sign-in' | 'register' | 'forgot' | 'handover'>(
-    inviteToken ? 'register' : earlier ? 'handover' : 'sign-in',
+    inviteToken ? 'register' : earlier ? 'handover' : initialMode,
   )
   const [notice, setNotice] = useState<string | null>(null)
   const [config, setConfig] = useState<{ googleClientId: string; emailEnabled: boolean; legacyHandover?: boolean; workeasy360SignInUrl?: string } | null>(null)
@@ -55,7 +63,8 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [remember, setRemember] = useState(true)
+  // The plain login starts unticked, as in the brand artwork; joining or creating an account keeps you signed in.
+  const [remember, setRemember] = useState(() => Boolean(inviteToken) || initialMode === 'register' || earlier !== null)
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'checking' | 'success' | 'shake'>('idle')
@@ -288,20 +297,25 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
           WorkEasy <span>Operations</span>
         </h1>
         <p className="si-tagline">Plan • Assign • Track • Get Work Done</p>
-        <p className="si-sub">A simple workspace to manage projects, tasks and teams for your business.</p>
+        <p className="si-sub">
+          A simple workspace to manage projects, tasks and teams <span className="si-sub-end">for your business.</span>
+        </p>
         <div className="si-showcase">
           <ul className="si-features">
             <Feature icon="clipboard" title="Project Management" text="Organize and track projects with your team" />
-            <Feature icon="tasks" title="Task Management" text="Create, assign and track tasks with deadlines" />
-            <Feature icon="team" title="Team Collaboration" text="Work together, share updates and stay aligned" />
-            <Feature icon="barChart" title="Progress & Reports" text="Get clear visibility on team and project performance" />
+            <Feature icon="checklist" title="Task Management" text="Create, assign and track tasks with deadlines" />
+            <Feature icon="people" title="Team Collaboration" text="Work together, share updates and stay aligned" />
+            <Feature icon="bars" title="Progress & Reports" text="Get clear visibility on team and project performance" />
           </ul>
           <LaptopPreview />
         </div>
         <ul className="si-checks" aria-label="Included">
           {['Projects', 'Tasks', 'Teams', 'Automation', 'Reports', 'AI Assistant'].map((item) => (
             <li key={item}>
-              <Icon name="checkCircle" size={22} /> {item}
+              <span className="si-check-dot" aria-hidden="true">
+                <Icon name="check" size={18} />
+              </span>
+              {item}
             </li>
           ))}
         </ul>
@@ -467,16 +481,16 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
               )}
               <ul className="si-tiles" aria-hidden="true">
                 <li>
-                  <Icon name="clipboard" size={34} />
-                  Manage Projects
+                  <ArtIcon name="clipboard" size={44} />
+                  <span>Manage<br />Projects</span>
                 </li>
                 <li>
-                  <Icon name="checkCircle" size={34} />
-                  Track Tasks
+                  <ArtIcon name="checkCircle" size={44} />
+                  <span>Track<br />Tasks</span>
                 </li>
                 <li>
-                  <Icon name="team" size={34} />
-                  Collaborate with Teams
+                  <ArtIcon name="people" size={44} />
+                  <span>Collaborate<br />with Teams</span>
                 </li>
               </ul>
             </>
@@ -495,7 +509,7 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
             </p>
           )}
 
-          {!inviteToken && !resetToken && !handingOver && (
+          {!inviteToken && !resetToken && !handingOver && !plainLogin && (
             <p className="si-foot">
               {forgetting ? 'Remembered it?' : registering ? 'Already have an account?' : 'New here?'}{' '}
               <button type="button" className="si-switch" onClick={switchMode}>
@@ -519,11 +533,70 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
   )
 }
 
-function Feature({ icon, title, text }: { icon: IconName; title: string; text: string }) {
+type ArtIconName = 'clipboard' | 'checklist' | 'people' | 'bars' | 'checkCircle'
+
+/** Line icons drawn like the ones in the brand artwork (fuller than the app's small icons). */
+function ArtIcon({ name, size }: { name: ArtIconName; size: number }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: '0 0 48 48',
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 3.2,
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+    'aria-hidden': true,
+  }
+  switch (name) {
+    case 'clipboard':
+      return (
+        <svg {...common}>
+          <path d="M17 8h-5a3 3 0 0 0-3 3v29a3 3 0 0 0 3 3h24a3 3 0 0 0 3-3V11a3 3 0 0 0-3-3h-5" />
+          <rect x="17" y="4.5" width="14" height="7" rx="2" />
+          <path d="M16 21h16M16 28h16M16 35h10" />
+        </svg>
+      )
+    case 'checklist':
+      return (
+        <svg {...common}>
+          <path d="M6 11l3.5 3.5L16 8M6 24l3.5 3.5L16 21M6 37l3.5 3.5L16 34" />
+          <path d="M22 12h20M22 25h20M22 38h20" />
+        </svg>
+      )
+    case 'people':
+      return (
+        <svg {...common}>
+          <circle cx="24" cy="15" r="6" />
+          <circle cx="11" cy="19" r="4.5" />
+          <circle cx="37" cy="19" r="4.5" />
+          <path d="M14 40v-3a10 10 0 0 1 20 0v3z" />
+          <path d="M3.5 38v-2a7.5 7.5 0 0 1 10-7M44.5 38v-2a7.5 7.5 0 0 0-10-7" />
+        </svg>
+      )
+    case 'bars':
+      return (
+        <svg width={size} height={size} viewBox="0 0 48 48" fill="currentColor" aria-hidden="true">
+          <rect x="6" y="27" width="9" height="15" rx="1.5" />
+          <rect x="19.5" y="17" width="9" height="25" rx="1.5" />
+          <rect x="33" y="6" width="9" height="36" rx="1.5" />
+        </svg>
+      )
+    case 'checkCircle':
+      return (
+        <svg {...common}>
+          <circle cx="24" cy="24" r="18" />
+          <path d="M15.5 24.5l6 6 11-12" />
+        </svg>
+      )
+  }
+}
+
+function Feature({ icon, title, text }: { icon: ArtIconName; title: string; text: string }) {
   return (
     <li>
       <span className="si-feature-icon">
-        <Icon name={icon} size={34} />
+        <ArtIcon name={icon} size={44} />
       </span>
       <span>
         <strong>{title}</strong>
@@ -533,8 +606,22 @@ function Feature({ icon, title, text }: { icon: IconName; title: string; text: s
   )
 }
 
-/** A drawn (not photographed) laptop showing the Operations home page, for the welcome panel. */
+/**
+ * A drawn (not photographed) laptop showing the Operations home page, for the welcome panel.
+ * Drawn to match the brand artwork: the lid is mapped onto the artwork's exact corners
+ * (see .si-laptop-lid in signin-ops.css) and the keyboard deck is drawn as SVG below it.
+ */
 function LaptopPreview() {
+  const nav: [string, IconName][] = [
+    ['Home', 'home'],
+    ['Projects', 'clipboard'],
+    ['Tasks', 'tasks'],
+    ['Team', 'team'],
+    ['Reports', 'barChart'],
+    ['Automation', 'automation'],
+    ['Helpdesk', 'headset'],
+    ['Settings', 'settings'],
+  ]
   const bars: [string, number][] = [
     ['Website Redesign', 80],
     ['Product Launch', 60],
@@ -542,15 +629,49 @@ function LaptopPreview() {
   ]
   return (
     <div className="si-laptop" aria-hidden="true">
-      <div className="si-laptop-screen">
+      <svg className="si-laptop-deck" viewBox="0 0 740 480" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="si-deck-top" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#f4f6f8" />
+            <stop offset="1" stopColor="#cdd2d8" />
+          </linearGradient>
+          <linearGradient id="si-deck-front" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor="#c3c8cf" />
+            <stop offset="1" stopColor="#7d848d" />
+          </linearGradient>
+          <radialGradient id="si-deck-shadow">
+            <stop offset="0" stopColor="rgba(0,0,0,0.55)" />
+            <stop offset="1" stopColor="rgba(0,0,0,0)" />
+          </radialGradient>
+        </defs>
+        <ellipse cx="365" cy="470" rx="380" ry="16" fill="url(#si-deck-shadow)" />
+        <polygon points="92,415 720,412 726,430 690,453 4,461" fill="url(#si-deck-top)" />
+        <polygon points="98,416 704,414 682,429 54,433" fill="#15181d" />
+        <polygon points="58,431 680,428 676,431 50,435" fill="#2b3038" />
+        <path d="M190,446 L290,444 Q288,452 282,453 L198,455 Q191,453 190,446 Z" fill="#c6cbd2" />
+        <polygon points="4,461 690,453 682,468 14,474" fill="url(#si-deck-front)" />
+        <polygon points="690,453 726,430 722,440 682,468" fill="#9aa1aa" />
+        <rect x="640" y="458" width="10" height="3" rx="1" fill="#2e333a" />
+        <rect x="656" y="457" width="10" height="3" rx="1" fill="#2e333a" />
+        <rect x="672" y="456" width="6" height="3" rx="1" fill="#2e333a" />
+      </svg>
+      <div className="si-laptop-lid">
+        <span className="si-laptop-camera" />
         <div className="si-mini">
-          <aside className="si-mini-side">
+          <header className="si-mini-top">
             <span className="si-mini-brand">
-              <BrandMark size={14} /> WorkEasy<b>360</b> Operations
+              <BrandMark size={22} /> <span>WorkEasy<b>360</b></span> Operations
             </span>
-            {['Home', 'Projects', 'Tasks', 'Team', 'Reports', 'Automation', 'Helpdesk', 'Settings'].map((item, i) => (
+            <span className="si-mini-tools">
+              <Icon name="help" size={15} />
+              <Icon name="user" size={15} />
+              <span className="si-mini-avatar">MR</span>
+            </span>
+          </header>
+          <aside className="si-mini-side">
+            {nav.map(([item, icon], i) => (
               <span key={item} className={`si-mini-link${i === 0 ? ' on' : ''}`}>
-                {item}
+                <Icon name={icon} size={14} /> {item}
               </span>
             ))}
           </aside>
@@ -577,15 +698,17 @@ function LaptopPreview() {
                 <span className="si-mini-ring"><b>24</b><i>Tasks</i></span>
               </div>
             </div>
-            <div className="si-mini-actions">
-              <span className="g">+ Add Task</span>
-              <span className="b">Create Project</span>
-              <span className="p">Invite Member</span>
+            <div className="si-mini-card si-mini-quick">
+              <small>Quick Actions</small>
+              <div className="si-mini-actions">
+                <span className="g"><Icon name="plus" size={22} />Add Task</span>
+                <span className="b"><Icon name="folder" size={20} />Create Project</span>
+                <span className="p"><Icon name="userPlus" size={20} />Invite Member</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-      <div className="si-laptop-base" />
     </div>
   )
 }

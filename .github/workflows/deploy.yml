@@ -280,7 +280,7 @@ jobs:
           echo "Checking $INSTANCE_URL"
           for i in $(seq 1 24); do
             if curl -fsS --max-time 10 "$INSTANCE_URL/actuator/health" | grep -q '"UP"' \
-              && curl -fsS --max-time 10 "$INSTANCE_URL/" | grep -q '<title>WorkEasyProject</title>' \
+              && curl -fsS --max-time 10 "$INSTANCE_URL/" | grep -q '<title>WorkEasy360 Operations</title>' \
               && curl -fsS --max-time 10 "$INSTANCE_URL/api/v1/auth/config" | grep -q 'legacyHandover'; then
               echo "The new version is running and healthy."
               exit 0

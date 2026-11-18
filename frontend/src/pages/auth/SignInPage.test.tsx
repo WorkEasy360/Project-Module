@@ -38,6 +38,7 @@ function renderPage(successDelayMs = 0, path = '/sign-in') {
       <IdentityProvider>
         <Routes>
           <Route path="/sign-in" element={<SignInPage successDelayMs={successDelayMs} />} />
+          <Route path="/sign-up" element={<SignInPage successDelayMs={successDelayMs} initialMode="register" />} />
           <Route path="/join/:inviteToken" element={<SignInPage successDelayMs={successDelayMs} />} />
           <Route path="/reset/:resetToken" element={<SignInPage successDelayMs={successDelayMs} />} />
           <Route path="/dashboard" element={<div>DASHBOARD</div>} />
@@ -82,10 +83,10 @@ describe('SignInPage', () => {
     await fillSignIn()
     await userEvent.click(screen.getByRole('button', { name: /log in to operations/i }))
     expect(await screen.findByText((_, el) => el?.tagName === 'STRONG' && el.textContent === 'Welcome to WorkEasy360 Operations')).toBeInTheDocument()
-    expect(authApi.login).toHaveBeenCalledWith({ email: 'ada@example.com', password: 'correct horse', rememberMe: true })
+    expect(authApi.login).toHaveBeenCalledWith({ email: 'ada@example.com', password: 'correct horse', rememberMe: false })
     expect(getIdentity()).toMatchObject({ userId: 'user-1', orgId: 'org-1', token: 'session-token', name: 'Ada' })
-    expect(window.localStorage.getItem('projectmodule.identity')).toContain('session-token')
-    expect(window.localStorage.getItem('projectmodule.identity')).not.toContain('correct horse')
+    expect(window.sessionStorage.getItem('projectmodule.identity')).toContain('session-token')
+    expect(window.sessionStorage.getItem('projectmodule.identity')).not.toContain('correct horse')
     await screen.findByText('DASHBOARD')
   })
 
@@ -100,16 +101,21 @@ describe('SignInPage', () => {
     expect(screen.queryByText('DASHBOARD')).not.toBeInTheDocument()
   })
 
-  it('"Remember me" off keeps the session for this tab only', async () => {
+  it('"Remember me" starts unticked, and ticking it keeps the session on this device', async () => {
     vi.mocked(authApi.login).mockResolvedValue(SESSION)
     renderPage()
+    expect(screen.getByLabelText('Remember me')).not.toBeChecked()
     await fillSignIn()
     await userEvent.click(screen.getByLabelText('Remember me'))
     await userEvent.click(screen.getByRole('button', { name: /log in to operations/i }))
     await screen.findByText('DASHBOARD')
-    expect(authApi.login).toHaveBeenCalledWith(expect.objectContaining({ rememberMe: false }))
-    expect(window.localStorage.getItem('projectmodule.identity')).toBeNull()
-    expect(window.sessionStorage.getItem('projectmodule.identity')).toContain('session-token')
+    expect(authApi.login).toHaveBeenCalledWith(expect.objectContaining({ rememberMe: true }))
+    expect(window.localStorage.getItem('projectmodule.identity')).toContain('session-token')
+  })
+
+  it('has no sign-up line on the login card; sign-up opens at its own address', async () => {
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Create an account' })).not.toBeInTheDocument()
   })
 
   it('asks for a reset link without saying whether the address has an account', async () => {
@@ -178,8 +184,7 @@ describe('SignInPage', () => {
 
   it('creates an account and signs straight in', async () => {
     vi.mocked(authApi.register).mockResolvedValue(SESSION)
-    renderPage()
-    await userEvent.click(screen.getByRole('button', { name: 'Create an account' }))
+    renderPage(0, '/sign-up')
     await userEvent.type(screen.getByLabelText('Full name'), 'Ada')
     await fillSignIn()
     await userEvent.click(screen.getByRole('button', { name: /^create account/i }))
@@ -194,8 +199,7 @@ describe('SignInPage', () => {
   })
 
   it('checks the name and password length before creating an account', async () => {
-    renderPage()
-    await userEvent.click(screen.getByRole('button', { name: 'Create an account' }))
+    renderPage(0, '/sign-up')
     await fillSignIn('ada@example.com', 'short')
     await userEvent.click(screen.getByRole('button', { name: /^create account/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/your name/)
@@ -207,8 +211,7 @@ describe('SignInPage', () => {
 
   it('says so when the email already has an account, not that something changed elsewhere', async () => {
     vi.mocked(authApi.register).mockRejectedValue(problem(409, 'An account with this email already exists'))
-    renderPage()
-    await userEvent.click(screen.getByRole('button', { name: 'Create an account' }))
+    renderPage(0, '/sign-up')
     await userEvent.type(screen.getByLabelText('Full name'), 'Ada')
     await fillSignIn()
     await userEvent.click(screen.getByRole('button', { name: /^create account/i }))

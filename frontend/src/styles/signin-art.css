@@ -1,0 +1,363 @@
+/* ==========================================================================
+   Sign-in page: exact match to the brand artwork. Loaded after signin-ops.css.
+   Sizes are in design px: the page is drawn at 1672x941 and zoomed to fit the
+   window (fitToWindow.ts), so these numbers are measured straight off the artwork.
+   ========================================================================== */
+.si-page.si-ops,
+.si-page.si-ops input,
+.si-page.si-ops button {
+  font-family: 'Poppins', 'Inter', -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+.si-check-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px #ffffff;
+  color: #ffffff;
+}
+.si-check-dot svg {
+  stroke-width: 3;
+}
+
+@media (min-width: 1100px) {
+  /* ---- Welcome panel ---- */
+  .si-ops .si-brand {
+    padding: 16px 40px 25px 62px;
+    gap: 0;
+    background:
+      radial-gradient(circle 560px at 1150px -250px, #0c4a39 0%, #0e5f46 80%, #139a5a 93%, #2fd97c 97%, rgba(47, 217, 124, 0) 100%),
+      radial-gradient(ellipse 250px 80px at 120px 860px, rgba(40, 210, 110, 0.9) 0%, rgba(26, 168, 88, 0.55) 55%, rgba(26, 168, 88, 0) 100%),
+      radial-gradient(ellipse 140px 260px at 1000px 880px, rgba(48, 225, 130, 0.9) 0%, rgba(26, 168, 98, 0.5) 50%, rgba(26, 168, 98, 0) 100%),
+      linear-gradient(160deg, #0f4733 0%, #0b3a2b 45%, #072b20 100%);
+  }
+  .si-ops .si-brand::after {
+    display: none;
+  }
+  .si-brand-top {
+    gap: 22px;
+  }
+  .si-brand-logo {
+    margin: 4px 0 0 -14px;
+    gap: 12px;
+    font-size: 41px;
+    letter-spacing: -0.02em;
+  }
+  .si-brand-logo .brand-name {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .si-brand-top .ops-badge-lg {
+    gap: 22px;
+    margin-left: -2px;
+    padding: 0 26px 0 24px;
+    height: 64px;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    background: linear-gradient(180deg, #37d86f 0%, #12a03f 100%);
+    box-shadow: 0 0 26px rgba(46, 229, 112, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+    font-size: 33px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  .si-brand-top .ops-badge-lg svg {
+    font-size: 44px;
+    stroke-width: 1.5;
+  }
+  .si-ops .si-headline {
+    margin: 10px 0 0;
+    font-size: 63px;
+    font-weight: 600;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+  .si-ops .si-headline span {
+    color: #2ee584;
+    -webkit-text-fill-color: #2ee584;
+  }
+  .si-ops .si-tagline {
+    margin: 0;
+    font-size: 31px;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .si-ops .si-sub {
+    margin: 10px 0 0;
+    max-width: none;
+    font-size: 20.5px;
+    line-height: 28px;
+    font-weight: 400;
+    letter-spacing: -0.012em;
+    color: #ffffff;
+  }
+  .si-showcase {
+    margin-top: 32px;
+  }
+  .si-features {
+    position: relative;
+    z-index: 2;
+    max-width: 345px;
+    gap: 21px;
+  }
+  .si-features li {
+    height: 75px;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .si-feature-icon {
+    width: 75px;
+    height: 75px;
+    flex-shrink: 0;
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: linear-gradient(160deg, #31d46c 0%, #0f9040 100%);
+    box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  }
+  .si-features strong {
+    margin-top: 10px;
+    font-size: 21px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+  .si-features li span span {
+    max-width: 236px;
+    margin-top: 3px;
+    font-size: 16.5px;
+    line-height: 23px;
+    letter-spacing: -0.02em;
+    color: #ffffff;
+  }
+  .si-laptop {
+    left: 166px;
+    top: -68px;
+  }
+  .si-checks {
+    justify-content: center;
+    gap: 35px;
+    height: 64px;
+    margin-left: -7px;
+    margin-right: -5px;
+    padding: 0 18px;
+    border: 1.5px solid rgba(255, 255, 255, 0.32);
+    border-radius: 32px;
+    background: rgba(255, 255, 255, 0.04);
+  }
+  .si-checks li {
+    position: relative;
+    gap: 11px;
+    font-size: 16.5px;
+    font-weight: 400;
+    letter-spacing: -0.02em;
+  }
+  .si-checks li + li::before {
+    content: '';
+    position: absolute;
+    left: -18px;
+    top: 50%;
+    width: 1px;
+    height: 28px;
+    margin-top: -14px;
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  /* ---- Login card ---- */
+  .si-ops .si-form-wrap {
+    padding: 37px 29px 48px 38px;
+    align-items: stretch;
+  }
+  .si-ops .si-card {
+    max-width: 623px;
+    padding: 40px 36px 28px 40px;
+    gap: 0;
+    border-radius: 24px;
+  }
+  .si-card-brand {
+    gap: 22px;
+    margin-bottom: 26px;
+  }
+  .si-card-brand .si-brand-logo-dark {
+    margin-left: 0;
+    gap: 12px;
+    font-size: 35px;
+    letter-spacing: -0.02em;
+  }
+  .si-card-brand .si-brand-logo-dark img {
+    width: 52px;
+    height: 52px;
+  }
+  .si-card-brand-sep {
+    flex-shrink: 0;
+    width: 2.5px;
+    height: 38px;
+    background: #16a34a;
+  }
+  .si-card-brand .ops-badge-md {
+    gap: 14px;
+    height: 46px;
+    padding: 0 16px 0 14px;
+    border-radius: 11px;
+    border: 0;
+    background: linear-gradient(180deg, #0f7d2c 0%, #0a5f20 100%);
+    box-shadow: 0 2px 6px rgba(10, 95, 32, 0.35);
+    font-size: 24px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+  .si-card-brand .ops-badge-md svg {
+    font-size: 34px;
+    stroke-width: 1.5;
+  }
+  .si-ops .si-card h2 {
+    margin: 0;
+    font-size: 40px;
+    font-weight: 600;
+    line-height: 1.15;
+    letter-spacing: -0.015em;
+    color: #0f1b3d;
+  }
+  .si-ops .si-form-sub {
+    margin: 6px 0 14px;
+    font-size: 21.5px;
+    line-height: 30px;
+    letter-spacing: -0.012em;
+    color: #1e3a6e;
+  }
+  .si-ops .si-field {
+    gap: 7px;
+    margin-bottom: 14px;
+  }
+  .si-ops .si-label {
+    font-size: 17.5px;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+    color: #111827;
+  }
+  .si-ops .si-input {
+    height: 48px;
+    padding: 0 16px 0 18px;
+    gap: 18px;
+    border: 1.5px solid #d6dde8;
+    border-radius: 11px;
+    color: #1e3a6e;
+  }
+  .si-ops .si-input > svg {
+    width: 26px;
+    height: 26px;
+  }
+  .si-ops .si-input input {
+    font-size: 17px;
+    letter-spacing: -0.015em;
+    color: #0f1b3d;
+  }
+  .si-ops .si-input input::placeholder {
+    color: #1e3a6e;
+    opacity: 1;
+  }
+  .si-ops .si-eye {
+    color: #1e3a6e;
+  }
+  .si-ops .si-eye svg {
+    width: 28px;
+    height: 28px;
+  }
+  .si-ops .si-row {
+    margin: 6px 0 22px;
+  }
+  .si-ops .si-row .checkbox-row {
+    gap: 13px;
+    font-size: 16.5px;
+    letter-spacing: -0.015em;
+    color: #111827;
+  }
+  .si-ops .si-row .checkbox-row input {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 23px;
+    height: 23px;
+    margin: 0;
+    border: 1.5px solid #4b5563;
+    border-radius: 5px;
+    background: #ffffff;
+    cursor: pointer;
+  }
+  .si-ops .si-row .checkbox-row input:checked {
+    border-color: #16a34a;
+    background: #16a34a url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 17px no-repeat;
+  }
+  .si-ops .si-row .checkbox-row input:focus-visible {
+    outline: 3px solid rgba(22, 163, 74, 0.35);
+    outline-offset: 2px;
+  }
+  .si-ops .si-forgot {
+    font-size: 17px;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+    color: #15803d;
+  }
+  .si-ops .si-submit {
+    height: 62px;
+    gap: 22px;
+    border-radius: 12px;
+    background: linear-gradient(180deg, #12922f 0%, #0b6d22 100%);
+    box-shadow: 0 4px 10px rgba(11, 109, 34, 0.3);
+    font-size: 22.5px;
+    font-weight: 500;
+    letter-spacing: -0.015em;
+  }
+  .si-ops .si-submit svg {
+    width: 34px;
+    height: 34px;
+  }
+  .si-ops .si-or {
+    margin: 16px 0;
+  }
+  .si-ops .si-or span {
+    padding: 6px 16px;
+    border: 1.5px solid #d6dde8;
+    border-radius: 20px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #1e3a6e;
+  }
+  .si-ops .si-sso {
+    height: 58px;
+    margin-left: -2px;
+    gap: 18px;
+    border: 2px solid #16a34a;
+    border-radius: 12px;
+    font-size: 19.5px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: #111827;
+  }
+  .si-ops .si-sso img {
+    width: 38px;
+    height: 38px;
+  }
+  .si-ops .si-tiles {
+    gap: 17px;
+    margin: 31px -2px 0 -7px;
+  }
+  .si-ops .si-tiles li {
+    height: 120px;
+    gap: 6px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 13px;
+    background: #eafbf0;
+    font-size: 17.5px;
+    font-weight: 500;
+    line-height: 24px;
+    letter-spacing: -0.02em;
+    color: #111827;
+  }
+  .si-ops .si-tiles svg {
+    width: 44px;
+    height: 44px;
+    color: #16a34a;
+  }
+}
