@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { CreateProjectDialog } from './CreateProjectDialog'
 import { projectsApi } from '../../api/projects'
 import { ApiError } from '../../api/client'
+import { IdentityProvider } from '../../context/IdentityContext'
 
 vi.mock('../../api/projects', () => ({
   projectsApi: {
@@ -20,14 +21,14 @@ describe('CreateProjectDialog', () => {
   it('disables submit until a name is entered', async () => {
     render(
       <MemoryRouter>
-        <CreateProjectDialog onClose={vi.fn()} onCreated={vi.fn()} />
+        <IdentityProvider><CreateProjectDialog onClose={vi.fn()} onCreated={vi.fn()} /></IdentityProvider>
       </MemoryRouter>,
     )
 
     const submit = screen.getByRole('button', { name: /create project/i })
     expect(submit).toBeDisabled()
 
-    await userEvent.type(screen.getByLabelText(/^name/i), 'New Project')
+    await userEvent.type(screen.getByLabelText(/^project name/i), 'New Project')
     expect(submit).toBeEnabled()
   })
 
@@ -37,7 +38,7 @@ describe('CreateProjectDialog', () => {
       organizationId: 'o1',
       name: 'New Project',
       description: null,
-      status: 'PLANNING',
+      status: 'ACTIVE',
       priority: 'MEDIUM',
       startDate: null,
       targetEndDate: null,
@@ -53,11 +54,11 @@ describe('CreateProjectDialog', () => {
 
     render(
       <MemoryRouter>
-        <CreateProjectDialog onClose={vi.fn()} onCreated={onCreated} />
+        <IdentityProvider><CreateProjectDialog onClose={vi.fn()} onCreated={onCreated} /></IdentityProvider>
       </MemoryRouter>,
     )
 
-    await userEvent.type(screen.getByLabelText(/^name/i), 'New Project')
+    await userEvent.type(screen.getByLabelText(/^project name/i), 'New Project')
     await userEvent.click(screen.getByRole('button', { name: /create project/i }))
 
     expect(projectsApi.create).toHaveBeenCalledWith(
@@ -82,11 +83,11 @@ describe('CreateProjectDialog', () => {
 
     render(
       <MemoryRouter>
-        <CreateProjectDialog onClose={vi.fn()} onCreated={vi.fn()} />
+        <IdentityProvider><CreateProjectDialog onClose={vi.fn()} onCreated={vi.fn()} /></IdentityProvider>
       </MemoryRouter>,
     )
 
-    await userEvent.type(screen.getByLabelText(/^name/i), 'x')
+    await userEvent.type(screen.getByLabelText(/^project name/i), 'x')
     await userEvent.click(screen.getByRole('button', { name: /create project/i }))
 
     expect(await screen.findByText('name must not be blank')).toBeInTheDocument()

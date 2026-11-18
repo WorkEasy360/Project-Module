@@ -4,8 +4,9 @@ import { Header } from './Header'
 import { SidebarProvider } from '../../context/SidebarContext'
 import { useIdentity } from '../../context/IdentityContext'
 import { PeopleProvider } from '../../context/PeopleContext'
-import { TimerProvider } from '../../context/TimerContext'
 import { AssistantPanel } from '../assistant/AssistantPanel'
+import '../../styles/ops.css'
+import { WorkspaceSettingsProvider } from '../../context/WorkspaceSettingsContext'
 
 /**
  * Application shell. Until someone is signed in, the shell redirects to the sign-in page — there
@@ -20,8 +21,8 @@ export function AppLayout() {
   }
 
   return (
+    <WorkspaceSettingsProvider>
     <PeopleProvider>
-      <TimerProvider>
       <SidebarProvider>
         <div className="app-shell">
           <Sidebar />
@@ -34,7 +35,7 @@ export function AppLayout() {
         </div>
         <AssistantPanel />
       </SidebarProvider>
-      </TimerProvider>
     </PeopleProvider>
+    </WorkspaceSettingsProvider>
   )
 }

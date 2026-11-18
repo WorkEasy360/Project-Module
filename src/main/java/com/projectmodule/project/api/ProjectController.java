@@ -10,6 +10,7 @@ import com.projectmodule.project.application.ProjectApplicationService;
 import com.projectmodule.project.domain.Project;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
@@ -68,10 +70,20 @@ public class ProjectController {
 
     @GetMapping
     public PageResponse<ProjectSummaryResponse> listProjects(
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @RequestParam(name = "archived", defaultValue = "false") boolean archived) {
 
-        Page<Project> page = projectApplicationService.listProjects(requestContext, pageable);
-        return PageResponse.of(page, page.map(projectMapper::toSummary).getContent());
+        Page<Project> page = archived
+                ? projectApplicationService.listArchivedProjects(requestContext, pageable)
+                : projectApplicationService.listProjects(requestContext, pageable);
+        Map<UUID, long[]> counts = projectApplicationService.taskCounts(
+                page.getContent().stream().map(Project::getId).toList());
+        return PageResponse.of(page, page.getContent().stream()
+                .map(p -> {
+                    long[] c = counts.getOrDefault(p.getId(), new long[] {0, 0});
+                    return projectMapper.toSummary(p, c[0], c[1]);
+                })
+                .toList());
     }
 
     @GetMapping("/{id}")

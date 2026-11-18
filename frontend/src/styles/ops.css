@@ -1,0 +1,3495 @@
+/* WorkEasy360 Operations: the app shell (sidebar, header) and the Home, Projects and Helpdesk pages. */
+
+:root {
+  --ops-navy: #13222e;
+  --ops-ink: #1d2b45;
+  --ops-sub: #24426b;
+  --ops-green: #16a34a;
+  --ops-green-bright: #22c55e;
+  --ops-card-border: #e8ecf1;
+  --ops-card-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 8px 24px rgba(16, 24, 40, 0.05);
+  --ops-track: #e6e9ee;
+  --ops-head-bg: #f7f9fb;
+}
+:root[data-theme='dark'] {
+  --ops-ink: #e8eaf1;
+  --ops-sub: #a9c1dc;
+  --ops-card-border: #213748;
+  --ops-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  --ops-track: #213748;
+  --ops-head-bg: #182b39;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --ops-ink: #e8eaf1;
+    --ops-sub: #a9c1dc;
+    --ops-card-border: #213748;
+    --ops-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+    --ops-track: #213748;
+    --ops-head-bg: #182b39;
+  }
+}
+
+/* ---------- Brand ---------- */
+.brand-name {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.brand-accent {
+  color: var(--ops-green-bright);
+}
+.ops-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  padding: 0.38em 0.95em;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: linear-gradient(180deg, #2fd46e 0%, #14a24b 100%);
+  color: #ffffff;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  box-shadow: 0 6px 18px rgba(20, 162, 75, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  white-space: nowrap;
+}
+.ops-badge svg {
+  font-size: 1.15em;
+}
+.ops-badge-sm {
+  font-size: 13px;
+}
+.ops-badge-md {
+  font-size: 18px;
+}
+.ops-badge-lg {
+  font-size: 30px;
+  border-radius: 16px;
+}
+
+/* ---------- Sidebar ---------- */
+:root {
+  --sidebar-width: 272px;
+  --sidebar-width-collapsed: 72px;
+  --header-height: 72px;
+}
+aside.sidebar {
+  background: linear-gradient(180deg, #0e3d2f 0%, #0b3428 55%, #082b21 100%);
+  color: #ffffff;
+  border-right: 0;
+  padding: 18px 14px 18px;
+  display: flex;
+  flex-direction: column;
+}
+aside.sidebar .sidebar-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 18px;
+  text-decoration: none;
+  color: #ffffff;
+  border-bottom: 0;
+  height: auto;
+}
+aside.sidebar .sidebar-brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 27px;
+}
+aside.sidebar .sidebar-brand .brand-name {
+  color: #ffffff;
+}
+aside.sidebar .sidebar-nav {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+aside.sidebar .sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 11px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+aside.sidebar .sidebar-link svg {
+  flex: none;
+  color: #ffffff;
+  opacity: 0.95;
+}
+aside.sidebar .sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+aside.sidebar .sidebar-link.active {
+  background: linear-gradient(180deg, #24c862 0%, #15a64d 100%);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(21, 166, 77, 0.35);
+}
+aside.sidebar .sidebar-link-label {
+  flex: 1;
+}
+.sidebar-group-chevron {
+  transition: transform 0.15s ease;
+}
+.sidebar-group.open .sidebar-group-chevron {
+  transform: rotate(180deg);
+}
+.sidebar-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0 4px 34px;
+}
+.sidebar-sublink {
+  display: block;
+  padding: 9px 16px;
+  border-radius: 9px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 16px;
+  text-decoration: none;
+}
+.sidebar-sublink:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+.sidebar-sublink.active {
+  background: #2ccf63;
+  color: #ffffff;
+  font-weight: 600;
+}
+aside.sidebar .sidebar-divider {
+  height: 1px;
+  margin: 8px 4px;
+  background: rgba(255, 255, 255, 0.22);
+  border: 0;
+}
+.sidebar-plan {
+  margin: 12px 4px 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.sidebar-plan-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.sidebar-plan-crown {
+  color: #ffc940;
+  fill: rgba(255, 201, 64, 0.35);
+  flex: none;
+  margin-top: 2px;
+}
+.sidebar-plan-label {
+  display: block;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.sidebar-plan-name {
+  display: block;
+  font-size: 22px;
+  font-weight: 800;
+  color: #ffffff;
+}
+.sidebar-plan-valid {
+  display: block;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.sidebar-plan-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px;
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--ops-navy);
+  font-weight: 700;
+  font-size: 16px;
+  text-decoration: none;
+}
+.sidebar-plan-btn:hover {
+  background: #eafaf0;
+}
+aside.sidebar.collapsed {
+  padding: 18px 10px;
+}
+aside.sidebar.collapsed .sidebar-link {
+  justify-content: center;
+  padding: 11px 0;
+}
+
+/* ---------- Header ---------- */
+.app-header {
+  height: var(--header-height);
+  gap: 14px;
+  padding: 0 24px;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--ops-card-border);
+}
+.workspace-picker {
+  position: relative;
+}
+.workspace-picker-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 280px;
+  max-width: 420px;
+  padding: 10px 16px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+.workspace-picker-btn:hover {
+  border-color: var(--color-border-strong);
+}
+.workspace-picker-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.workspace-picker-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  min-width: 100%;
+  padding: 6px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+.workspace-picker-current,
+.workspace-picker-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: var(--ops-ink);
+  text-decoration: none;
+  font-size: 15px;
+}
+.workspace-picker-current {
+  font-weight: 700;
+  background: var(--color-primary-bg);
+}
+.workspace-picker-current span {
+  flex: 1;
+}
+.workspace-picker-current svg:last-child {
+  color: var(--ops-green);
+}
+.workspace-picker-link:hover {
+  background: var(--color-surface-2);
+}
+.header-search-wrap {
+  position: relative;
+}
+.header-search-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -40px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(440px, 80vw);
+  padding: 10px 12px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  color: var(--color-text-muted);
+}
+.header-search-pop input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 15px;
+}
+.header-search-pop kbd {
+  font-size: 11px;
+  color: var(--color-text-faint);
+}
+.app-header .icon-btn {
+  color: var(--ops-ink);
+}
+.ai-assistant-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 22px;
+  border: 1px solid #d9b8fb;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #faf5ff 0%, #f1e6fe 100%);
+  color: #7c3aed;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ai-assistant-btn:hover {
+  background: #ede0fd;
+}
+.ai-assistant-btn svg {
+  fill: rgba(124, 58, 237, 0.25);
+}
+.header-help {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.header-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--ops-card-border);
+}
+.app-header .identity-trigger {
+  gap: 12px;
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+}
+.app-header .identity-avatar {
+  width: 46px;
+  height: 46px;
+  font-size: 16px;
+  background: linear-gradient(180deg, #2fd46e 0%, #14a24b 100%);
+  color: #ffffff;
+}
+.app-header .identity-name {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ops-ink);
+}
+.app-header .identity-sub {
+  font-size: 15px;
+  color: var(--color-text-muted);
+}
+.app-header .guide-me,
+.app-header .breadcrumb,
+.app-header .global-search {
+  display: none;
+}
+
+/* ---------- Page ---------- */
+.app-content {
+  background: var(--color-bg);
+}
+:root:not([data-theme='dark']) .app-content {
+  background: #f4f6f9;
+}
+.ops-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1500px;
+  margin: 0 auto;
+  width: 100%;
+}
+.ops-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.ops-page-head h1 {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ops-ink);
+}
+.ops-page-head p {
+  margin: 4px 0 0;
+  font-size: 19px;
+  color: var(--ops-sub);
+}
+.ops-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+.ops-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 26px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #16a34a 0%, #12813b 100%);
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 6px 16px rgba(22, 163, 74, 0.28);
+}
+.ops-primary:hover {
+  background: linear-gradient(180deg, #15913f 0%, #0f6f33 100%);
+}
+.ops-primary-sm {
+  padding: 9px 18px;
+  font-size: 15px;
+}
+.ops-toggle {
+  display: inline-flex;
+  padding: 4px;
+  gap: 4px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+.ops-toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 26px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ops-ink);
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.ops-toggle button.on {
+  background: #d9f7e3;
+  color: #12813b;
+  font-weight: 600;
+}
+
+/* Period selector and date range on Home */
+.ops-period {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.ops-range {
+  padding: 11px 20px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+  font-size: 17px;
+}
+
+/* Selects with a custom chevron */
+.ops-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  padding: 0 14px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+}
+.ops-select select {
+  flex: 1;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--ops-ink);
+  font-size: 17px;
+  font-weight: 500;
+  padding: 12px 28px 12px 0;
+  cursor: pointer;
+  outline: none;
+}
+.ops-select-chevron {
+  position: absolute;
+  right: 14px;
+  pointer-events: none;
+}
+.ops-select-icon svg:first-child {
+  color: var(--ops-sub);
+}
+.ops-select-sm {
+  min-width: 150px;
+}
+.ops-select-sm select {
+  font-size: 16px;
+  padding: 9px 28px 9px 0;
+}
+
+/* ---------- Stat tiles ---------- */
+.ops-stats {
+  display: grid;
+  gap: 16px;
+}
+.ops-stats-6 {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+.ops-stats-5 {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+.ops-tile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--ops-card-shadow);
+  color: var(--ops-ink);
+  text-decoration: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+div.ops-tile {
+  cursor: default;
+}
+.ops-tile:hover {
+  border-color: #c9e9d5;
+}
+.ops-tile.on {
+  border-color: var(--ops-green);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.18);
+}
+.ops-tile-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 62px;
+  height: 62px;
+  border-radius: 14px;
+}
+.ops-tile-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.ops-tile-label {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ops-ink);
+}
+.ops-tile-value {
+  font-size: 32px;
+  line-height: 1.15;
+  font-weight: 800;
+  color: var(--ops-ink);
+}
+.ops-tile-foot {
+  font-size: 14px;
+  font-weight: 700;
+}
+.ops-foot-green {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ops-green);
+}
+.ops-foot-red {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #dc2626;
+}
+.ops-foot-muted {
+  color: var(--color-text-muted);
+  font-weight: 600;
+}
+
+/* Tones: light background, coloured icon */
+.tone-green {
+  background: #e3f7ea;
+  color: #16a34a;
+}
+.tone-solid-green {
+  background: #e3f7ea;
+  color: #ffffff;
+}
+.tone-solid-green svg {
+  background: #16a34a;
+  border-radius: 50%;
+  padding: 6px;
+  width: 40px;
+  height: 40px;
+  stroke-width: 2.4;
+}
+.tone-blue {
+  background: #e7f0fe;
+  color: #2563eb;
+}
+.tone-orange {
+  background: #fff1dc;
+  color: #f59e0b;
+}
+.tone-red {
+  background: #fde8e8;
+  color: #dc2626;
+}
+.tone-purple {
+  background: #f1e8fe;
+  color: #8b5cf6;
+}
+.tone-pink {
+  background: #fde7ec;
+  color: #e11d48;
+}
+.tone-gray {
+  background: #eef0f3;
+  color: #4b5563;
+}
+.tone-text-green {
+  color: #16a34a;
+}
+.tone-text-blue {
+  color: #2563eb;
+}
+.tone-text-orange {
+  color: #f59e0b;
+}
+.tone-text-red {
+  color: #dc2626;
+}
+.tone-text-purple {
+  color: #8b5cf6;
+}
+
+/* ---------- Cards ---------- */
+.ops-grid {
+  display: grid;
+  gap: 18px;
+}
+.ops-grid-3 {
+  grid-template-columns: 1.1fr 1.1fr 0.9fr;
+}
+.ops-grid-2 {
+  grid-template-columns: 1.15fr 1fr;
+}
+.ops-grid-wide {
+  grid-template-columns: 1.15fr 1fr;
+}
+.ops-card {
+  padding: 18px 20px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  box-shadow: var(--ops-card-shadow);
+  min-width: 0;
+}
+.ops-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ops-card-head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--ops-ink);
+}
+.ops-card-head h2 svg {
+  color: var(--ops-green);
+}
+.ops-view-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--ops-green);
+  font-size: 16px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+.ops-empty {
+  margin: 8px 0;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.ops-muted {
+  color: var(--color-text-muted);
+}
+
+/* Progress bars */
+.ops-bar {
+  position: relative;
+  display: block;
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--ops-track);
+  overflow: hidden;
+  min-width: 60px;
+}
+.ops-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #12a347 0%, #1fbf55 100%);
+}
+.ops-progress-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.ops-progress-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) 48px;
+  align-items: center;
+  gap: 16px;
+  font-size: 17px;
+}
+.ops-progress-list a {
+  color: var(--ops-ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ops-progress-list strong {
+  text-align: right;
+  color: var(--ops-ink);
+}
+
+/* Donut */
+.ops-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.ops-donut {
+  width: 160px;
+  height: 160px;
+  flex: none;
+}
+.ops-donut-num {
+  font-size: 28px;
+  font-weight: 800;
+  fill: var(--ops-ink);
+}
+.ops-donut-label {
+  font-size: 15px;
+  font-weight: 700;
+  fill: var(--ops-ink);
+}
+.ops-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 16px;
+  color: var(--ops-ink);
+}
+.ops-legend li {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  align-items: center;
+  gap: 10px;
+}
+.ops-legend-num {
+  color: var(--ops-ink);
+}
+.ops-dot {
+  display: inline-block;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+
+/* My Tasks */
+.ops-mytasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ops-mytasks li {
+  display: grid;
+  grid-template-columns: 26px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 17px;
+  color: var(--ops-ink);
+}
+.ops-count {
+  min-width: 56px;
+  padding: 3px 12px;
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 800;
+}
+
+/* Quick actions */
+.ops-quick {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+.ops-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 112px;
+  border: 0;
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ops-ink);
+  cursor: pointer;
+}
+.ops-quick-btn.tone-green svg {
+  color: #16a34a;
+}
+.ops-quick-btn.tone-blue svg {
+  color: #2563eb;
+}
+.ops-quick-btn.tone-purple svg {
+  color: #8b5cf6;
+}
+.ops-quick-btn.tone-pink svg {
+  color: #e11d48;
+}
+.ops-quick-btn:hover {
+  filter: brightness(0.97);
+}
+
+/* Recent activity */
+.ops-activity {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ops-activity li {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+}
+.ops-activity-text {
+  color: var(--ops-ink);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ops-activity-text:hover {
+  text-decoration: underline;
+}
+.ops-activity-time {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  white-space: nowrap;
+}
+.ops-activity-full .ops-activity-text {
+  white-space: normal;
+}
+
+/* Chart */
+.ops-chart-legend {
+  display: flex;
+  gap: 18px;
+  font-size: 15px;
+  color: var(--ops-ink);
+}
+.ops-chart-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ops-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.ops-chart-grid {
+  stroke: var(--ops-track);
+  stroke-width: 1;
+}
+.ops-chart-axis {
+  font-size: 12px;
+  fill: var(--ops-ink);
+}
+
+/* Team workload */
+.ops-workload {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ops-workload li {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto minmax(80px, 1fr) 48px;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  color: var(--ops-ink);
+}
+.ops-workload-count {
+  color: var(--ops-ink);
+  white-space: nowrap;
+}
+.ops-workload-pct {
+  text-align: right;
+}
+.ops-avatar {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2fd46e 0%, #14a24b 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 700;
+}
+.ops-avatar-sm {
+  width: 28px;
+  height: 28px;
+  font-size: 11px;
+}
+.ops-pick-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.ops-pick-list button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
+}
+.ops-pick-list button:hover {
+  border-color: var(--ops-green);
+  background: var(--color-primary-bg);
+}
+
+/* ---------- Projects ---------- */
+.ops-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.ops-search {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+}
+.ops-search input {
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 17px;
+  padding: 13px 0;
+}
+.ops-search-wide {
+  margin-bottom: 12px;
+}
+.ops-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+.ops-table-scroll {
+  overflow-x: auto;
+}
+.ops-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 16px;
+  color: var(--ops-ink);
+}
+.ops-table th {
+  padding: 16px 16px;
+  background: var(--ops-head-bg);
+  border-bottom: 1px solid var(--ops-card-border);
+  text-align: left;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.ops-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ops-card-border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.ops-table tbody tr:hover td {
+  background: var(--ops-head-bg);
+}
+.ops-th-actions {
+  text-align: center;
+}
+.ops-project-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.ops-project-cell > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ops-project-icon {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+}
+.ops-project-icon-sm {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.ops-project-name {
+  color: var(--ops-ink);
+  font-weight: 700;
+  font-size: 17px;
+  text-decoration: none;
+}
+.ops-project-name:hover {
+  color: var(--ops-green);
+}
+.ops-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.ops-tag {
+  padding: 3px 10px;
+  border-radius: 7px;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ops-tag.tone-blue {
+  color: #1d4ed8;
+}
+.ops-tag.tone-purple {
+  color: #6d28d9;
+}
+.ops-tag.tone-pink {
+  color: #be185d;
+}
+.ops-tag.tone-green {
+  color: #15803d;
+}
+.ops-tag.tone-orange {
+  color: #b45309;
+}
+.ops-owner {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.ops-progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 150px;
+}
+.ops-status {
+  display: inline-block;
+  padding: 6px 16px;
+  border-radius: 9px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.status-active {
+  background: #dcfce7;
+  color: #15a34a;
+}
+.status-on_hold {
+  background: #ffedd5;
+  color: #ea7a0c;
+}
+.status-planning {
+  background: #dbeafe;
+  color: #2563eb;
+}
+.status-completed {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+.status-cancelled {
+  background: #eef0f3;
+  color: #4b5563;
+}
+.status-archived {
+  background: #f1e8fe;
+  color: #7c3aed;
+}
+.ops-actions {
+  text-align: center;
+}
+.ops-actions > * {
+  vertical-align: middle;
+}
+.ops-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ops-ink);
+  cursor: pointer;
+}
+.ops-icon-btn:hover {
+  background: var(--color-surface-2);
+}
+.ops-menu {
+  position: relative;
+  display: inline-block;
+  margin-left: 6px;
+}
+.ops-menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+  text-align: left;
+}
+.ops-menu-list a {
+  padding: 9px 12px;
+  border-radius: 8px;
+  color: var(--ops-ink);
+  text-decoration: none;
+  font-size: 15px;
+}
+.ops-menu-list a:hover {
+  background: var(--color-surface-2);
+}
+.ops-table-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 18px 20px;
+  font-size: 17px;
+  color: var(--ops-ink);
+}
+.ops-pager {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ops-page-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  height: 42px;
+  padding: 0 10px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+  font-size: 17px;
+  cursor: pointer;
+}
+.ops-page-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.ops-page-btn.on {
+  border-color: var(--ops-green);
+  background: var(--ops-green);
+  color: #ffffff;
+  font-weight: 700;
+}
+.ops-page-gap {
+  padding: 0 4px;
+  color: var(--color-text-muted);
+}
+
+/* Board view */
+.ops-board {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(220px, 1fr));
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.ops-board-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--ops-head-bg);
+  border: 1px solid var(--ops-card-border);
+  min-width: 220px;
+}
+.ops-board-col > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.ops-board-count {
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+.ops-board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+  text-decoration: none;
+  box-shadow: var(--ops-card-shadow);
+}
+a.ops-board-card:hover {
+  border-color: var(--ops-green);
+}
+.ops-board-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ops-board-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* ---------- Helpdesk ---------- */
+.ops-help-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+.ops-help-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.ops-help-card h3 {
+  margin: 4px 0 0;
+  font-size: 20px;
+  color: var(--ops-ink);
+}
+.ops-help-card p {
+  margin: 0 0 6px;
+  color: var(--color-text-muted);
+  flex: 1;
+}
+.ops-faq {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ops-faq li {
+  border-top: 1px solid var(--ops-card-border);
+}
+.ops-faq button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 4px;
+  border: 0;
+  background: none;
+  color: var(--ops-ink);
+  font-size: 17px;
+  font-weight: 700;
+  text-align: left;
+  cursor: pointer;
+}
+.ops-faq li.open button svg {
+  transform: rotate(180deg);
+}
+.ops-faq-answer {
+  padding: 0 4px 16px;
+  color: var(--color-text);
+  line-height: 1.6;
+}
+.ops-faq-answer a {
+  color: var(--ops-green);
+  font-weight: 600;
+}
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 1099px) {
+  .ops-stats-6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 1099px) {
+  .ops-grid-3,
+  .ops-grid-2,
+  .ops-grid-wide {
+    grid-template-columns: 1fr;
+  }
+  .ops-stats-5 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ops-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ops-search {
+    grid-column: 1 / -1;
+  }
+  .ai-assistant-btn span {
+    display: none;
+  }
+  .ai-assistant-btn {
+    padding: 9px 12px;
+  }
+  .workspace-picker-btn {
+    min-width: 0;
+  }
+}
+@media (max-width: 760px) {
+  .ops-stats-6,
+  .ops-stats-5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ops-quick {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ops-help-cards {
+    grid-template-columns: 1fr;
+  }
+  .ops-filters {
+    grid-template-columns: 1fr;
+  }
+  .ops-page-head h1 {
+    font-size: 28px;
+  }
+  .ops-page-head p {
+    font-size: 16px;
+  }
+  .ops-tile-icon {
+    width: 48px;
+    height: 48px;
+  }
+  .ops-tile-value {
+    font-size: 26px;
+  }
+  .app-header .identity-text,
+  .header-divider {
+    display: none;
+  }
+  .workspace-picker-btn {
+    font-size: 15px;
+    padding: 8px 10px;
+  }
+  .ops-donut-wrap {
+    flex-direction: column;
+  }
+  .ops-workload li {
+    grid-template-columns: 32px minmax(0, 1fr) 48px;
+  }
+  .ops-workload li .ops-workload-count,
+  .ops-workload li .ops-bar {
+    display: none;
+  }
+}
+
+/* ---------- Fixes after comparing with the design ---------- */
+aside.sidebar .sidebar-link.active svg,
+aside.sidebar .sidebar-link svg {
+  color: #ffffff;
+}
+aside.sidebar .sidebar-link::before,
+aside.sidebar .sidebar-link.active::before {
+  display: none;
+}
+aside.sidebar .sidebar-link {
+  position: relative;
+}
+/* The assistant opens from the header's AI Assistant button, as in the design. */
+.app-shell ~ .assistant-launch,
+.assistant-launch {
+  display: none;
+}
+.ops-table th {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 16px;
+  color: var(--ops-ink);
+  padding: 15px 12px;
+}
+.ops-table td {
+  padding: 13px 12px;
+  font-size: 15.5px;
+}
+.ops-table th:first-child,
+.ops-table td:first-child {
+  padding-left: 20px;
+}
+.ops-project-icon {
+  width: 48px;
+  height: 48px;
+}
+.ops-project-name {
+  font-size: 16.5px;
+}
+.ops-tag {
+  font-size: 13.5px;
+  padding: 2px 9px;
+}
+.ops-progress-cell {
+  min-width: 128px;
+}
+.ops-progress-cell .ops-bar {
+  min-width: 70px;
+}
+.ops-status {
+  padding: 5px 14px;
+  font-size: 15px;
+}
+.ops-icon-btn {
+  width: 34px;
+  height: 34px;
+}
+.ops-menu {
+  margin-left: 2px;
+}
+/* Stat tiles: label on one line, like the design */
+.ops-tile {
+  gap: 14px;
+  padding: 16px;
+}
+.ops-tile-icon {
+  width: 54px;
+  height: 54px;
+}
+.ops-tile-icon svg {
+  width: 28px;
+  height: 28px;
+}
+.ops-tile-label {
+  font-size: 16px;
+  white-space: nowrap;
+}
+.ops-tile-foot {
+  font-size: 13px;
+  white-space: nowrap;
+}
+.ops-tile-foot svg {
+  width: 14px;
+  height: 14px;
+}
+.tone-solid-green svg {
+  width: 34px;
+  height: 34px;
+  padding: 5px;
+}
+.ops-board-card-foot .ops-owner,
+.ops-board-card-foot .ops-muted {
+  white-space: nowrap;
+}
+.ops-board-card-foot .ops-owner {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+/* ---------- Richer look: the design's font, darker text, deeper colours ---------- */
+body,
+button,
+input,
+select,
+textarea {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+:root {
+  --ops-ink: #0f1d33;
+  --ops-sub: #1e3a66;
+  --ops-card-border: #e1e7ef;
+  --ops-card-shadow: 0 1px 3px rgba(15, 29, 51, 0.06), 0 10px 28px rgba(15, 29, 51, 0.07);
+  --ops-track: #e2e8f0;
+}
+:root:not([data-theme='dark']) .app-content {
+  background: #eef2f7;
+}
+.ops-page-head h1 {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+.ops-page-head p {
+  font-weight: 500;
+}
+.ops-card-head h2 {
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.ops-tile-label {
+  font-weight: 700;
+}
+.ops-tile-value {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.ops-page svg,
+aside.sidebar svg,
+.app-header svg {
+  stroke-width: 2;
+}
+
+/* Deeper sidebar */
+aside.sidebar {
+  background: linear-gradient(180deg, #0c4a34 0%, #08392a 50%, #052a1f 100%);
+  box-shadow: 4px 0 24px rgba(5, 42, 31, 0.25);
+}
+aside.sidebar .sidebar-link {
+  font-weight: 600;
+}
+aside.sidebar .sidebar-link.active {
+  background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+  box-shadow: 0 6px 18px rgba(22, 163, 74, 0.45);
+}
+.sidebar-sublink.active {
+  background: #22c55e;
+  box-shadow: 0 4px 12px rgba(34, 197, 94, 0.35);
+}
+.ops-badge {
+  background: linear-gradient(180deg, #22c55e 0%, #15983f 100%);
+}
+
+/* Header */
+.app-header {
+  box-shadow: 0 1px 0 #e1e7ef, 0 4px 16px rgba(15, 29, 51, 0.04);
+}
+.ai-assistant-btn {
+  border-color: #c4a1fb;
+  background: linear-gradient(180deg, #f6efff 0%, #ead9ff 100%);
+  color: #6d28d9;
+}
+
+/* Stronger icon tiles */
+.tone-green {
+  background: #d3f6e0;
+  color: #0f9a45;
+}
+.tone-solid-green {
+  background: #d3f6e0;
+}
+.tone-solid-green svg {
+  background: #16a34a;
+}
+.tone-blue {
+  background: #dce9ff;
+  color: #1d5fe0;
+}
+.tone-orange {
+  background: #ffe7c4;
+  color: #e88300;
+}
+.tone-red {
+  background: #ffdcdc;
+  color: #dc2626;
+}
+.tone-purple {
+  background: #ebdfff;
+  color: #7c3aed;
+}
+.tone-pink {
+  background: #ffdce5;
+  color: #e11d48;
+}
+.ops-tile-icon {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+/* Bars, pills and counts */
+.ops-bar {
+  height: 11px;
+}
+.ops-bar > span {
+  background: linear-gradient(90deg, #15a046 0%, #22c55e 100%);
+}
+.ops-count {
+  font-weight: 800;
+}
+.status-active {
+  background: #d1fadf;
+  color: #0f9a45;
+}
+.status-on_hold {
+  background: #ffe4c7;
+  color: #e06c00;
+}
+.status-planning {
+  background: #d6e6ff;
+  color: #1d5fe0;
+}
+.status-completed {
+  background: #dfe3ff;
+  color: #3730a3;
+}
+.status-archived {
+  background: #ebdfff;
+  color: #6d28d9;
+}
+.ops-tag.tone-blue {
+  background: #dce9ff;
+}
+.ops-tag.tone-purple {
+  background: #ebdfff;
+}
+.ops-quick-btn {
+  font-weight: 700;
+  box-shadow: inset 0 0 0 1px rgba(15, 29, 51, 0.04);
+}
+.ops-quick-btn.tone-green {
+  background: #d3f6e0;
+}
+.ops-quick-btn.tone-blue {
+  background: #dce9ff;
+}
+.ops-quick-btn.tone-purple {
+  background: #ebdfff;
+}
+.ops-quick-btn.tone-pink {
+  background: #ffdce5;
+}
+.ops-table th {
+  background: #f3f6fa;
+  font-weight: 700;
+}
+.ops-project-name,
+.ops-progress-list strong,
+.ops-workload strong {
+  font-weight: 700;
+}
+.ops-legend li,
+.ops-mytasks li,
+.ops-progress-list li {
+  font-weight: 500;
+}
+.ops-primary {
+  background: linear-gradient(180deg, #16a34a 0%, #0f7d36 100%);
+  box-shadow: 0 8px 20px rgba(22, 163, 74, 0.35);
+}
+.ops-toggle button.on {
+  background: #d1fadf;
+  color: #0f7d36;
+}
+.ops-quick-btn.tone-green,
+.ops-quick-btn.tone-blue,
+.ops-quick-btn.tone-purple,
+.ops-quick-btn.tone-pink {
+  color: var(--ops-ink);
+}
+
+/* ============ Polish: premium finish ============ */
+
+/* Sizing closer to the design */
+:root {
+  --sidebar-width: 292px;
+}
+aside.sidebar {
+  padding: 20px 16px;
+}
+aside.sidebar .sidebar-brand-row {
+  font-size: 31px;
+  gap: 10px;
+}
+aside.sidebar .sidebar-brand .ops-badge-md {
+  font-size: 21px;
+  padding: 0.42em 1.05em;
+}
+aside.sidebar .sidebar-brand {
+  padding-bottom: 22px;
+}
+aside.sidebar .sidebar-nav {
+  gap: 6px;
+}
+aside.sidebar .sidebar-link {
+  padding: 12px 18px;
+  font-size: 19px;
+  border-radius: 11px;
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+aside.sidebar .sidebar-link svg {
+  width: 24px;
+  height: 24px;
+}
+aside.sidebar .sidebar-link:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.07);
+  transform: translateX(2px);
+}
+.sidebar-sublink {
+  font-size: 17px;
+  padding: 10px 16px;
+  transition: background-color 0.18s ease;
+}
+aside.sidebar .sidebar-nav::-webkit-scrollbar {
+  width: 6px;
+}
+aside.sidebar .sidebar-nav::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+}
+.sidebar-plan {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.sidebar-plan-name {
+  font-size: 24px;
+  letter-spacing: -0.01em;
+}
+.sidebar-plan-btn {
+  font-size: 17px;
+  padding: 11px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.sidebar-plan-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
+}
+
+/* Header */
+.app-header {
+  height: 76px;
+  padding: 0 28px;
+  gap: 16px;
+}
+.app-header .icon-btn svg,
+.header-help svg {
+  width: 25px;
+  height: 25px;
+}
+.app-header .icon-btn,
+.header-help {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  transition: background-color 0.18s ease;
+}
+.app-header .icon-btn:hover,
+.header-help:hover {
+  background: #f1f4f8;
+}
+.workspace-picker-btn {
+  font-size: 19px;
+  padding: 11px 18px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.workspace-picker-btn:hover {
+  box-shadow: 0 4px 12px rgba(15, 29, 51, 0.08);
+}
+.ai-assistant-btn {
+  font-size: 19px;
+  padding: 10px 24px;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.ai-assistant-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.2);
+}
+.ai-assistant-btn svg {
+  fill: #8b5cf6;
+  stroke: #7c3aed;
+}
+.app-header .identity-avatar {
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 4px #d9e2ec;
+}
+
+/* Cards: layered soft shadow and a gentle lift */
+.ops-card,
+.ops-tile {
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 29, 51, 0.05), 0 4px 10px rgba(15, 29, 51, 0.04), 0 16px 32px -12px rgba(15, 29, 51, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+a.ops-tile:hover,
+button.ops-tile:hover {
+  transform: translateY(-3px);
+  border-color: #b8e8c9;
+  box-shadow: 0 2px 4px rgba(15, 29, 51, 0.05), 0 18px 36px -14px rgba(15, 29, 51, 0.22);
+}
+.ops-card {
+  padding: 20px 22px;
+}
+.ops-grid {
+  gap: 20px;
+}
+.ops-stats {
+  gap: 18px;
+}
+.ops-tile-value,
+.ops-count,
+.ops-table td,
+.ops-legend-num,
+.ops-progress-list strong,
+.ops-workload-pct,
+.ops-range {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Entrance: cards rise in, one after another */
+@keyframes ops-rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ops-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+.ops-page-head,
+.ops-stats > *,
+.ops-grid > *,
+.ops-filters,
+.ops-table-card,
+.ops-help-cards > * {
+  animation: ops-rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.ops-stats > :nth-child(2) { animation-delay: 0.04s; }
+.ops-stats > :nth-child(3) { animation-delay: 0.08s; }
+.ops-stats > :nth-child(4) { animation-delay: 0.12s; }
+.ops-stats > :nth-child(5) { animation-delay: 0.16s; }
+.ops-stats > :nth-child(6) { animation-delay: 0.2s; }
+.ops-grid > :nth-child(2) { animation-delay: 0.08s; }
+.ops-grid > :nth-child(3) { animation-delay: 0.14s; }
+.ops-bar > span {
+  transform-origin: left center;
+  animation: ops-grow 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Buttons and controls */
+.ops-primary,
+.ops-quick-btn,
+.ops-toggle button,
+.ops-page-btn,
+.ops-view-all {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, filter 0.18s ease;
+}
+.ops-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(22, 163, 74, 0.38);
+}
+.ops-quick-btn:hover {
+  transform: translateY(-3px);
+  filter: none;
+  box-shadow: 0 12px 24px -10px rgba(15, 29, 51, 0.25);
+}
+.ops-view-all:hover {
+  transform: translateX(2px);
+}
+.ops-page-btn:hover:not(:disabled):not(.on) {
+  border-color: #b8e8c9;
+  background: #f3fcf6;
+}
+.ops-select,
+.ops-search,
+.ops-range {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  box-shadow: 0 1px 2px rgba(15, 29, 51, 0.04);
+}
+.ops-select:focus-within,
+.ops-search:focus-within {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+}
+.ops-select:hover,
+.ops-search:hover {
+  border-color: #c9d3df;
+}
+
+/* Table */
+.ops-table tbody tr {
+  transition: background-color 0.15s ease;
+}
+.ops-table tbody tr:hover td {
+  background: #f5fbf7;
+}
+.ops-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.ops-project-icon {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+}
+.ops-avatar {
+  box-shadow: 0 2px 6px rgba(22, 163, 74, 0.3);
+}
+.ops-status {
+  letter-spacing: 0.01em;
+}
+
+/* Dashboard details */
+.ops-donut {
+  width: 172px;
+  height: 172px;
+  filter: drop-shadow(0 6px 14px rgba(15, 29, 51, 0.08));
+}
+.ops-legend li {
+  font-size: 16.5px;
+}
+.ops-mytasks li {
+  padding: 4px 0;
+}
+.ops-count {
+  min-width: 58px;
+  padding: 5px 12px;
+  border-radius: 9px;
+}
+.ops-activity li {
+  padding: 3px 0;
+}
+.ops-workload li {
+  padding: 2px 0;
+}
+.ops-card-head h2 svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* Login page polish */
+.si-ops .si-input {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.si-ops .si-input:focus-within {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.15);
+}
+.si-ops .si-submit,
+.si-sso,
+.si-tiles li {
+  transition: transform 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+}
+.si-ops .si-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(22, 163, 74, 0.38);
+}
+.si-sso:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(22, 163, 74, 0.15);
+}
+.si-tiles li:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px -10px rgba(22, 163, 74, 0.45);
+}
+.si-ops .si-card {
+  box-shadow: 0 2px 4px rgba(15, 29, 51, 0.04), 0 24px 60px -20px rgba(15, 29, 51, 0.2);
+}
+.si-feature-icon {
+  transition: transform 0.2s ease;
+}
+.si-features li:hover .si-feature-icon {
+  transform: translateY(-2px) scale(1.03);
+}
+.si-ops .si-brand > *,
+.si-ops .si-card {
+  animation: ops-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-page-head,
+  .ops-stats > *,
+  .ops-grid > *,
+  .ops-filters,
+  .ops-table-card,
+  .ops-help-cards > *,
+  .ops-bar > span,
+  .si-ops .si-brand > *,
+  .si-ops .si-card {
+    animation: none;
+  }
+  .ops-card,
+  .ops-tile,
+  .ops-quick-btn,
+  .ops-primary {
+    transition: none;
+  }
+}
+
+/* Polish follow-ups */
+.ops-card.ops-table-card {
+  padding: 0;
+}
+aside.sidebar .sidebar-nav {
+  gap: 3px;
+}
+aside.sidebar .sidebar-link {
+  padding: 11px 18px;
+}
+.sidebar-sub {
+  padding: 4px 0 2px 34px;
+  gap: 3px;
+}
+.sidebar-sublink {
+  padding: 9px 16px;
+}
+aside.sidebar .sidebar-brand {
+  padding-bottom: 16px;
+}
+.ops-stats-6 .ops-tile {
+  gap: 12px;
+  padding: 16px 14px;
+}
+.ops-stats-6 .ops-tile-icon {
+  width: 50px;
+  height: 50px;
+}
+.ops-stats-6 .ops-tile-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.ops-stats-6 .ops-tile-label {
+  font-size: 15.5px;
+}
+.ops-stats-6 .ops-tile-foot {
+  font-size: 12.5px;
+}
+.ops-tile-text {
+  overflow: hidden;
+}
+.ops-progress-list li {
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr) 46px;
+  gap: 14px;
+}
+.ops-stats-6 .ops-tile {
+  gap: 10px;
+  padding: 16px 12px;
+}
+.ops-stats-6 .ops-tile-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+}
+.ops-stats-6 .ops-tile-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.ops-stats-6 .tone-solid-green svg {
+  width: 30px;
+  height: 30px;
+}
+.ops-stats-6 .ops-tile-label {
+  font-size: 15px;
+}
+.ops-stats-6 .ops-tile-foot {
+  font-size: 12px;
+}
+.ops-stats-6 .ops-tile-foot svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* ============ Fit each page in one window, like the design (1672 x 941) ============ */
+.app-content:has(.ops-page) {
+  padding: 18px 24px 16px;
+}
+.ops-page {
+  gap: 14px;
+}
+.ops-page-head h1 {
+  font-size: 33px;
+  line-height: 1.15;
+}
+.ops-page-head p {
+  font-size: 17px;
+  margin-top: 2px;
+}
+.ops-head-actions .ops-toggle button {
+  padding: 8px 22px;
+}
+.ops-head-actions .ops-primary {
+  padding: 11px 24px;
+}
+.ops-period .ops-select select {
+  padding: 10px 28px 10px 0;
+}
+.ops-range {
+  padding: 10px 18px;
+}
+
+/* Home */
+.ops-home .ops-stats-6 .ops-tile {
+  padding: 13px 12px;
+}
+.ops-home .ops-tile-value {
+  font-size: 28px;
+}
+.ops-home .ops-card {
+  padding: 14px 18px;
+}
+.ops-home .ops-card-head {
+  margin-bottom: 8px;
+}
+.ops-home .ops-card-head h2 {
+  font-size: 19px;
+}
+.ops-home .ops-grid {
+  gap: 14px;
+}
+.ops-home .ops-progress-list {
+  gap: 13px;
+}
+.ops-home .ops-progress-list li,
+.ops-home .ops-mytasks li,
+.ops-home .ops-legend li {
+  font-size: 15.5px;
+}
+.ops-home .ops-donut {
+  width: 138px;
+  height: 138px;
+}
+.ops-home .ops-legend {
+  gap: 9px;
+}
+.ops-home .ops-mytasks {
+  gap: 7px;
+}
+.ops-home .ops-mytasks li {
+  padding: 0;
+}
+.ops-home .ops-count {
+  padding: 2px 12px;
+}
+.ops-home .ops-quick-btn {
+  min-height: 92px;
+  gap: 7px;
+  font-size: 16px;
+}
+.ops-home .ops-quick-btn svg {
+  width: 30px;
+  height: 30px;
+}
+.ops-home .ops-activity {
+  gap: 7px;
+}
+.ops-home .ops-activity li {
+  padding: 1px 0;
+  font-size: 15px;
+}
+.ops-home .ops-workload {
+  gap: 9px;
+}
+.ops-home .ops-workload li {
+  padding: 0;
+  font-size: 15px;
+}
+.ops-home .ops-workload .ops-avatar {
+  width: 34px;
+  height: 34px;
+  font-size: 12px;
+}
+.ops-home .ops-workload li {
+  grid-template-columns: 34px minmax(0, 1fr) auto minmax(80px, 1fr) 44px;
+}
+
+/* Projects */
+.ops-projects .ops-tile {
+  padding: 13px 16px;
+}
+.ops-projects .ops-table th {
+  padding: 13px 12px;
+}
+.ops-projects .ops-table td {
+  padding: 10px 12px;
+}
+.ops-projects .ops-project-icon {
+  width: 46px;
+  height: 46px;
+}
+.ops-projects .ops-table-foot {
+  padding: 12px 20px;
+}
+.ops-projects .ops-page-btn {
+  height: 38px;
+  min-width: 38px;
+}
+.ops-projects .ops-search input {
+  padding: 11px 0;
+}
+.ops-projects .ops-select select {
+  padding: 10px 28px 10px 0;
+}
+.ops-home {
+  gap: 12px;
+}
+.ops-home .ops-grid {
+  gap: 12px;
+}
+.app-content:has(.ops-home) {
+  padding: 14px 24px 12px;
+}
+
+/* ============ Larger, easier-to-read text inside the product ============ */
+.ops-page-head h1 {
+  font-size: 34px;
+}
+.ops-page-head p {
+  font-size: 18px;
+}
+.ops-card-head h2,
+.ops-home .ops-card-head h2 {
+  font-size: 21px;
+}
+.ops-view-all {
+  font-size: 17px;
+}
+.ops-tile-label,
+.ops-stats-6 .ops-tile-label {
+  font-size: 16.5px;
+}
+.ops-stats-6 .ops-tile-foot,
+.ops-tile-foot {
+  font-size: 13.5px;
+}
+.ops-home .ops-tile-value {
+  font-size: 30px;
+}
+.ops-home .ops-progress-list li,
+.ops-home .ops-mytasks li,
+.ops-home .ops-legend li,
+.ops-progress-list li,
+.ops-mytasks li,
+.ops-legend li {
+  font-size: 17px;
+}
+.ops-home .ops-activity li,
+.ops-activity li {
+  font-size: 16.5px;
+}
+.ops-activity-time {
+  font-size: 15px;
+}
+.ops-home .ops-workload li,
+.ops-workload li {
+  font-size: 16.5px;
+}
+.ops-home .ops-quick-btn {
+  font-size: 17.5px;
+}
+.ops-chart-axis {
+  font-size: 13.5px;
+}
+.ops-chart-legend {
+  font-size: 16px;
+}
+.ops-donut-label {
+  font-size: 16px;
+}
+.ops-count {
+  font-size: 16px;
+}
+.ops-table {
+  font-size: 17px;
+}
+.ops-table th {
+  font-size: 17px;
+}
+.ops-table td,
+.ops-projects .ops-table td {
+  font-size: 17px;
+}
+.ops-project-name {
+  font-size: 18px;
+}
+.ops-tag {
+  font-size: 14.5px;
+}
+.ops-status {
+  font-size: 16px;
+}
+.ops-table-foot,
+.ops-search input,
+.ops-select select {
+  font-size: 17.5px;
+}
+.ops-faq button {
+  font-size: 18px;
+}
+.ops-faq-answer,
+.ops-help-card p {
+  font-size: 16.5px;
+}
+.ops-help-card h3 {
+  font-size: 21px;
+}
+/* Keep Home inside one window with the larger text */
+.ops-home .ops-mytasks {
+  gap: 5px;
+}
+.ops-home .ops-progress-list {
+  gap: 12px;
+}
+.ops-home .ops-legend {
+  gap: 8px;
+}
+.ops-home .ops-quick-btn {
+  min-height: 88px;
+}
+.ops-home .ops-activity {
+  gap: 6px;
+}
+.ops-home .ops-workload {
+  gap: 7px;
+}
+
+/* Pages not redesigned yet (Tasks, Team, Settings, a project's pages): larger too. They scroll. */
+.app-content > :not(.ops-page) {
+  zoom: 1.15;
+}
+.ops-home .ops-workload {
+  gap: 4px;
+}
+.ops-home .ops-workload .ops-avatar {
+  width: 31px;
+  height: 31px;
+  font-size: 11.5px;
+}
+.ops-home .ops-workload li {
+  grid-template-columns: 31px minmax(0, 1fr) auto minmax(80px, 1fr) 46px;
+}
+.ops-home .ops-card-head {
+  margin-bottom: 6px;
+}
+
+/* Profile photos in any avatar circle */
+.has-photo {
+  overflow: hidden;
+  padding: 0 !important;
+  background: #e5eaf0 !important;
+}
+.has-photo > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+.ws-photo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.ws-photo-preview {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #2fd46e 0%, #14a24b 100%);
+  color: #ffffff;
+  font-size: 22px;
+  font-weight: 700;
+  box-shadow: 0 0 0 3px #ffffff, 0 0 0 4px #d9e2ec;
+}
+
+/* Projects table: keep every column inside the card with the larger text */
+.ops-projects .ops-table td:nth-child(1),
+.ops-projects .ops-table td:nth-child(2),
+.ops-projects .ops-table td:nth-child(3) {
+  white-space: normal;
+}
+.ops-projects .ops-table td:nth-child(2) {
+  max-width: 190px;
+}
+.ops-projects .ops-table td:nth-child(3) {
+  max-width: 190px;
+}
+.ops-projects .ops-table th,
+.ops-projects .ops-table td {
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.ops-projects .ops-progress-cell {
+  min-width: 112px;
+}
+.ops-projects .ops-progress-cell .ops-bar {
+  min-width: 56px;
+}
+.ops-projects .ops-owner {
+  gap: 8px;
+}
+.ops-table-scroll {
+  overflow-x: auto;
+}
+
+/* ============ AI Assistant panel: larger and easy to read ============ */
+.assistant-panel {
+  right: 24px;
+  bottom: 20px;
+  width: min(580px, calc(100vw / var(--app-zoom, 1) - 40px));
+  height: min(860px, calc(100vh / var(--app-zoom, 1) - 100px));
+  border-radius: 18px;
+  box-shadow: 0 2px 6px rgba(15, 29, 51, 0.08), 0 28px 70px -12px rgba(15, 29, 51, 0.38);
+}
+.assistant-head {
+  padding: 14px 18px;
+}
+.assistant-head .assistant-avatar {
+  width: 48px;
+  height: 48px;
+}
+.assistant-title strong {
+  font-size: 20px;
+}
+.assistant-status {
+  font-size: 14.5px;
+}
+.assistant-head .icon-btn {
+  width: 40px;
+  height: 40px;
+}
+.assistant-head .icon-btn svg {
+  width: 20px;
+  height: 20px;
+}
+.assistant-body {
+  padding: 18px 20px;
+}
+.assistant-welcome img {
+  width: 104px;
+  height: 104px;
+}
+.assistant-welcome h2 {
+  font-size: 24px;
+  margin: 10px 0 6px;
+}
+.assistant-welcome p,
+.assistant-note {
+  font-size: 16.5px;
+  line-height: 1.5;
+}
+.assistant-suggestions {
+  gap: 9px;
+}
+.assistant-chip {
+  padding: 9px 15px;
+  font-size: 15.5px;
+}
+.assistant-line {
+  max-width: 90%;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  font-size: 17px;
+  line-height: 1.55;
+}
+.assistant-line.from-note {
+  font-size: 14.5px;
+}
+.assistant-row {
+  gap: 10px;
+}
+.assistant-row-avatar {
+  width: 36px !important;
+  height: 36px !important;
+}
+.assistant-approval {
+  font-size: 16.5px;
+  padding: 14px 16px;
+}
+.assistant-approval strong {
+  font-size: 17px;
+}
+.assistant-approval .btn {
+  font-size: 15.5px;
+  padding: 8px 18px;
+}
+.assistant-input {
+  padding: 14px 16px;
+  gap: 10px;
+}
+.assistant-input textarea {
+  font-size: 17px;
+  line-height: 1.45;
+  padding: 12px 14px;
+  min-height: 56px;
+}
+.assistant-mic,
+.assistant-send {
+  width: 48px;
+  height: 48px;
+}
+.assistant-mic svg,
+.assistant-send svg {
+  width: 22px;
+  height: 22px;
+}
+.assistant-voicebar {
+  font-size: 15px;
+  padding: 9px 14px;
+  margin: 0 16px;
+}
+.assistant-voicebar-end {
+  font-size: 14px;
+  padding: 5px 14px;
+}
+.assistant-typing span {
+  width: 9px;
+  height: 9px;
+}
+
+/* The assistant panel keeps a comfortable size even when the app is scaled down to fit. */
+.assistant-panel {
+  zoom: var(--panel-zoom, 1);
+  width: min(460px, calc(100vw / var(--panel-effective, 1) - 32px));
+  height: min(680px, calc(100vh / var(--panel-effective, 1) - 90px));
+  right: 20px;
+  bottom: 16px;
+}
+.assistant-working {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.assistant-working .assistant-typing {
+  display: inline-flex;
+  gap: 4px;
+  padding: 0;
+  background: none;
+}
+.assistant-working-text {
+  color: var(--ops-ink);
+  font-weight: 500;
+}
+.assistant-working-time {
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.assistant-stop {
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.assistant-stop:hover {
+  border-color: #dc2626;
+  color: #dc2626;
+}
+
+/* Quicker page changes */
+.ops-page-head,
+.ops-stats > *,
+.ops-grid > *,
+.ops-filters,
+.ops-table-card,
+.ops-help-cards > * {
+  animation-duration: 0.22s;
+}
+.ops-stats > :nth-child(n) { animation-delay: 0s; }
+.ops-grid > :nth-child(n) { animation-delay: 0s; }
+.ops-bar > span {
+  animation-duration: 0.45s;
+}
+
+/* The < / > button on the sidebar's edge: shrinks the navigation to icons, or expands it again. */
+:root {
+  --sidebar-width-collapsed: 84px;
+}
+.sidebar-collapse-btn {
+  position: absolute;
+  top: 118px;
+  right: -15px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 2px solid #ffffff;
+  background: #22c55e;
+  color: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(5, 42, 31, 0.35);
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.sidebar-collapse-btn:hover {
+  background: #16a34a;
+  transform: scale(1.08);
+}
+.sidebar-collapse-btn:focus-visible {
+  outline: 3px solid #86efac;
+  outline-offset: 2px;
+}
+.sidebar-collapse-btn svg {
+  stroke-width: 2.6;
+}
+aside.sidebar.collapsed .sidebar-collapse-btn {
+  top: 70px;
+}
+aside.sidebar.collapsed .sidebar-brand {
+  padding: 4px 0 18px;
+}
+aside.sidebar.collapsed .sidebar-divider {
+  margin-left: 6px;
+  margin-right: 6px;
+}
+
+/* ============ A little larger text again, and bigger search bars ============ */
+.ops-page-head p {
+  font-size: 19.5px;
+}
+.ops-card-head h2,
+.ops-home .ops-card-head h2 {
+  font-size: 22.5px;
+}
+.ops-view-all {
+  font-size: 18px;
+}
+.ops-tile-label,
+.ops-stats-6 .ops-tile-label {
+  font-size: 18px;
+}
+.ops-stats-6 .ops-tile-foot,
+.ops-tile-foot {
+  font-size: 14.5px;
+}
+.ops-home .ops-progress-list li,
+.ops-home .ops-mytasks li,
+.ops-home .ops-legend li,
+.ops-progress-list li,
+.ops-mytasks li,
+.ops-legend li {
+  font-size: 18px;
+}
+.ops-home .ops-activity li,
+.ops-activity li,
+.ops-home .ops-workload li,
+.ops-workload li {
+  font-size: 17.5px;
+}
+.ops-activity-time {
+  font-size: 16px;
+}
+.ops-home .ops-quick-btn {
+  font-size: 18.5px;
+}
+.ops-chart-axis {
+  font-size: 14.5px;
+}
+.ops-chart-legend,
+.ops-donut-label,
+.ops-count {
+  font-size: 17px;
+}
+.ops-table,
+.ops-table th,
+.ops-table td,
+.ops-projects .ops-table td {
+  font-size: 18px;
+}
+.ops-project-name {
+  font-size: 19px;
+}
+.ops-tag {
+  font-size: 15.5px;
+}
+.ops-status {
+  font-size: 17px;
+}
+.ops-table-foot,
+.ops-select select {
+  font-size: 18.5px;
+}
+.ops-faq button {
+  font-size: 19px;
+}
+.ops-faq-answer,
+.ops-help-card p {
+  font-size: 17.5px;
+}
+
+/* Search bars: larger writing and a taller box. */
+.ops-search input,
+.ops-projects .ops-search input {
+  font-size: 20px;
+  padding: 13px 0;
+}
+.ops-search svg {
+  width: 22px;
+  height: 22px;
+}
+.header-search-pop {
+  width: min(520px, 80vw);
+  padding: 14px 16px;
+}
+.header-search-pop input {
+  font-size: 19px;
+}
+.header-search-pop kbd {
+  font-size: 13px;
+}
+
+/* Keep the larger text inside one window: no wrapping names, nothing cut off. */
+.ops-filters {
+  grid-template-columns: minmax(0, 2.3fr) repeat(3, minmax(0, 1fr));
+}
+.ops-search input,
+.ops-projects .ops-search input {
+  font-size: 19px;
+}
+.ops-table td,
+.ops-projects .ops-table td {
+  font-size: 17.5px;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.ops-table th {
+  font-size: 17.5px;
+}
+.ops-owner,
+.ops-tags,
+.ops-status {
+  white-space: nowrap;
+}
+.ops-tags {
+  flex-wrap: nowrap;
+}
+.ops-project-name {
+  font-size: 18.5px;
+  white-space: nowrap;
+}
+.ops-tag {
+  font-size: 15px;
+}
+.ops-projects .ops-table-foot,
+.ops-projects .ops-select select {
+  font-size: 18px;
+}
+/* Home has six tiles in a row, so its labels stay a touch smaller to fit. */
+.ops-home .ops-stats-6 .ops-tile-label,
+.ops-stats-6 .ops-tile-label {
+  font-size: 17px;
+}
+.ops-home .ops-progress-list li,
+.ops-home .ops-mytasks li,
+.ops-home .ops-legend li {
+  font-size: 17.5px;
+}
+.ops-home .ops-activity li,
+.ops-home .ops-workload li {
+  font-size: 17px;
+}
+.ops-home .ops-stats-6 .ops-tile-label,
+.ops-stats-6 .ops-tile-label {
+  font-size: 16.5px;
+}
+.ops-home .ops-stats-6 .ops-tile-foot,
+.ops-stats-6 .ops-tile-foot {
+  font-size: 13.5px;
+}
+.ops-home {
+  gap: 10px;
+}
+.ops-home .ops-grid {
+  gap: 10px;
+}
+
+/* ============ V3 screens: Home, Tasks, Reports, project tabs ============ */
+.ops-stats-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.ops-stats-7 {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 12px;
+}
+.ops-stats-7 .ops-tile {
+  gap: 10px;
+  padding: 16px 12px;
+}
+.ops-stats-7 .ops-tile-icon {
+  width: 46px;
+  height: 46px;
+}
+.ops-stats-7 .ops-tile-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.ops-stats-7 .ops-tile-label {
+  font-size: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+a.ops-tile {
+  text-decoration: none;
+  color: inherit;
+}
+.ops-filters-5 {
+  grid-template-columns: minmax(0, 1.9fr) repeat(4, minmax(0, 1fr));
+}
+.ops-quick-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ops-home .ops-grid-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* Home: my next tasks */
+.ops-home-tasks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ops-home-tasks li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto 104px;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--ops-card-border);
+  font-size: 18px;
+}
+.ops-home-tasks li:last-child {
+  border-bottom: 0;
+}
+.ops-home-task-name {
+  color: var(--ops-ink);
+  font-weight: 600;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ops-home-task-name:hover {
+  color: #16a34a;
+}
+.ops-home-task-project {
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 16.5px;
+}
+.ops-home-task-due {
+  text-align: right;
+  font-size: 16.5px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+.ops-home-task-due.today {
+  color: #c2410c;
+  font-weight: 700;
+}
+.ops-home-task-due.overdue {
+  color: #dc2626;
+  font-weight: 700;
+}
+.ops-no-tasks {
+  grid-column: 2 / 4;
+  color: var(--color-text-faint);
+  font-size: 16px;
+  font-style: italic;
+}
+
+/* Tasks and Reports tables */
+.ops-overdue {
+  color: #dc2626;
+}
+.ops-overdue-tag {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 14px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.ops-progress-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+.ops-progress-cell .ops-bar {
+  width: 110px;
+}
+.ops-bar-wide {
+  display: block;
+  width: 100%;
+  min-width: 140px;
+}
+.ops-report-grid {
+  grid-template-columns: 1fr 1.35fr;
+}
+.ops-subhead {
+  margin: 18px 0 8px;
+  font-size: 18px;
+  color: var(--ops-ink);
+}
+.ops-priority-list li a {
+  color: var(--ops-ink);
+  text-decoration: none;
+  flex: 1;
+}
+.ops-reports .ops-table-card,
+.ops-tasks .ops-table-card {
+  flex: 1;
+}
+
+/* Project tasks: List / Board switch */
+.list-board-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 14px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+  background: var(--color-surface);
+}
+.list-board-switch a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 9px;
+  color: var(--ops-ink);
+  font-size: 17px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.list-board-switch a.active {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+/* Task details */
+.task-history li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.more-details-toggle {
+  justify-self: start;
+}
+.field-static {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-surface-muted, #f8fafc);
+  color: var(--color-text);
+}
+.field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+
+@media (max-width: 1099px) {
+  .ops-stats-7,
+  .ops-stats-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ops-filters-5 {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ops-report-grid,
+  .ops-home .ops-grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .ops-home-tasks li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ops-home-task-project {
+    display: none;
+  }
+}
+
+/* ============ Page text: a step larger again (cards and tables) ============ */
+.ops-table,
+.ops-table th,
+.ops-table td,
+.ops-projects .ops-table td {
+  font-size: 18.5px;
+}
+.ops-table th {
+  font-size: 18px;
+}
+.ops-project-name {
+  font-size: 19.5px;
+}
+.ops-tag {
+  font-size: 15.5px;
+}
+.ops-status {
+  font-size: 17.5px;
+}
+.ops-tile-label,
+.ops-stats-5 .ops-tile-label,
+.ops-stats-4 .ops-tile-label {
+  font-size: 19px;
+}
+.ops-card-head h2,
+.ops-home .ops-card-head h2 {
+  font-size: 23.5px;
+}
+.ops-home .ops-progress-list li,
+.ops-progress-list li,
+.ops-mytasks li,
+.ops-legend li {
+  font-size: 19px;
+}
+.ops-home .ops-activity li,
+.ops-activity li,
+.ops-workload li {
+  font-size: 18.5px;
+}
+.ops-home-tasks li {
+  font-size: 19px;
+}
+.ops-home-task-project,
+.ops-home-task-due,
+.ops-activity-time {
+  font-size: 17px;
+}
+.ops-home .ops-quick-btn {
+  font-size: 19.5px;
+}
+.ops-page-head p {
+  font-size: 20px;
+}
+.ops-table-foot,
+.ops-select select,
+.ops-projects .ops-select select {
+  font-size: 18.5px;
+}
+.ops-empty {
+  font-size: 18px;
+}
+
+/* Sidebar: with a section open, the links scroll and never slide under the plan card. */
+aside.sidebar .sidebar-nav {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+}
+aside.sidebar .sidebar-plan {
+  flex-shrink: 0;
+  padding: 12px 14px;
+}
+aside.sidebar .sidebar-plan-valid {
+  display: none;
+}
+aside.sidebar .sidebar-plan-btn {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+/* ============ Project pages (Overview, Tasks, Board, Members, Activity, task details): larger and roomier ============ */
+.app-content > :not(.ops-page) {
+  zoom: 1.28;
+}
+.pj-content .overview-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+}
+.pj-content .overview-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.pj-content .overview-col .card + .card {
+  margin-top: 0;
+}
+.pj-content .overview-grid .kv {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+}
+.pj-content .work-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.pj-content .work-item > a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pj-content .work-item > span {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Home: seven tiles keep their whole labels on two lines rather than cutting them off. */
+.ops-stats-7 .ops-tile-label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  line-height: 1.2;
+  font-size: 16px;
+}
+
+/* Projects table: the larger text without the table running sideways. */
+.ops-projects .ops-table th,
+.ops-projects .ops-table td {
+  padding-left: 9px;
+  padding-right: 9px;
+}
+.ops-projects .ops-table td {
+  font-size: 18px;
+}
+.pj-content .overview-grid {
+  align-items: start;
+}
+.ops-projects .ops-progress-cell .ops-bar,
+.ops-projects .ops-table .ops-bar {
+  width: 64px;
+  min-width: 64px;
+}
+.ops-projects .ops-table th,
+.ops-projects .ops-table td {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.ops-priority-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ops-priority-list .ops-count {
+  flex: 0 0 auto;
+  min-width: 52px;
+  text-align: center;
+}
+
+/* ============ Readable floor (measured on a 1366x768 laptop) ============
+   Operations pages are drawn at 1672x941 and scaled to fit (0.816 on a laptop), so these sizes
+   are chosen to land at about 16px for reading text and at least 14px for badges and labels. */
+.ops-page .ops-table td,
+.ops-page .ops-table td a,
+.ops-page .ops-table td span,
+.ops-page .ops-table td strong,
+.ops-page .ops-owner,
+.ops-page .ops-table-foot,
+.ops-page .ops-table-foot span,
+.ops-page .ops-empty,
+.ops-page .ops-faq-answer,
+.ops-page .ops-faq-answer a,
+.ops-page .ops-faq-answer b,
+.ops-page .ops-activity-text,
+.ops-page .ops-home-tasks li,
+.ops-page .ops-progress-list li,
+.ops-page .ops-mytasks li,
+.ops-page .ops-legend li {
+  font-size: 20px;
+}
+.ops-page .ops-table th {
+  font-size: 19px;
+}
+.ops-page .ops-project-name {
+  font-size: 20.5px;
+}
+.ops-page .badge,
+.ops-page .ops-tag,
+.ops-page .ops-status,
+.ops-page .ops-role,
+.ops-page .ops-chip,
+.ops-page .ops-count,
+.ops-page .ops-soon-badge,
+.ops-page .ops-overdue-tag,
+.ops-page .ops-avatar,
+.ops-page .ops-page-btn {
+  font-size: 17.5px;
+}
+.ops-page .badge {
+  padding: 3px 10px;
+}
+.ops-page .ops-tile-label,
+.ops-page .ops-stats-7 .ops-tile-label {
+  font-size: 20px;
+}
+.ops-page .ops-stats-7 .ops-tile-label {
+  font-size: 18px;
+}
+.ops-page .ops-view-all,
+.ops-page .ops-home-task-project,
+.ops-page .ops-home-task-due,
+.ops-page .ops-activity-time,
+.ops-page .ops-range,
+.ops-page .ops-link-btn,
+.ops-page .ops-ghost-btn,
+.ops-page .ops-subhead,
+.ops-page .ops-muted,
+.ops-page .ops-notice,
+.ops-page .ops-field-note,
+.ops-page .ops-head-actions button,
+.ops-page .ops-toggle button,
+.ops-page .ops-card p,
+.ops-page .ops-card label > span,
+.ops-page .ops-card li span,
+.ops-page .ops-card strong,
+.ops-page .ops-card em,
+.ops-page .ops-card b {
+  font-size: 18.5px;
+}
+.ops-page .ops-chart-axis,
+.ops-page .ops-donut-label {
+  font-size: 17px;
+}
+
+/* Project pages (Overview, Tasks, Board, Members, Activity, task details) */
+.app-content > :not(.ops-page) {
+  zoom: 1.4;
+}
+.pj-content .badge,
+.pj-header .badge,
+.pj-content th,
+.pj-content dt,
+.pj-content label,
+.pj-content .text-faint,
+.pj-content .text-muted,
+.pj-content .task-side-meta,
+.pj-content .task-avatar,
+.pj-header .pj-meta-item,
+.pj-content .card-title-row a,
+.pj-content .task-back {
+  font-size: 13px;
+}
+.pj-content .btn-sm,
+.pj-header .btn-sm {
+  font-size: 13.5px;
+}
+.ops-projects .ops-dates {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+.ops-projects .ops-dates span:last-child {
+  color: var(--ops-ink);
+  font-weight: 600;
+}
+.pj-content .filter-bar label,
+.pj-content .kanban-column .text-muted {
+  font-size: 13px;
+}
+.ops-page .ops-stats-7 .ops-tile {
+  padding: 14px 10px;
+  gap: 8px;
+}
+.ops-page .ops-stats-7 .ops-tile-icon {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+}
+.ops-page .ops-stats-7 .ops-tile-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.ops-page .ops-stats-7 .ops-tile-label {
+  font-size: 17.5px;
+  overflow-wrap: anywhere;
+}
+
+/* ============ Dark mode: every label readable ============ */
+.ops-table th,
+.ops-page .ops-table th {
+  background: var(--ops-head-bg);
+  color: var(--ops-ink);
+}
+.sidebar-sublink.active {
+  background: #16a34a;
+}
+.status-on_hold {
+  background: #ffe4c7;
+  color: #9a3412;
+}
+/* Quick actions keep their light colours in both themes, so their words stay dark. */
+.ops-quick-btn.tone-green,
+.ops-quick-btn.tone-blue,
+.ops-quick-btn.tone-purple,
+.ops-quick-btn.tone-pink {
+  color: #1d2b45;
+}
+:root[data-theme='dark'] .ops-chip.tone-orange {
+  background: #ffedd5;
+  color: #9a3412;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .ops-chip.tone-orange {
+    background: #ffedd5;
+    color: #9a3412;
+  }
+}
+
+/* Light mode: green words use a deeper green so they read clearly on white (buttons keep the brand green). */
+:root:not([data-theme='dark']) .app-content a:not(.btn):not(.ops-primary):not(.ops-tile):not(.ops-quick-btn),
+:root:not([data-theme='dark']) .app-content .link-btn,
+:root:not([data-theme='dark']) .app-content .tab-link.active,
+:root:not([data-theme='dark']) .app-content .task-tab.active,
+:root:not([data-theme='dark']) .app-content .badge-primary,
+:root:not([data-theme='dark']) .app-content .ops-view-all,
+:root:not([data-theme='dark']) .app-content .ops-link-btn:not(.danger) {
+  color: #0f7a3d;
+}
+:root:not([data-theme='dark']) .app-content .ops-project-name,
+:root:not([data-theme='dark']) .app-content .ops-home-task-name {
+  color: var(--ops-ink);
+}
+:root:not([data-theme='dark']) .app-content .ops-chip.tone-orange {
+  color: #9a3412;
+}
+:root:not([data-theme='dark']) .app-content .text-faint,
+:root:not([data-theme='dark']) .app-content dt,
+:root:not([data-theme='dark']) .pj-content th {
+  color: #5f6478;
+}
+:root:not([data-theme='dark']) .task-avatar.sm {
+  color: #0f5132;
+}
+
+/* Dark mode hover: rows and buttons light up gently instead of turning white. */
+:root[data-theme='dark'] .ops-table tbody tr:hover td {
+  background: #1d3446;
+}
+:root[data-theme='dark'] tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+:root[data-theme='dark'] .app-header .icon-btn:hover,
+:root[data-theme='dark'] .header-help:hover,
+:root[data-theme='dark'] .ops-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme='dark'] .ops-page-btn:hover:not(:disabled):not(.on) {
+  background: rgba(34, 197, 94, 0.14);
+}
+:root[data-theme='dark'] .ops-tile:hover {
+  border-color: #2f6b47;
+}
+:root[data-theme='dark'] .ops-search:hover {
+  border-color: #33506a;
+}
+:root[data-theme='dark'] .ops-ghost-btn:hover {
+  background: rgba(167, 139, 250, 0.2);
+}
+:root[data-theme='dark'] .ops-overdue,
+:root[data-theme='dark'] .ops-home-task-due.overdue {
+  color: #fca5a5;
+}
+
+/* Names in lists stay in the dark ink colour; only real "go somewhere" links are green. */
+:root:not([data-theme='dark']) .app-content a.ops-home-task-name:not(.btn):not(.ops-primary):not(.ops-tile):not(.ops-quick-btn),
+:root:not([data-theme='dark']) .app-content a.ops-project-name:not(.btn):not(.ops-primary):not(.ops-tile):not(.ops-quick-btn),
+:root:not([data-theme='dark']) .app-content a.ops-activity-text:not(.btn):not(.ops-primary):not(.ops-tile):not(.ops-quick-btn),
+:root:not([data-theme='dark']) .app-content .ops-progress-list a:not(.btn):not(.ops-primary):not(.ops-tile):not(.ops-quick-btn) {
+  color: var(--ops-ink);
+}

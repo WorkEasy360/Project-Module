@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import com.projectmodule.project.domain.ProjectPriority;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Request body for {@code POST /api/v1/projects}.
@@ -30,5 +31,15 @@ public record CreateProjectRequest(
 
         LocalDate startDate,
 
-        LocalDate targetEndDate) {
+        LocalDate targetEndDate,
+
+        @Size(max = 200, message = "must be at most 200 characters")
+        String customerContact,
+
+        List<String> tags) {
+
+    public CreateProjectRequest(String name, String description, ProjectPriority priority, LocalDate startDate,
+                                LocalDate targetEndDate) {
+        this(name, description, priority, startDate, targetEndDate, null, null);
+    }
 }

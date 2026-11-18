@@ -1,5 +1,5 @@
 /**
- * Bounded context: work breakdown. Phase, Milestone, TaskList, Task, Subtask, Checklist and Dependency.
+ * Bounded context: work. Task, Checklist and task comments.
  *
  * <p>Layering within this package follows the module architecture:
  * {@code api} -> {@code application} -> {@code domain}, with {@code infrastructure}

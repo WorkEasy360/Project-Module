@@ -5,6 +5,7 @@ import com.projectmodule.account.api.dto.InvitationResponse;
 import com.projectmodule.account.api.dto.InviteRequest;
 import com.projectmodule.account.application.CreatedInvitation;
 import com.projectmodule.account.application.PasswordApplicationService;
+import com.projectmodule.account.application.WorkspaceSettingsService;
 import com.projectmodule.account.application.WorkspaceApplicationService;
 import com.projectmodule.common.context.RequestContext;
 import jakarta.validation.Valid;
@@ -29,13 +30,47 @@ public class WorkspaceController {
     private final WorkspaceApplicationService workspaceApplicationService;
     private final PasswordApplicationService passwordApplicationService;
     private final RequestContext requestContext;
+    private final WorkspaceSettingsService workspaceSettingsService;
+    private final com.projectmodule.account.application.AvatarService avatarService;
 
     public WorkspaceController(WorkspaceApplicationService workspaceApplicationService,
                                PasswordApplicationService passwordApplicationService,
-                               RequestContext requestContext) {
+                               RequestContext requestContext,
+                               WorkspaceSettingsService workspaceSettingsService,
+                               com.projectmodule.account.application.AvatarService avatarService) {
+        this.avatarService = avatarService;
+        this.workspaceSettingsService = workspaceSettingsService;
         this.passwordApplicationService = passwordApplicationService;
         this.workspaceApplicationService = workspaceApplicationService;
         this.requestContext = requestContext;
+    }
+
+    public record RenameWorkspaceRequest(@jakarta.validation.constraints.NotBlank
+                                         @jakarta.validation.constraints.Size(max = 200) String name) {
+    }
+
+    /** The workspace's name, plan and support contact, for the app shell. */
+    @GetMapping("/settings")
+    public WorkspaceSettingsService.Settings settings() {
+        return workspaceSettingsService.get(requestContext);
+    }
+
+    /** Admins only. */
+    @org.springframework.web.bind.annotation.PatchMapping("/settings")
+    public WorkspaceSettingsService.Settings rename(@Valid @RequestBody RenameWorkspaceRequest request) {
+        return workspaceSettingsService.rename(requestContext, request.name());
+    }
+
+    /** A teammate's profile photo. Only people in the same workspace can see it. */
+    @GetMapping("/people/{id}/avatar")
+    public org.springframework.http.ResponseEntity<byte[]> avatar(@PathVariable UUID id) {
+        com.projectmodule.account.application.AvatarService.Photo photo = avatarService.read(requestContext, id);
+        return org.springframework.http.ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.parseMediaType(photo.contentType()))
+                .cacheControl(org.springframework.http.CacheControl.maxAge(java.time.Duration.ofDays(7)).cachePrivate())
+                .header("X-Content-Type-Options", "nosniff")
+                .header("Content-Disposition", "inline")
+                .body(photo.content());
     }
 
     @GetMapping("/people")

@@ -172,6 +172,12 @@ export async function uploadFile<T>(path: string, file: File): Promise<T> {
   return (await response.json()) as T
 }
 
+/** Fetches a protected image (or other file) and returns an address the page can show it from. */
+export async function fetchObjectUrl(path: string): Promise<string> {
+  const response = await sendFile(path, { method: 'GET' })
+  return URL.createObjectURL(await response.blob())
+}
+
 /** Fetches a protected file and hands it to the browser to save. */
 export async function downloadFile(path: string, fileName: string): Promise<void> {
   const response = await sendFile(path, { method: 'GET' })

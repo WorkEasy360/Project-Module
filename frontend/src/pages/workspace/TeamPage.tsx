@@ -1,306 +1,386 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
-import '../../styles/workspace.css'
-import { useAllProjects, usePerProject } from '../../hooks/useWorkspaceData'
+import { Link, useLocation } from 'react-router-dom'
+import '../../styles/ops.css'
+import '../../styles/ops-sections.css'
+import { passwordResetLink, workspaceApi, type Invitation } from '../../api/workspace'
+import { toUserMessage } from '../../api/errorMessage'
 import { useIdentity } from '../../context/IdentityContext'
-import { membersApi } from '../../api/members'
-import { PageHeader } from '../../components/common/PageHeader'
-import { Icon } from '../../components/common/Icon'
-import { Badge, ProjectStatusBadge } from '../../components/common/Badge'
-import { EmptyState } from '../../components/common/EmptyState'
-import { ErrorState } from '../../components/common/ErrorState'
-import { LoadingState } from '../../components/common/LoadingState'
-import { Skeleton } from '../../components/common/Skeleton'
-import { humanizeToken } from '../../utils/format'
-import { PROJECT_ROLES, type ProjectMember, type ProjectRole, type ProjectSummary } from '../../types/project'
 import { usePeople } from '../../context/PeopleContext'
-import { ProjectLimitNote, PerProjectErrors } from './WorkspaceNotices'
-import { WorkspacePeoplePanel } from './WorkspacePeoplePanel'
-import {
-  ROLE_TONE,
-  avatarText,
-  collectMemberships,
-  filterMemberships,
-  groupPeople,
-  teamSummary,
-  type Membership,
-  type Person,
-} from './teamUtils'
+import { useAsyncData } from '../../hooks/useAsyncData'
+import { Avatar } from '../../components/common/Avatar'
+import { ConfirmDialog } from '../../components/common/ConfirmDialog'
+import { InlineError } from '../../components/common/ErrorState'
+import { Icon, type IconName } from '../../components/common/Icon'
+import { Modal } from '../../components/common/Modal'
+import { FormActions } from '../../components/forms/fields'
+import { formatDate } from '../../utils/format'
+import { CopyableLink, InviteDialog } from './team/InviteDialog'
 
-type View = 'people' | 'projects'
+export type TeamSection = 'members' | 'teams' | 'invitations'
 
-/**
- * My Team: everyone in the workspace, then every member of every loaded project. Project roles
- * are managed on each project's own Team tab.
- */
-export function TeamPage() {
-  const { identity } = useIdentity()
-  const { nameOf } = usePeople()
-  const projectsState = useAllProjects()
-  const projects = projectsState.data?.content ?? null
-  const members = usePerProject(projects, (id) => membersApi.list(id))
+const INTRO: Record<TeamSection, { title: string; text: string }> = {
+  members: { title: 'Members', text: 'Everyone in your workspace, their role and whether they have joined.' },
+  teams: { title: 'Teams', text: 'Group members into teams such as Sales, Support or Development.' },
+  invitations: { title: 'Invitations', text: 'Invitations waiting to be accepted. Send one again or withdraw it.' },
+}
 
-  const [view, setView] = useState<View>('people')
-  const [query, setQuery] = useState('')
-  const [role, setRole] = useState<ProjectRole | ''>('')
-
-  const all = useMemo(() => collectMemberships(projects ?? [], members.byProject), [projects, members.byProject])
-  const filtered = useMemo(() => filterMemberships(all, { query, role }, nameOf), [all, query, role, nameOf])
-  const people = useMemo(() => groupPeople(filtered, identity?.userId), [filtered, identity?.userId])
-  const summary = useMemo(() => teamSummary(all), [all])
-  const hasFilters = query.trim() !== '' || role !== ''
-
-  const header = <PageHeader title="My Team" description="Who is on which project, and in what role." />
-
-  if (projectsState.loading) {
-    return (
-      <div className="ws-page">
-        {header}
-        <LoadingState label="Loading projects…" />
-      </div>
-    )
-  }
-  if (projectsState.error) {
-    return (
-      <div className="ws-page">
-        {header}
-        <ErrorState message={projectsState.error} onRetry={projectsState.reload} />
-      </div>
-    )
-  }
-  if (!projects || projects.length === 0) {
-    return (
-      <div className="ws-page">
-        {header}
-        <WorkspacePeoplePanel />
-        <EmptyState
-          title="No projects yet"
-          description="Your team appears here once you are a member of a project."
-          action={
-            <Link className="btn btn-primary" to="/projects">
-              Go to Projects
-            </Link>
-          }
-        />
-      </div>
-    )
-  }
+/** V3 Team: Members, Teams and Invitations, one page per sidebar link. */
+export function TeamPage({ section }: { section: TeamSection }) {
+  const { isAdmin } = usePeople()
+  const location = useLocation()
+  // Home's "Invite Member" opens Team with the invite form already open.
+  const [inviteOpen, setInviteOpen] = useState(() => Boolean((location.state as { invite?: boolean } | null)?.invite))
+  const [refreshKey, setRefreshKey] = useState(0)
+  const intro = INTRO[section]
 
   return (
-    <div className="ws-page rise-in">
-      {header}
-      <WorkspacePeoplePanel />
-      <ProjectLimitNote totalElements={projectsState.data?.totalElements ?? 0} loaded={projects.length} what="members" />
-      <PerProjectErrors projects={projects} errors={members.errors} onRetry={members.reload} />
-
-      <h2 className="ws-list-title">On projects</h2>
-      <div className="ws-chips" aria-label="Team summary">
-        <span className="ws-chip is-accent">
-          <strong>{members.loading ? '…' : summary.people}</strong> people
-        </span>
-        <span className="ws-chip">
-          <strong>{members.loading ? '…' : summary.projects}</strong> projects
-        </span>
-        <span className="ws-chip">
-          <strong>{members.loading ? '…' : summary.owners}</strong> owners
-        </span>
-        <span className="ws-chip">
-          <strong>{members.loading ? '…' : summary.managers}</strong> managers
-        </span>
-      </div>
-      <div className="ws-toolbar">
-        <div className="ws-seg" role="group" aria-label="View">
-          <button type="button" aria-pressed={view === 'people'} onClick={() => setView('people')}>
-            People
-          </button>
-          <button type="button" aria-pressed={view === 'projects'} onClick={() => setView('projects')}>
-            By project
-          </button>
+    <div className="ops-page ops-section-page">
+      <header className="ops-page-head">
+        <div>
+          <h1>{intro.title}</h1>
+          <p>{intro.text}</p>
         </div>
-        <div className="form-field ws-search">
-          <label htmlFor="team-search">Search</label>
-          <input
-            id="team-search"
-            type="search"
-            placeholder="Name or project"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <div className="form-field">
-          <label htmlFor="team-role">Role</label>
-          <select id="team-role" value={role} onChange={(e) => setRole(e.target.value as ProjectRole | '')}>
-            <option value="">All roles</option>
-            {PROJECT_ROLES.map((r) => (
-              <option key={r} value={r}>
-                {humanizeToken(r)}
-              </option>
-            ))}
-          </select>
-        </div>
-        {hasFilters && (
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={() => {
-              setQuery('')
-              setRole('')
-            }}
-          >
-            Reset filters
-          </button>
+        {isAdmin && section !== 'teams' && (
+          <div className="ops-head-actions">
+            <button type="button" className="ops-primary" onClick={() => setInviteOpen(true)}>
+              <Icon name="userPlus" size={22} /> Invite Member
+            </button>
+          </div>
         )}
-      </div>
+      </header>
 
-      {members.loading ? (
-        <TeamSkeleton />
-      ) : view === 'people' ? (
-        <PeopleView people={people} hasFilters={hasFilters} />
-      ) : (
-        <ProjectsView
-          projects={projects}
-          byProject={members.byProject}
-          errors={members.errors}
-          filtered={filtered}
-          hasFilters={hasFilters}
-          meId={identity?.userId}
-        />
+      {section === 'members' && <MembersView refreshKey={refreshKey} />}
+      {section === 'teams' && <TeamsComingSoon />}
+      {section === 'invitations' && <InvitationsView refreshKey={refreshKey} onChanged={() => setRefreshKey((k) => k + 1)} />}
+
+      {inviteOpen && isAdmin && (
+        <InviteDialog onClose={() => setInviteOpen(false)} onInvited={() => setRefreshKey((k) => k + 1)} />
       )}
     </div>
   )
 }
 
-function TeamSkeleton() {
-  return (
-    <ul className="ws-people" aria-hidden="true">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <li className="ws-person" key={i}>
-          <Skeleton width={34} height={34} />
-          <Skeleton width="60%" height={14} />
-          <Skeleton width="80%" height={14} />
-        </li>
-      ))}
-    </ul>
+function Tile({ icon, tone, label, value, to }: { icon: IconName; tone: string; label: string; value: number | string; to?: string }) {
+  const body = (
+    <>
+      <span className={`ops-tile-icon tone-${tone}`}>
+        <Icon name={icon} size={30} />
+      </span>
+      <span className="ops-tile-text">
+        <span className="ops-tile-label">{label}</span>
+        <strong className="ops-tile-value">{value}</strong>
+      </span>
+    </>
+  )
+  return to ? (
+    <Link to={to} className="ops-tile">
+      {body}
+    </Link>
+  ) : (
+    <div className="ops-tile">{body}</div>
   )
 }
 
-function PeopleView({ people, hasFilters }: { people: Person[]; hasFilters: boolean }) {
-  const { nameOf } = usePeople()
-  if (people.length === 0) {
-    return (
-      <EmptyState
-        title={hasFilters ? 'No people match these filters.' : 'No members found'}
-        description={hasFilters ? undefined : 'The loaded projects have no members yet.'}
-      />
-    )
+interface MemberRow {
+  key: string
+  id: string | null
+  name: string
+  email: string
+  role: 'Admin' | 'Member'
+  status: 'Active' | 'Invited'
+  expiresAt?: string
+}
+
+/** Members: joined people and, for admins, the people invited but not joined yet. */
+function MembersView({ refreshKey }: { refreshKey: number }) {
+  const { identity } = useIdentity()
+  const { people, isAdmin } = usePeople()
+  const invitations = useAsyncData(() => (isAdmin ? workspaceApi.invitations() : Promise.resolve([] as Invitation[])), [isAdmin, refreshKey])
+  const [query, setQuery] = useState('')
+  const [role, setRole] = useState('')
+  const [status, setStatus] = useState('')
+  const [resetLink, setResetLink] = useState<{ email: string; link: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const rows = useMemo<MemberRow[]>(() => {
+    const joined: MemberRow[] = people.map((p) => ({
+      key: p.id,
+      id: p.id,
+      name: p.name,
+      email: p.email,
+      role: p.workspaceRole === 'ADMIN' ? 'Admin' : 'Member',
+      status: 'Active',
+    }))
+    const invited: MemberRow[] = (invitations.data ?? []).map((i) => ({
+      key: `invite-${i.id}`,
+      id: null,
+      name: i.email,
+      email: i.email,
+      role: 'Member',
+      status: 'Invited',
+      expiresAt: i.expiresAt,
+    }))
+    return [...joined, ...invited]
+  }, [people, invitations.data])
+
+  const shown = rows.filter((r) => {
+    const q = query.trim().toLowerCase()
+    if (q && !`${r.name} ${r.email}`.toLowerCase().includes(q)) return false
+    if (role && r.role !== role) return false
+    if (status && r.status !== status) return false
+    return true
+  })
+  const admins = rows.filter((r) => r.role === 'Admin' && r.status === 'Active').length
+  const invitedCount = rows.filter((r) => r.status === 'Invited').length
+
+  async function createResetLink(accountId: string, email: string) {
+    setError(null)
+    try {
+      const { token } = await workspaceApi.resetLink(accountId)
+      setResetLink({ email, link: passwordResetLink(token) })
+    } catch (err) {
+      setError(toUserMessage(err))
+    }
   }
+
   return (
     <>
-      <p className="ws-count">
-        {people.length} {people.length === 1 ? 'person' : 'people'}
-      </p>
-      <ul className="ws-people" aria-label="People">
-        {people.map((person) => (
-          <li key={person.userId} className={`ws-person${person.isMe ? ' is-me' : ''}`}>
-            <span className="ws-avatar" aria-hidden="true">
-              {avatarText(nameOf(person.userId))}
-            </span>
-            <div className="ws-person-id">
-              <span title={person.userId}>{nameOf(person.userId)}</span>
-              <span className="ws-person-meta">
-                {person.isMe && <Badge tone="primary">You</Badge>}
-                <span>
-                  {person.memberships.length} {person.memberships.length === 1 ? 'project' : 'projects'}
-                </span>
-              </span>
-            </div>
-            <ul className="ws-roles" aria-label={`Projects of ${nameOf(person.userId)}`}>
-              {person.memberships.map(({ project, member }) => (
-                <li key={member.id} className="ws-role">
-                  <Link to={`/projects/${project.id}/members`}>{project.name}</Link>
-                  <Badge tone={ROLE_TONE[member.role]}>{humanizeToken(member.role)}</Badge>
-                </li>
+      <section className="ops-stats ops-stats-3" aria-label="Member counts">
+        <Tile icon="team" tone="green" label="Members" value={people.length} />
+        <Tile icon="crown" tone="purple" label="Admins" value={admins} />
+        <Tile icon="mail" tone="orange" label="Invited, not joined" value={isAdmin ? invitedCount : '—'} to={isAdmin ? '/team/invitations' : undefined} />
+      </section>
+
+      <div className="ops-filters ops-filters-3" role="search" aria-label="Find members">
+        <label className="ops-search">
+          <Icon name="search" size={22} />
+          <input type="search" placeholder="Search members by name or email..." aria-label="Search members by name or email" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </label>
+        <Select label="Role" value={role} onChange={setRole} options={[{ value: '', label: 'All Roles' }, { value: 'Admin', label: 'Admin' }, { value: 'Member', label: 'Member' }]} />
+        <Select label="Status" value={status} onChange={setStatus} options={[{ value: '', label: 'All Status' }, { value: 'Active', label: 'Active' }, { value: 'Invited', label: 'Invited' }]} />
+      </div>
+
+      {error && <InlineError message={error} />}
+
+      <section className="ops-card ops-table-card">
+        <div className="ops-table-scroll">
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Operations Access</th>
+                <th>Status</th>
+                <th>Teams</th>
+                {isAdmin && <th className="ops-th-actions">Actions</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {shown.length === 0 && (
+                <tr>
+                  <td colSpan={isAdmin ? 7 : 6} className="ops-empty">
+                    {rows.length === 0 ? 'No members to show yet.' : 'No members match these filters.'}
+                  </td>
+                </tr>
+              )}
+              {shown.map((r) => (
+                <tr key={r.key}>
+                  <td>
+                    <span className="ops-owner">
+                      {r.id ? (
+                        <Avatar userId={r.id} name={r.name} />
+                      ) : (
+                        <span className="ops-avatar-empty" aria-hidden="true">
+                          <Icon name="mail" size={16} />
+                        </span>
+                      )}
+                      <strong>
+                        {r.status === 'Invited' ? 'Invited member' : r.name}
+                        {r.id && r.id === identity?.userId ? ' (you)' : ''}
+                      </strong>
+                    </span>
+                  </td>
+                  <td>{r.email}</td>
+                  <td>
+                    <span className={`ops-role role-${r.role.toLowerCase()}`}>{r.role}</span>
+                  </td>
+                  <td>{r.status === 'Active' ? 'Yes' : 'After joining'}</td>
+                  <td>
+                    <span className={`ops-status ${r.status === 'Active' ? 'status-active' : 'status-on_hold'}`}>{r.status}</span>
+                    {r.expiresAt && <span className="ops-cell-note">until {formatDate(r.expiresAt)}</span>}
+                  </td>
+                  <td className="ops-muted">—</td>
+                  {isAdmin && (
+                    <td className="ops-actions">
+                      {r.id && r.id !== identity?.userId && (
+                        <button type="button" className="ops-link-btn" onClick={() => createResetLink(r.id as string, r.email)}>
+                          Reset password
+                        </button>
+                      )}
+                      {r.status === 'Invited' && (
+                        <Link to="/team/invitations" className="ops-link-btn">
+                          Manage
+                        </Link>
+                      )}
+                    </td>
+                  )}
+                </tr>
               ))}
-            </ul>
-          </li>
-        ))}
-      </ul>
+            </tbody>
+          </table>
+        </div>
+        <footer className="ops-table-foot">
+          <span>
+            Showing {shown.length} of {rows.length} {rows.length === 1 ? 'member' : 'members'}. Add members to a project from its Members tab.
+          </span>
+        </footer>
+      </section>
+
+      {resetLink && (
+        <Modal title="Password reset link" onClose={() => setResetLink(null)}>
+          <p className="text-muted">Send this to {resetLink.email}. It works once and expires in 2 hours.</p>
+          <CopyableLink link={resetLink.link} label="Password reset link" />
+          <FormActions>
+            <button type="button" className="btn btn-primary" onClick={() => setResetLink(null)}>
+              Done
+            </button>
+          </FormActions>
+        </Modal>
+      )}
     </>
   )
 }
 
-function ProjectsView({
-  projects,
-  byProject,
-  errors,
-  filtered,
-  hasFilters,
-  meId,
-}: {
-  projects: ProjectSummary[]
-  byProject: Record<string, ProjectMember[] | null>
-  errors: Record<string, string>
-  filtered: Membership[]
-  hasFilters: boolean
-  meId: string | undefined
-}) {
-  const { nameOf } = usePeople()
-  const cards = projects
-    .map((project) => ({
-      project,
-      members: filtered.filter((m) => m.project.id === project.id).map((m) => m.member),
-      error: errors[project.id],
-      loaded: byProject[project.id] !== null && byProject[project.id] !== undefined,
-    }))
-    // With filters active, only projects that still have a matching member are shown.
-    .filter((c) => !hasFilters || c.members.length > 0)
+/** Teams are the next build stage; this says so plainly instead of showing anything that looks working. */
+function TeamsComingSoon() {
+  return (
+    <section className="ops-card ops-soon-card" aria-labelledby="teams-soon">
+      <span className="ops-tile-icon tone-purple">
+        <Icon name="team" size={34} />
+      </span>
+      <div>
+        <span className="ops-soon-badge">Coming in the next update</span>
+        <h2 id="teams-soon">Teams are not available yet</h2>
+        <p>When Teams arrive you will be able to:</p>
+        <ul className="ops-soon-list">
+          <li>Create a named team, such as Sales, Support or Development.</li>
+          <li>Choose a team manager and add existing members; one person can be in several teams.</li>
+          <li>Add a whole team to a project and see exactly who that gives access to.</li>
+          <li>Keep each task with one named person responsible, even when a team is on the project.</li>
+        </ul>
+        <p className="ops-muted">
+          Until then, add people to each project one by one from the project&apos;s Members tab.
+        </p>
+      </div>
+    </section>
+  )
+}
 
-  if (cards.length === 0) {
-    return <EmptyState title="No projects match these filters." />
+/** Invitations that are still waiting (admins only): send again or withdraw. */
+function InvitationsView({ refreshKey, onChanged }: { refreshKey: number; onChanged: () => void }) {
+  const { isAdmin } = usePeople()
+  const invitations = useAsyncData(() => (isAdmin ? workspaceApi.invitations() : Promise.resolve([] as Invitation[])), [isAdmin, refreshKey])
+  const [resend, setResend] = useState<Invitation | null>(null)
+  const [withdraw, setWithdraw] = useState<Invitation | null>(null)
+
+  if (!isAdmin) {
+    return (
+      <section className="ops-card">
+        <p className="ops-empty">Only workspace admins can see and manage invitations.</p>
+      </section>
+    )
   }
 
+  const list = invitations.data ?? []
   return (
-    <ul className="ws-grid" aria-label="Projects">
-      {cards.map(({ project, members, error, loaded }) => (
-        <li key={project.id} className="ws-card">
-          <div className="ws-card-head">
-            <h3 className="ws-card-title">
-              <Link to={`/projects/${project.id}`}>{project.name}</Link>
-            </h3>
-            <ProjectStatusBadge status={project.status} />
-          </div>
-          {error ? (
-            <p className="ws-card-error">Members could not be loaded: {error}</p>
-          ) : !loaded ? (
-            <Skeleton height={14} />
-          ) : members.length === 0 ? (
-            <p className="text-muted">No members.</p>
-          ) : (
-            <ul className="ws-member-list" aria-label={`Members of ${project.name}`}>
-              {members.map((m) => (
-                <li key={m.id} className={`ws-member${m.userId === meId ? ' is-me' : ''}`}>
-                  <span className="ws-avatar sm" aria-hidden="true">
-                    {avatarText(nameOf(m.userId))}
-                  </span>
-                  <span title={m.userId}>
-                    {nameOf(m.userId)}
-                    {m.userId === meId ? ' (you)' : ''}
-                  </span>
-                  <Badge tone={ROLE_TONE[m.role]}>{humanizeToken(m.role)}</Badge>
-                </li>
+    <>
+      <section className="ops-card ops-table-card">
+        <div className="ops-table-scroll">
+          <table className="ops-table">
+            <thead>
+              <tr>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Link expires</th>
+                <th className="ops-th-actions">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invitations.loading && list.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="ops-empty">Loading invitations…</td>
+                </tr>
+              )}
+              {invitations.error && (
+                <tr>
+                  <td colSpan={4} className="ops-empty">{invitations.error}</td>
+                </tr>
+              )}
+              {!invitations.loading && !invitations.error && list.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="ops-empty">No invitations are waiting. Everyone you invited has joined, or the links have expired.</td>
+                </tr>
+              )}
+              {list.map((i) => (
+                <tr key={i.id}>
+                  <td>
+                    <strong>{i.email}</strong>
+                  </td>
+                  <td>
+                    <span className="ops-status status-on_hold">Pending</span>
+                  </td>
+                  <td>{formatDate(i.expiresAt)}</td>
+                  <td className="ops-actions">
+                    <button type="button" className="ops-link-btn" onClick={() => setResend(i)}>
+                      Resend
+                    </button>
+                    <button type="button" className="ops-link-btn danger" onClick={() => setWithdraw(i)}>
+                      Revoke
+                    </button>
+                  </td>
+                </tr>
               ))}
-            </ul>
-          )}
-          <div className="ws-card-foot">
-            <span className="text-faint">
-              {loaded && !error ? `${members.length} ${members.length === 1 ? 'member' : 'members'}` : ''}
-            </span>
-            <Link to={`/projects/${project.id}/members`}>
-              Manage members <Icon name="arrowRight" size={14} />
-            </Link>
-          </div>
-        </li>
-      ))}
-    </ul>
+            </tbody>
+          </table>
+        </div>
+        <footer className="ops-table-foot">
+          <span>
+            Accepted invitations show on Members as Active. Expired links are not listed; invite the person again.
+          </span>
+        </footer>
+      </section>
+
+      {resend && (
+        <InviteDialog initialEmail={resend.email} onClose={() => setResend(null)} onInvited={onChanged} />
+      )}
+      {withdraw && (
+        <ConfirmDialog
+          title="Revoke invitation"
+          message={`Revoke the invitation for ${withdraw.email}? The link stops working straight away.`}
+          confirmLabel="Revoke"
+          onConfirm={async () => {
+            await workspaceApi.revokeInvitation(withdraw.id)
+            onChanged()
+          }}
+          onClose={() => setWithdraw(null)}
+        />
+      )}
+    </>
+  )
+}
+
+function Select({ label, value, onChange, options }: { label: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <label className="ops-select">
+      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <Icon name="chevronDown" size={18} className="ops-select-chevron" />
+    </label>
   )
 }

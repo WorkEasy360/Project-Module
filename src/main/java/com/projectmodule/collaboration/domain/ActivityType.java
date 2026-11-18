@@ -8,7 +8,6 @@ package com.projectmodule.collaboration.domain;
  * the features that raise them.
  */
 public enum ActivityType {
-
     PROJECT_CREATED,
     PROJECT_UPDATED,
     PROJECT_STATUS_CHANGED,
@@ -17,25 +16,12 @@ public enum ActivityType {
     MEMBER_ADDED,
     MEMBER_ROLE_CHANGED,
     MEMBER_REMOVED,
-    PHASE_CREATED,
-    PHASE_UPDATED,
-    MILESTONE_CREATED,
-    MILESTONE_COMPLETED,
-    MILESTONE_AT_RISK,
     TASK_CREATED,
     TASK_UPDATED,
     TASK_ASSIGNED,
     TASK_COMPLETED,
     TASK_BLOCKED,
+    /** No longer raised (overdue is not a status); kept so earlier task history still reads. */
     TASK_OVERDUE,
-    DEPENDENCY_CREATED,
-    DEPENDENCY_BROKEN,
-    RISK_CREATED,
-    RISK_UPDATED,
-    RISK_RESOLVED,
-    AI_RECOMMENDATION_CREATED,
-    AI_RECOMMENDATION_ACCEPTED,
-    AI_RECOMMENDATION_REJECTED,
-
     COMMENT_ADDED
 }

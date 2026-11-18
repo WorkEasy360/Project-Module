@@ -35,9 +35,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 
 @ExtendWith(MockitoExtension.class)
 class ProjectCommentApplicationServiceTest {
@@ -60,11 +57,14 @@ class ProjectCommentApplicationServiceTest {
     private RequestContext otherMemberContext;
     private Project project;
 
+    private final TaskApplicationService taskApplicationService =
+            org.mockito.Mockito.mock(TaskApplicationService.class);
+
     @BeforeEach
     void setUp() {
         service = new ProjectCommentApplicationService(
                 commentRepository, projectApplicationService, projectAuthorizationService,
-                org.mockito.Mockito.mock(TaskApplicationService.class),
+                taskApplicationService,
                 org.mockito.Mockito.mock(com.projectmodule.project.infrastructure.ProjectMemberRepository.class),
                 org.mockito.Mockito.mock(com.projectmodule.collaboration.infrastructure.ProjectActivityRepository.class),
                 org.mockito.Mockito.mock(TaskNotifier.class));
@@ -76,72 +76,35 @@ class ProjectCommentApplicationServiceTest {
     }
 
     @Nested
-    class Create {
+    class CreateOnTask {
 
         @Test
-        @DisplayName("creates a comment authored by the caller, requiring only VIEW_PROJECT")
-        void createsComment() {
-            when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
-                    .thenReturn(project);
+        @DisplayName("creates a comment on a task the caller can see, authored by the caller")
+        void createsTaskComment() {
+            com.projectmodule.work.domain.Task task =
+                    com.projectmodule.work.domain.Task.create(project.getId(), "Write spec", null, null);
+            when(taskApplicationService.getTask(authorContext, task.getId())).thenReturn(task);
             when(commentRepository.save(any(ProjectComment.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            CreateCommentRequest request = new CreateCommentRequest("Looks good to me");
-            ProjectComment created = service.createComment(authorContext, project.getId(), request);
+            ProjectComment created = service.createTaskComment(authorContext, task.getId(),
+                    new CreateCommentRequest("Looks good to me"));
 
             assertThat(created.getAuthorId()).isEqualTo(AUTHOR);
-            assertThat(created.getBody()).isEqualTo("Looks good to me");
-            verify(projectAuthorizationService).requirePermission(
-                    AUTHOR, project.getId(), ProjectPermission.VIEW_PROJECT);
+            assertThat(created.getTaskId()).isEqualTo(task.getId());
+            assertThat(created.getProjectId()).isEqualTo(project.getId());
         }
 
         @Test
-        @DisplayName("denies creation without VIEW_PROJECT")
-        void deniesWithoutPermission() {
-            when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
-                    .thenReturn(project);
-            doThrow(new AuthorizationException("denied"))
-                    .when(projectAuthorizationService)
-                    .requirePermission(AUTHOR, project.getId(), ProjectPermission.VIEW_PROJECT);
+        @DisplayName("nothing is saved when the caller cannot see the task")
+        void deniesWhenTaskIsNotVisible() {
+            UUID taskId = UUID.randomUUID();
+            when(taskApplicationService.getTask(authorContext, taskId))
+                    .thenThrow(new AuthorizationException("denied"));
 
-            CreateCommentRequest request = new CreateCommentRequest("Looks good to me");
-
-            assertThatThrownBy(() -> service.createComment(authorContext, project.getId(), request))
+            assertThatThrownBy(() -> service.createTaskComment(authorContext, taskId,
+                    new CreateCommentRequest("Looks good to me")))
                     .isInstanceOf(AuthorizationException.class);
             verify(commentRepository, never()).save(any());
-        }
-
-        @Test
-        @DisplayName("denies creation across an organization boundary")
-        void deniesCrossOrganization() {
-            when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
-                    .thenThrow(new ResourceNotFoundException("Project", project.getId()));
-
-            CreateCommentRequest request = new CreateCommentRequest("Looks good to me");
-
-            assertThatThrownBy(() -> service.createComment(authorContext, project.getId(), request))
-                    .isInstanceOf(ResourceNotFoundException.class);
-            verify(commentRepository, never()).save(any());
-        }
-    }
-
-    @Nested
-    class List_ {
-
-        @Test
-        @DisplayName("lists a page of comments for the project, requiring VIEW_PROJECT")
-        void listsComments() {
-            ProjectComment comment = ProjectComment.create(project.getId(), AUTHOR, "Looks good to me");
-            Pageable pageable = PageRequest.of(0, 20);
-            when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
-                    .thenReturn(project);
-            when(commentRepository.findProjectLevelComments(project.getId(), pageable))
-                    .thenReturn(new PageImpl<>(List.of(comment), pageable, 1));
-
-            var page = service.listComments(authorContext, project.getId(), pageable);
-
-            assertThat(page.getContent()).containsExactly(comment);
-            verify(projectAuthorizationService).requirePermission(
-                    AUTHOR, project.getId(), ProjectPermission.VIEW_PROJECT);
         }
     }
 
@@ -151,7 +114,7 @@ class ProjectCommentApplicationServiceTest {
         @Test
         @DisplayName("the author can edit their own comment")
         void authorCanEdit() {
-            ProjectComment comment = ProjectComment.create(project.getId(), AUTHOR, "Looks good to me");
+            ProjectComment comment = ProjectComment.createOnTask(project.getId(), UUID.randomUUID(), AUTHOR, "Looks good to me");
             when(commentRepository.findByIdAndArchivedAtIsNull(comment.getId())).thenReturn(Optional.of(comment));
             when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
                     .thenReturn(project);
@@ -166,7 +129,7 @@ class ProjectCommentApplicationServiceTest {
         @Test
         @DisplayName("a non-author is denied, even with EDIT_PROJECT")
         void nonAuthorCannotEdit() {
-            ProjectComment comment = ProjectComment.create(project.getId(), AUTHOR, "Looks good to me");
+            ProjectComment comment = ProjectComment.createOnTask(project.getId(), UUID.randomUUID(), AUTHOR, "Looks good to me");
             when(commentRepository.findByIdAndArchivedAtIsNull(comment.getId())).thenReturn(Optional.of(comment));
             when(projectApplicationService.findActiveProjectInCallerOrganization(otherMemberContext, project.getId()))
                     .thenReturn(project);
@@ -182,7 +145,7 @@ class ProjectCommentApplicationServiceTest {
         @Test
         @DisplayName("rejects an update against a stale version")
         void rejectsStaleVersion() {
-            ProjectComment comment = ProjectComment.create(project.getId(), AUTHOR, "Looks good to me");
+            ProjectComment comment = ProjectComment.createOnTask(project.getId(), UUID.randomUUID(), AUTHOR, "Looks good to me");
             when(commentRepository.findByIdAndArchivedAtIsNull(comment.getId())).thenReturn(Optional.of(comment));
             when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
                     .thenReturn(project);
@@ -213,7 +176,7 @@ class ProjectCommentApplicationServiceTest {
         @Test
         @DisplayName("the author can archive their own comment")
         void authorCanArchive() {
-            ProjectComment comment = ProjectComment.create(project.getId(), AUTHOR, "Looks good to me");
+            ProjectComment comment = ProjectComment.createOnTask(project.getId(), UUID.randomUUID(), AUTHOR, "Looks good to me");
             when(commentRepository.findByIdAndArchivedAtIsNull(comment.getId())).thenReturn(Optional.of(comment));
             when(projectApplicationService.findActiveProjectInCallerOrganization(authorContext, project.getId()))
                     .thenReturn(project);
@@ -227,7 +190,7 @@ class ProjectCommentApplicationServiceTest {
         @Test
         @DisplayName("a non-author with EDIT_PROJECT can moderate-archive the comment")
         void moderatorCanArchive() {
-            ProjectComment comment = ProjectComment.create(project.getId(), AUTHOR, "Looks good to me");
+            ProjectComment comment = ProjectComment.createOnTask(project.getId(), UUID.randomUUID(), AUTHOR, "Looks good to me");
             when(commentRepository.findByIdAndArchivedAtIsNull(comment.getId())).thenReturn(Optional.of(comment));
             when(projectApplicationService.findActiveProjectInCallerOrganization(otherMemberContext, project.getId()))
                     .thenReturn(project);
@@ -244,7 +207,7 @@ class ProjectCommentApplicationServiceTest {
         @Test
         @DisplayName("a non-author without EDIT_PROJECT is denied")
         void nonAuthorWithoutPermissionCannotArchive() {
-            ProjectComment comment = ProjectComment.create(project.getId(), AUTHOR, "Looks good to me");
+            ProjectComment comment = ProjectComment.createOnTask(project.getId(), UUID.randomUUID(), AUTHOR, "Looks good to me");
             when(commentRepository.findByIdAndArchivedAtIsNull(comment.getId())).thenReturn(Optional.of(comment));
             when(projectApplicationService.findActiveProjectInCallerOrganization(otherMemberContext, project.getId()))
                     .thenReturn(project);

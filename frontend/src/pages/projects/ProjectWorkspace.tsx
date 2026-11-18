@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { NavLink, Outlet, useParams } from 'react-router-dom'
+import { Link, Outlet, useLocation, useParams } from 'react-router-dom'
 import '../../styles/project.css'
 import { useAsyncData } from '../../hooks/useAsyncData'
 import { projectsApi } from '../../api/projects'
@@ -12,15 +12,15 @@ import { hasPermission, type ProjectPermission } from '../../utils/permissions'
 import { LoadingState } from '../../components/common/LoadingState'
 import { ErrorState } from '../../components/common/ErrorState'
 import { Icon } from '../../components/common/Icon'
-import { ArchivedBadge, PriorityBadge, ProjectStatusBadge } from '../../components/common/Badge'
-import { projectNav } from '../../components/layout/navConfig'
+import { ArchivedBadge, ProjectStatusBadge } from '../../components/common/Badge'
+import { projectTabs } from '../../components/layout/navConfig'
 import { formatDate } from '../../utils/format'
 import { EditProjectDialog } from './EditProjectDialog'
 
 /**
- * Project shell. A compact header card (identity, status, dates, owner, Edit) sits above the
- * tab bar; the tab bar shows only CORE project features plus "More" (both derived from the
- * feature registry); on phones the same items become a bottom tab bar instead.
+ * Project shell. A compact header card (identity, status, dates, owner, Edit) sits above the V3
+ * Project Details tabs: Overview, Tasks (List / Board), Members and Activity. On phones the same
+ * tabs become a bottom tab bar.
  */
 export function ProjectWorkspace() {
   const { projectId } = useParams<{ projectId: string }>()
@@ -28,6 +28,7 @@ export function ProjectWorkspace() {
   const { nameOf } = usePeople()
   const { isMobile } = useSidebar()
   const [editOpen, setEditOpen] = useState(false)
+  const { pathname } = useLocation()
 
   const projectState = useAsyncData(() => projectsApi.get(projectId!), [projectId])
   const membersState = useAsyncData(() => membersApi.list(projectId!), [projectId])
@@ -47,7 +48,9 @@ export function ProjectWorkspace() {
   if (!projectState.data) return <ErrorState message="Project not found." />
 
   const project = projectState.data
-  const tabs = projectNav(project.id)
+  const tabs = projectTabs(project.id)
+  const isActive = (tab: (typeof tabs)[number]) =>
+    [tab.to, ...(tab.also ?? [])].some((to) => pathname === to || pathname.startsWith(`${to}/`))
   const hasDates = Boolean(project.startDate || project.targetEndDate)
 
   return (
@@ -62,7 +65,6 @@ export function ProjectWorkspace() {
           <div className="pj-header-title">
             <h1>{project.name}</h1>
             <ProjectStatusBadge status={project.status} />
-            <PriorityBadge priority={project.priority} />
             {project.archived && <ArchivedBadge />}
           </div>
           <div className="pj-header-meta">
@@ -96,13 +98,9 @@ export function ProjectWorkspace() {
       {!isMobile && (
         <nav className="tab-bar" aria-label="Project sections">
           {tabs.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={tab.to}
-              className={({ isActive }) => `tab-link${isActive ? ' active' : ''}`}
-            >
+            <Link key={tab.to} to={tab.to} className={`tab-link${isActive(tab) ? ' active' : ''}`} aria-current={isActive(tab) ? 'page' : undefined}>
               {tab.label}
-            </NavLink>
+            </Link>
           ))}
         </nav>
       )}
@@ -112,14 +110,10 @@ export function ProjectWorkspace() {
       {isMobile && (
         <nav className="mobile-tabbar" aria-label="Project sections">
           {tabs.map((tab) => (
-            <NavLink
-              key={tab.to}
-              to={tab.to}
-              className={({ isActive }) => `mobile-tab${isActive ? ' active' : ''}`}
-            >
+            <Link key={tab.to} to={tab.to} className={`mobile-tab${isActive(tab) ? ' active' : ''}`} aria-current={isActive(tab) ? 'page' : undefined}>
               <Icon name={tab.icon} size={20} />
               <span>{tab.label}</span>
-            </NavLink>
+            </Link>
           ))}
         </nav>
       )}

@@ -43,14 +43,14 @@ public class ProjectAutomationApplicationService {
     public ProjectAutomation createAutomation(RequestContext context, UUID projectId, String name,
                                               String description, String triggerEvent,
                                               AutomationActionType actionType,
-                                              UUID actionRecipientId, String actionChannelReference,
+                                              UUID actionRecipientId,
                                               String actionMessage) {
         projectApplicationService.findActiveProjectInCallerOrganization(context, projectId);
         projectAuthorizationService.requirePermission(
                 context.requireUserId(), projectId, ProjectPermission.EDIT_PROJECT);
 
         ProjectAutomation automation = ProjectAutomation.create(projectId, name, triggerEvent, actionType,
-                actionRecipientId, actionChannelReference, actionMessage);
+                actionRecipientId, actionMessage);
         if (description != null) {
             automation.describe(description);
         }

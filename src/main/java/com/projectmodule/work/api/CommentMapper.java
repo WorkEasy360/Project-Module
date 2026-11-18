@@ -18,6 +18,6 @@ public class CommentMapper {
                 comment.getCreatedAt(),
                 comment.getUpdatedAt(),
                 comment.getVersion(),
-                comment.getTaskId().orElse(null));
+                comment.getTaskId());
     }
 }

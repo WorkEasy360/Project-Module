@@ -10,9 +10,9 @@ const STORAGE_KEY = 'projectmodule.theme'
 function readStored(): ThemePreference {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
-    return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'system'
+    return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'light'
   } catch {
-    return 'system'
+    return 'light'
   }
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { SignInPage } from './SignInPage'
@@ -48,7 +48,7 @@ function renderPage(successDelayMs = 0, path = '/sign-in') {
 }
 
 async function fillSignIn(email = 'ada@example.com', password = 'correct horse') {
-  await userEvent.type(screen.getByLabelText('Email'), email)
+  await userEvent.type(screen.getByLabelText('Email Address'), email)
   await userEvent.type(screen.getByLabelText('Password'), password)
 }
 
@@ -61,7 +61,7 @@ describe('SignInPage', () => {
 
   it('asks for email and password, not for ids', () => {
     renderPage()
-    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email Address')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
     expect(screen.queryByLabelText(/user id/i)).not.toBeInTheDocument()
     expect(screen.queryByLabelText(/organization id/i)).not.toBeInTheDocument()
@@ -70,7 +70,7 @@ describe('SignInPage', () => {
   it('rejects a malformed email without calling the backend', async () => {
     renderPage()
     await fillSignIn('nope')
-    await userEvent.click(screen.getByRole('button', { name: /^sign in/i }))
+    await userEvent.click(screen.getByRole('button', { name: /log in to operations/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent(/valid email/)
     expect(authApi.login).not.toHaveBeenCalled()
     expect(getIdentity()).toBeNull()
@@ -80,8 +80,8 @@ describe('SignInPage', () => {
     vi.mocked(authApi.login).mockResolvedValue(SESSION)
     renderPage(400)
     await fillSignIn()
-    await userEvent.click(screen.getByRole('button', { name: /^sign in/i }))
-    expect(await screen.findByText((_, el) => el?.tagName === 'STRONG' && el.textContent === 'Welcome to WorkEasyProject')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /log in to operations/i }))
+    expect(await screen.findByText((_, el) => el?.tagName === 'STRONG' && el.textContent === 'Welcome to WorkEasy360 Operations')).toBeInTheDocument()
     expect(authApi.login).toHaveBeenCalledWith({ email: 'ada@example.com', password: 'correct horse', rememberMe: true })
     expect(getIdentity()).toMatchObject({ userId: 'user-1', orgId: 'org-1', token: 'session-token', name: 'Ada' })
     expect(window.localStorage.getItem('projectmodule.identity')).toContain('session-token')
@@ -93,7 +93,7 @@ describe('SignInPage', () => {
     vi.mocked(authApi.login).mockRejectedValue(problem(401, 'Incorrect email or password'))
     renderPage()
     await fillSignIn()
-    await userEvent.click(screen.getByRole('button', { name: /^sign in/i }))
+    await userEvent.click(screen.getByRole('button', { name: /log in to operations/i }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect email or password')
     await waitFor(() => expect(getIdentity()).toBeNull())
     expect(screen.getByLabelText('Password')).toHaveValue('')
@@ -105,7 +105,7 @@ describe('SignInPage', () => {
     renderPage()
     await fillSignIn()
     await userEvent.click(screen.getByLabelText('Remember me'))
-    await userEvent.click(screen.getByRole('button', { name: /^sign in/i }))
+    await userEvent.click(screen.getByRole('button', { name: /log in to operations/i }))
     await screen.findByText('DASHBOARD')
     expect(authApi.login).toHaveBeenCalledWith(expect.objectContaining({ rememberMe: false }))
     expect(window.localStorage.getItem('projectmodule.identity')).toBeNull()
@@ -114,18 +114,31 @@ describe('SignInPage', () => {
 
   it('asks for a reset link without saying whether the address has an account', async () => {
     renderPage()
-    await userEvent.click(await screen.findByRole('button', { name: 'Forgot password?' }))
-    await userEvent.type(screen.getByLabelText('Email'), 'ada@example.com')
+    await waitFor(() => expect(authApi.config).toHaveBeenCalled())
+    await act(async () => {})
+    await userEvent.click(await screen.findByRole('button', { name: 'Forgot Password?' }))
+    await userEvent.type(screen.getByLabelText('Email Address'), 'ada@example.com')
     await userEvent.click(screen.getByRole('button', { name: /send reset link/i }))
     expect(authApi.forgotPassword).toHaveBeenCalledWith('ada@example.com')
     expect(await screen.findByRole('status')).toHaveTextContent(/if that address has an account/i)
   })
 
-  it('hides "Forgot password" when this deployment has no email', async () => {
+  it('without email, "Forgot Password?" says to ask the workspace admin', async () => {
     vi.mocked(authApi.config).mockResolvedValueOnce({ googleClientId: '', emailEnabled: false })
     renderPage()
     await waitFor(() => expect(authApi.config).toHaveBeenCalled())
-    expect(screen.queryByRole('button', { name: 'Forgot password?' })).not.toBeInTheDocument()
+    await act(async () => {})
+    await userEvent.click(screen.getByRole('button', { name: 'Forgot Password?' }))
+    expect(await screen.findByRole('status')).toHaveTextContent(/ask your workspace admin/i)
+    expect(authApi.forgotPassword).not.toHaveBeenCalled()
+  })
+
+  it('shows the Operations login, with WorkEasy360 sign-in explained until it is set up', async () => {
+    renderPage()
+    expect(screen.getByRole('heading', { name: 'Operations Login' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Password')).toHaveAttribute('placeholder', 'Enter your password')
+    await userEvent.click(screen.getByRole('button', { name: /continue with workeasy360 account/i }))
+    expect(await screen.findByRole('status')).toHaveTextContent(/not set up for this workspace yet/i)
   })
 
   it('a reset link asks only for the new password, then returns to sign in', async () => {
@@ -134,15 +147,15 @@ describe('SignInPage', () => {
     await userEvent.type(screen.getByLabelText('New password'), 'a new password')
     await userEvent.click(screen.getByRole('button', { name: /set new password/i }))
     expect(authApi.resetPassword).toHaveBeenCalledWith({ token: 'abc', newPassword: 'a new password' })
-    expect(await screen.findByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Operations Login' })).toBeInTheDocument()
   })
 
   it('an invitation fixes the email and joins the workspace', async () => {
     vi.mocked(authApi.previewInvitation).mockResolvedValue({ email: 'ben@example.com', expiresAt: '2030-01-01' })
     vi.mocked(authApi.acceptInvitation).mockResolvedValue(SESSION)
     renderPage(0, '/join/tok')
-    await waitFor(() => expect(screen.getByLabelText('Email')).toHaveValue('ben@example.com'))
-    expect(screen.getByLabelText('Email')).toHaveAttribute('readonly')
+    await waitFor(() => expect(screen.getByLabelText('Email Address')).toHaveValue('ben@example.com'))
+    expect(screen.getByLabelText('Email Address')).toHaveAttribute('readonly')
     await userEvent.type(screen.getByLabelText('Full name'), 'Ben')
     await userEvent.type(screen.getByLabelText('Password'), 'correct horse')
     await userEvent.click(screen.getByRole('button', { name: /join workspace/i }))
@@ -236,7 +249,7 @@ describe('SignInPage for people who used the app before email sign-in', () => {
     await fillSignIn()
     await userEvent.click(screen.getByRole('button', { name: /keep my workspace/i }))
     expect(await screen.findByRole('status')).toHaveTextContent(/already has an email sign-in/)
-    expect(screen.getByRole('button', { name: /^sign in/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /log in to operations/i })).toBeInTheDocument()
   })
 
   it('they can start a new workspace instead, which forgets the old ids', async () => {
@@ -250,6 +263,6 @@ describe('SignInPage for people who used the app before email sign-in', () => {
     vi.mocked(authApi.config).mockResolvedValueOnce({ googleClientId: '', emailEnabled: true, legacyHandover: false })
     renderPage()
     await waitFor(() => expect(screen.queryByRole('button', { name: /keep my workspace/i })).not.toBeInTheDocument())
-    expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Operations Login' })).toBeInTheDocument()
   })
 })

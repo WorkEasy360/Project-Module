@@ -68,6 +68,9 @@ public class AuthController {
     private final EmailPort emailPort;
     private final RequestContext requestContext;
     private final LegacyHandoverService legacyHandoverService;
+    private final com.projectmodule.account.application.AvatarService avatarService;
+    /** Where "Continue with WorkEasy360 Account" goes; empty until single sign-on is set up. */
+    private final String workeasy360SignInUrl;
 
     public AuthController(AccountApplicationService accountApplicationService,
                           WorkspaceApplicationService workspaceApplicationService,
@@ -75,8 +78,12 @@ public class AuthController {
                           GoogleSignInService googleSignInService,
                           EmailPort emailPort,
                           RequestContext requestContext,
-                          LegacyHandoverService legacyHandoverService) {
+                          LegacyHandoverService legacyHandoverService,
+                          com.projectmodule.account.application.AvatarService avatarService,
+                          @org.springframework.beans.factory.annotation.Value("${projectmodule.auth.workeasy360-sign-in-url:}") String workeasy360SignInUrl) {
+        this.workeasy360SignInUrl = workeasy360SignInUrl;
         this.legacyHandoverService = legacyHandoverService;
+        this.avatarService = avatarService;
         this.passwordApplicationService = passwordApplicationService;
         this.googleSignInService = googleSignInService;
         this.emailPort = emailPort;
@@ -89,7 +96,8 @@ public class AuthController {
     @GetMapping("/config")
     public Map<String, Object> config() {
         return Map.of("googleClientId", googleSignInService.clientId(), "emailEnabled", emailPort.isEnabled(),
-                "legacyHandover", legacyHandoverService.isEnabled());
+                "legacyHandover", legacyHandoverService.isEnabled(),
+                "workeasy360SignInUrl", workeasy360SignInUrl);
     }
 
     /** Moves an earlier sign-in onto an email and password, keeping all of its work. */
@@ -103,6 +111,18 @@ public class AuthController {
     @PostMapping("/google")
     public SessionResponse google(@Valid @RequestBody GoogleSignInRequest request) {
         return SessionResponse.from(googleSignInService.signIn(request.credential(), request.rememberMe()));
+    }
+
+    /** Sets the signed-in person's profile photo: PNG, JPEG, WebP or GIF, at most 2 MB. */
+    @PostMapping(path = "/me/avatar", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public AccountResponse uploadAvatar(@org.springframework.web.bind.annotation.RequestParam("file")
+                                        org.springframework.web.multipart.MultipartFile file) throws java.io.IOException {
+        return AccountResponse.from(avatarService.upload(requestContext, file.getBytes()));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping("/me/avatar")
+    public AccountResponse removeAvatar() {
+        return AccountResponse.from(avatarService.remove(requestContext));
     }
 
     @PatchMapping("/me")

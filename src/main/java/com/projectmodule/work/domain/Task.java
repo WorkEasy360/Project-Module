@@ -10,7 +10,6 @@ import com.projectmodule.work.domain.event.TaskBlocked;
 import com.projectmodule.work.domain.event.TaskCompleted;
 import com.projectmodule.work.domain.event.TaskCreated;
 import com.projectmodule.work.domain.event.TaskDomainEvent;
-import com.projectmodule.work.domain.event.TaskOverdue;
 import com.projectmodule.work.domain.event.TaskUpdated;
 import com.projectmodule.project.domain.ProjectPriority;
 import jakarta.persistence.CollectionTable;
@@ -37,18 +36,16 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * A unit of work within a project, optionally under a {@link com.projectmodule.work.domain.TaskList}.
+ * A unit of work within a project.
  *
  * <p>Plain field edits (name, description, due date) raise {@code task.updated}; only a status
  * transition or an assignment raises its own specific event, because
  * {@code docs/project/05-EVENTS.md} defines {@code task.completed}/{@code blocked}/
- * {@code overdue}/{@code assigned} as distinct from a plain update. There is no scheduler or
- * automated delay detection here: {@code BLOCKED} and {@code OVERDUE} are set explicitly by a
- * person, so manual workflows work fully without AI or automation.
+ * {@code assigned} as distinct from a plain update. {@code BLOCKED} is set explicitly by a person.
+ * Overdue is not a status: a task is overdue when it is past its due date and not done.
  *
  * <p>The project is referenced by plain id, the same convention {@code ProjectMember} already
- * uses. There is no {@code taskListId}: {@code docs/project/03-DATABASE.md} does not associate
- * a Task with a Task List, only with a project.
+ * uses.
  */
 @Entity
 @Table(name = "tasks")
@@ -90,10 +87,6 @@ public class Task extends BaseEntity {
     @Column(name = "estimate_minutes")
     private Integer estimateMinutes;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "recurrence", nullable = false, length = 20)
-    private TaskRecurrence recurrence = TaskRecurrence.NONE;
-
     // Eager: responses are mapped after the transaction ends, and tasks have only a few tags.
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "task_tags", joinColumns = @JoinColumn(name = "task_id"))
@@ -124,8 +117,7 @@ public class Task extends BaseEntity {
      * Creates a task in its initial, {@link TaskStatus#TODO} state.
      *
      * <p>An initial {@code assignee} does not raise {@code task.assigned}: creation is already
-     * covered by {@code task.created}, the same reasoning {@code Milestone.create} uses for an
-     * initial phase.
+     * covered by {@code task.created}.
      *
      * @throws ValidationException if the name is blank or too long
      */
@@ -160,7 +152,7 @@ public class Task extends BaseEntity {
 
     /**
      * Marks that this task was updated, for the audit and event pipeline. Deliberately separate
-     * from the field mutators above, for the same reason {@code Phase.recordUpdated()} is.
+     * from the field mutators above, so several edits in one request raise one update.
      *
      * @throws BusinessRuleViolationException if the task is archived
      */
@@ -190,12 +182,6 @@ public class Task extends BaseEntity {
         this.estimateMinutes = minutes;
     }
 
-    /** Sets how the task repeats. A plain edit: the caller records the update. */
-    public void repeat(TaskRecurrence newRecurrence) {
-        requireNotArchived("set the recurrence of");
-        this.recurrence = Objects.requireNonNull(newRecurrence, "recurrence is required");
-    }
-
     /** Replaces the task's tags. Blank entries and duplicates, ignoring case, are dropped. */
     public void tag(Collection<String> newTags) {
         requireNotArchived("tag");
@@ -219,26 +205,6 @@ public class Task extends BaseEntity {
         if (startDate != null && dueDate != null && dueDate.isBefore(startDate)) {
             throw new ValidationException("Due date must not be before the start date");
         }
-    }
-
-    /**
-     * Creates the task's next occurrence, if it repeats and has a date to repeat from, and stops
-     * this one repeating, so reopening and completing it again cannot create a second one.
-     */
-    public Optional<Task> spawnNextOccurrence() {
-        if (recurrence == TaskRecurrence.NONE || dueDate == null) {
-            return Optional.empty();
-        }
-        Task next = new Task(UuidV7.generate(), projectId, name, recurrence.next(dueDate),
-                getAssigneeId().orElse(null));
-        next.description = description;
-        next.priority = priority;
-        next.startDate = startDate == null ? null : recurrence.next(startDate);
-        next.estimateMinutes = estimateMinutes;
-        next.recurrence = recurrence;
-        next.tags.addAll(tags);
-        this.recurrence = TaskRecurrence.NONE;
-        return Optional.of(next);
     }
 
     /**
@@ -298,23 +264,6 @@ public class Task extends BaseEntity {
         }
         this.status = TaskStatus.BLOCKED;
         registerEvent(new TaskBlocked(getId()));
-    }
-
-    /**
-     * Flags the task as overdue. {@link #startWork()} or {@link #reopen()} clears the flag.
-     *
-     * @throws BusinessRuleViolationException if it is already overdue, or already completed
-     */
-    public void markOverdue() {
-        requireNotArchived("mark overdue");
-        if (status == TaskStatus.OVERDUE) {
-            throw new BusinessRuleViolationException("Task is already overdue");
-        }
-        if (status == TaskStatus.COMPLETED) {
-            throw new BusinessRuleViolationException("Cannot mark a completed task overdue");
-        }
-        this.status = TaskStatus.OVERDUE;
-        registerEvent(new TaskOverdue(getId()));
     }
 
     /**
@@ -397,10 +346,6 @@ public class Task extends BaseEntity {
 
     public Optional<Integer> getEstimateMinutes() {
         return Optional.ofNullable(estimateMinutes);
-    }
-
-    public TaskRecurrence getRecurrence() {
-        return recurrence;
     }
 
     public List<String> getTags() {

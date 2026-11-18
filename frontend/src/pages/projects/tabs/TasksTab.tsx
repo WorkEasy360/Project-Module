@@ -9,11 +9,12 @@ import { ConfirmDialog } from '../../../components/common/ConfirmDialog'
 import { SelectField } from '../../../components/forms/fields'
 import { ProjectPersonField } from '../../../components/forms/ProjectPersonField'
 import { usePeople } from '../../../context/PeopleContext'
-import { TaskStatusBadge, ArchivedBadge, PriorityBadge } from '../../../components/common/Badge'
+import { TaskStatusBadge, ArchivedBadge, PriorityBadge, taskStatusLabel } from '../../../components/common/Badge'
 import { TaskStatusControl } from '../../../components/task/TaskStatusControl'
 import { formatDate, humanizeToken } from '../../../utils/format'
 import { downloadCsv, toCsv } from '../../../utils/csv'
 import { TASK_SORT_FIELDS, TASK_STATUSES, type Task, type TaskListQuery, type TaskSortField } from '../../../types/work'
+import { ListBoardSwitch } from '../../../components/task/ListBoardSwitch'
 import type { SortDirection } from '../../../types/common'
 
 export function TasksTab() {
@@ -57,16 +58,14 @@ export function TasksTab() {
   function exportCsv() {
     const rows = (data ?? []).map((t) => [
       t.name,
-      humanizeToken(t.status),
+      taskStatusLabel(t.status),
       humanizeToken(t.priority),
       t.assigneeId ? nameOf(t.assigneeId) : '',
-      t.startDate,
       t.dueDate,
-      t.tags.join('; '),
     ])
     downloadCsv(
       `${project.name}-tasks.csv`,
-      toCsv(['Task', 'Status', 'Priority', 'Assignee', 'Start date', 'Due date', 'Tags'], rows),
+      toCsv(['Task', 'Status', 'Priority', 'Assignee', 'Due date'], rows),
     )
   }
 
@@ -105,11 +104,6 @@ export function TasksTab() {
           <Link to={`../tasks/${t.id}`} relative="path">
             {t.name}
           </Link>
-          {t.tags.map((tag) => (
-            <span key={tag} className="task-tag">
-              {tag}
-            </span>
-          ))}
         </span>
       ),
     },
@@ -131,6 +125,7 @@ export function TasksTab() {
 
   return (
     <div>
+      <ListBoardSwitch current="list" />
       <div className="filter-bar">
         <SelectField
           id="task-status-filter"
@@ -139,7 +134,7 @@ export function TasksTab() {
           onChange={setStatusFilter}
           allowEmpty
           emptyLabel="All statuses"
-          options={TASK_STATUSES.map((s) => ({ value: s, label: humanizeToken(s) }))}
+          options={TASK_STATUSES.map((s) => ({ value: s, label: taskStatusLabel(s) }))}
         />
         <ProjectPersonField
           id="task-assignee-filter"

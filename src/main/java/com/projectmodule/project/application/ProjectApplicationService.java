@@ -80,6 +80,12 @@ public class ProjectApplicationService {
         if (request.startDate() != null || request.targetEndDate() != null) {
             project.schedule(request.startDate(), request.targetEndDate());
         }
+        if (request.customerContact() != null) {
+            project.changeCustomerContact(request.customerContact());
+        }
+        if (request.tags() != null) {
+            project.tag(request.tags());
+        }
 
         project = projectRepository.save(project);
         projectMemberRepository.save(ProjectMember.join(project.getId(), ownerId, ProjectRole.OWNER));
@@ -100,6 +106,26 @@ public class ProjectApplicationService {
     public Page<Project> listProjects(RequestContext context, Pageable pageable) {
         OrganizationId organizationId = requireOrganizationId(context);
         return projectRepository.findVisibleToUser(organizationId.value(), context.requireUserId().value(), pageable);
+    }
+
+    /** Task totals per project, [total, completed], for the given projects (already visible to the caller). */
+    @Transactional(readOnly = true)
+    public java.util.Map<UUID, long[]> taskCounts(java.util.Collection<UUID> projectIds) {
+        java.util.Map<UUID, long[]> out = new java.util.HashMap<>();
+        if (projectIds.isEmpty()) {
+            return out;
+        }
+        for (ProjectRepository.TaskCount c : projectRepository.countTasks(projectIds)) {
+            out.put(c.getProjectId(), new long[] {c.getTotal(), c.getCompleted()});
+        }
+        return out;
+    }
+
+    /** The archived projects the person belonged to, read only. */
+    @Transactional(readOnly = true)
+    public Page<Project> listArchivedProjects(RequestContext context, Pageable pageable) {
+        OrganizationId organizationId = requireOrganizationId(context);
+        return projectRepository.findArchivedVisibleToUser(organizationId.value(), context.requireUserId().value(), pageable);
     }
 
     @Transactional
@@ -161,6 +187,12 @@ public class ProjectApplicationService {
         if (request.priority() != null) {
             project.changePriority(request.priority());
         }
+        if (request.customerContact() != null) {
+            project.changeCustomerContact(request.customerContact());
+        }
+        if (request.tags() != null) {
+            project.tag(request.tags());
+        }
         if (request.startDate() != null || request.targetEndDate() != null) {
             LocalDate newStart = request.startDate() != null
                     ? request.startDate() : project.getStartDate().orElse(null);
@@ -180,7 +212,7 @@ public class ProjectApplicationService {
      * tenant boundary.
      *
      * <p>Public so {@link ProjectMemberApplicationService} and the {@code work} package's
-     * application services (Phase, Milestone, Task List) can apply the same existence and
+     * application services (tasks, members, automations) can apply the same existence and
      * tenant-boundary check before their own authorization check, without duplicating this
      * logic.
      */

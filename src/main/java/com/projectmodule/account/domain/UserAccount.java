@@ -52,6 +52,10 @@ public class UserAccount extends BaseEntity {
     @Column(name = "last_login_at")
     private Instant lastLoginAt;
 
+    /** When the profile photo last changed; null when there is none. The image is in user_avatars. */
+    @Column(name = "avatar_updated_at")
+    private Instant avatarUpdatedAt;
+
     /** For JPA only. */
     protected UserAccount() {
     }
@@ -123,6 +127,15 @@ public class UserAccount extends BaseEntity {
             lockedUntil = now.plus(LOCK_DURATION);
             failedLoginAttempts = 0;
         }
+    }
+
+    public java.util.Optional<Instant> getAvatarUpdatedAt() {
+        return java.util.Optional.ofNullable(avatarUpdatedAt);
+    }
+
+    /** Records that the photo changed now, or that it was removed (null). */
+    public void markAvatarChanged(Instant when) {
+        this.avatarUpdatedAt = when;
     }
 
     public void recordSuccessfulLogin(Instant now) {

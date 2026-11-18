@@ -1,34 +1,23 @@
-export type AutomationActionType = 'NOTIFY' | 'CHAT_MESSAGE'
+/** V3: rules notify people inside Operations. */
+export type AutomationActionType = 'NOTIFY'
 
-export const AUTOMATION_ACTION_TYPES: AutomationActionType[] = ['NOTIFY', 'CHAT_MESSAGE']
+export const AUTOMATION_ACTION_TYPES: AutomationActionType[] = ['NOTIFY']
 
 export type AutomationRunStatus = 'SUCCEEDED' | 'FAILED'
 
 /**
- * The canonical trigger-event catalogue, mirroring
- * com.projectmodule.automation.domain.AutomationTriggerEvent exactly (19 values). This is the
- * single source of truth for the trigger dropdown — never hand-typed elsewhere in the UI.
+ * The trigger events a rule can start from, mirroring the backend's AutomationTriggerEvent after
+ * the V3 clean-up. The single source for the trigger choice; never hand-typed elsewhere.
  */
 export const AUTOMATION_TRIGGER_EVENTS = [
+  'task.created',
+  'task.assigned',
+  'task.updated',
+  'task.completed',
+  'task.blocked',
   'project.created',
   'project.updated',
   'project.archived',
-  'phase.created',
-  'phase.updated',
-  'milestone.created',
-  'milestone.completed',
-  'milestone.at_risk',
-  'task.created',
-  'task.updated',
-  'task.assigned',
-  'task.completed',
-  'task.overdue',
-  'task.blocked',
-  'dependency.created',
-  'dependency.broken',
-  'risk.created',
-  'risk.updated',
-  'risk.resolved',
 ] as const
 
 export type AutomationTriggerEvent = (typeof AUTOMATION_TRIGGER_EVENTS)[number]
@@ -41,7 +30,6 @@ export interface ProjectAutomation {
   triggerEvent: string
   actionType: AutomationActionType
   actionRecipientId: string | null
-  actionChannelReference: string | null
   actionMessage: string
   enabled: boolean
   archived: boolean
@@ -56,7 +44,6 @@ export interface CreateAutomationRequest {
   triggerEvent: string
   actionType: AutomationActionType
   actionRecipientId?: string | null
-  actionChannelReference?: string | null
   actionMessage: string
 }
 
@@ -76,4 +63,20 @@ export interface AutomationRun {
   status: AutomationRunStatus
   errorMessage: string | null
   executedAt: string
+}
+
+/** Plain-language label for a trigger, as the rule form and lists show it. */
+export const TRIGGER_LABEL: Record<AutomationTriggerEvent, string> = {
+  'task.created': 'A task is created',
+  'task.assigned': 'A task is assigned',
+  'task.updated': 'A task is changed',
+  'task.completed': 'A task is completed',
+  'task.blocked': 'A task is marked Blocked',
+  'project.created': 'A project is created',
+  'project.updated': 'A project is changed',
+  'project.archived': 'A project is archived',
+}
+
+export function triggerLabel(event: string): string {
+  return (TRIGGER_LABEL as Record<string, string>)[event] ?? event
 }

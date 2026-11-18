@@ -27,7 +27,7 @@ function renderPanel() {
         <Route path="*" element={<AssistantPanel />} />
       </Routes>
       <Routes>
-        <Route path="/timesheet" element={<div>TIMESHEET</div>} />
+        <Route path="/reports/workload" element={<div>TEAM WORKLOAD</div>} />
         <Route path="*" element={null} />
       </Routes>
     </MemoryRouter>
@@ -81,10 +81,10 @@ describe('AssistantPanel', () => {
   })
 
   it('opens the page the assistant chose', async () => {
-    vi.mocked(assistantApi.chat).mockResolvedValue(reply({ messages: ['Here it is.'], navigateTo: '/timesheet' }))
+    vi.mocked(assistantApi.chat).mockResolvedValue(reply({ messages: ['Here it is.'], navigateTo: '/reports/workload' }))
     renderPanel()
-    await openAndSend('Open my timesheet')
-    expect(await screen.findByText('TIMESHEET')).toBeInTheDocument()
+    await openAndSend('Open team workload')
+    expect(await screen.findByText('TEAM WORKLOAD')).toBeInTheDocument()
   })
 
   it('says plainly when it is not set up, and cannot be used', async () => {

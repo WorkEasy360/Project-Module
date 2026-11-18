@@ -38,6 +38,7 @@ export function formatDateTime(value: string | null | undefined): string {
 /** "TASK_BREAKDOWN" -> "Task Breakdown"; "task.overdue" -> "Task Overdue". */
 export function humanizeToken(value: string): string {
   if (value === 'TODO') return 'To Do'
+  if (value === 'MEDIUM') return 'Normal'
   return value
     .split(/[._]/)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())

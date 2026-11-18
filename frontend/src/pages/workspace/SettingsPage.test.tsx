@@ -2,25 +2,41 @@ import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { SettingsPage } from './SettingsPage'
+import { SettingsPage, tagCounts, type SettingsSection } from './SettingsPage'
 import { IdentityProvider } from '../../context/IdentityContext'
-import { SidebarProvider } from '../../context/SidebarContext'
+import { WorkspaceSettingsProvider } from '../../context/WorkspaceSettingsContext'
 import { getIdentity, setIdentity } from '../../context/identityStore'
 import { getThemePreference, setThemePreference } from '../../context/themeStore'
-import { getCollapsed, setCollapsed } from '../../context/sidebarStore'
+import { projectsApi } from '../../api/projects'
 
 const ME = '11111111-2222-4333-8444-555555555555'
 const ORG = '99999999-2222-4333-8444-555555555555'
 
 vi.mock('../../api/auth', () => ({ authApi: { logout: vi.fn(() => Promise.resolve()) } }))
+vi.mock('../../api/projects', () => ({ projectsApi: { list: vi.fn() } }))
+vi.mock('../../api/workspace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/workspace')>()),
+  workspaceApi: {
+    people: vi.fn(() => Promise.resolve([])),
+    settings: vi.fn(() =>
+      Promise.resolve({
+        name: 'Acme Enterprises Pvt. Ltd.',
+        canEdit: true,
+        plan: { name: 'Advanced', validUntil: '31 Dec 2026', manageUrl: 'https://workeasy360.com/plans' },
+        supportEmail: 'support@workeasy360.com',
+      }),
+    ),
+    rename: vi.fn(),
+  },
+}))
 
-function renderSettings() {
+function renderSettings(section: SettingsSection) {
   return render(
     <MemoryRouter>
       <IdentityProvider>
-        <SidebarProvider>
-          <SettingsPage />
-        </SidebarProvider>
+        <WorkspaceSettingsProvider>
+          <SettingsPage section={section} />
+        </WorkspaceSettingsProvider>
       </IdentityProvider>
     </MemoryRouter>,
   )
@@ -29,72 +45,84 @@ function renderSettings() {
 describe('SettingsPage', () => {
   beforeEach(() => {
     setIdentity({ userId: ME, orgId: ORG, token: 'tok', name: 'Ada', email: 'ada@example.com' })
-    setThemePreference('system')
-    setCollapsed(false)
+    setThemePreference('light')
+    vi.mocked(projectsApi.list).mockReset().mockResolvedValue({
+      content: [
+        { id: 'p1', name: 'A', status: 'ACTIVE', priority: 'MEDIUM', ownerId: ME, updatedAt: '2026-11-01T00:00:00Z', tags: ['Sales', 'Ops'] },
+        { id: 'p2', name: 'B', status: 'ACTIVE', priority: 'MEDIUM', ownerId: ME, updatedAt: '2026-11-01T00:00:00Z', tags: ['Sales'] },
+      ],
+      page: 0,
+      size: 100,
+      totalElements: 2,
+      totalPages: 1,
+    })
   })
-  afterEach(() => {
-    setThemePreference('system')
-    setCollapsed(false)
-  })
+  afterEach(() => setThemePreference('system'))
 
-  it('Account shows the signed-in name and email, not internal ids', () => {
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
-    expect(within(section).getByText('Ada')).toBeInTheDocument()
-    expect(within(section).getByText('ada@example.com')).toBeInTheDocument()
-    expect(within(section).queryByText(ME)).not.toBeInTheDocument()
-    expect(screen.queryByRole('checkbox', { name: /notification/i })).not.toBeInTheDocument()
-  })
-
-  it('Sign out ends the session, and the ids can no longer be edited by hand', async () => {
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
-    expect(within(section).queryByRole('button', { name: /change identity/i })).not.toBeInTheDocument()
-    await userEvent.click(within(section).getByRole('button', { name: /Sign out/ }))
+  it('Workspace & Access shows the workspace, your profile without internal ids, and signs out', async () => {
+    renderSettings('workspace')
+    expect(screen.getByRole('heading', { name: 'Workspace & Access' })).toBeInTheDocument()
+    expect(await screen.findByText('Acme Enterprises Pvt. Ltd.')).toBeInTheDocument()
+    const profile = screen.getByRole('region', { name: 'Your profile' })
+    expect(within(profile).getByText('Ada')).toBeInTheDocument()
+    expect(within(profile).getByText('ada@example.com')).toBeInTheDocument()
+    expect(within(profile).queryByText(ME)).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Team → Members' })).toHaveAttribute('href', '/team')
+    await userEvent.click(within(profile).getByRole('button', { name: /Sign out/ }))
     expect(getIdentity()).toBeNull()
   })
 
-  it('Appearance is a System / Light / Dark radio group wired to the theme store', async () => {
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Appearance' })
-    expect(within(section).getByRole('radio', { name: 'System' })).toBeChecked()
-    await userEvent.click(within(section).getByRole('radio', { name: 'Dark' }))
+  it('Appearance switches the theme', async () => {
+    renderSettings('workspace')
+    const appearance = screen.getByRole('region', { name: 'Appearance' })
+    expect(within(appearance).getByRole('radio', { name: /Light/ })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(within(appearance).getByRole('radio', { name: /Dark/ }))
     expect(getThemePreference()).toBe('dark')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(within(section).getByRole('radio', { name: 'Dark' })).toBeChecked()
-    expect(section).toHaveTextContent('Currently showing the dark theme')
-    await userEvent.click(within(section).getByRole('radio', { name: 'Light' }))
-    expect(getThemePreference()).toBe('light')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 
-  it('Navigation toggles the persisted sidebar collapse', async () => {
-    renderSettings()
-    const box = within(screen.getByRole('region', { name: 'Navigation' })).getByRole('checkbox')
-    expect(box).not.toBeChecked()
-    await userEvent.click(box)
-    expect(getCollapsed()).toBe(true)
-    expect(box).toBeChecked()
-    await userEvent.click(box)
-    expect(getCollapsed()).toBe(false)
+  it('Fields & Tags lists the V3 statuses and priorities and the project tags in use', async () => {
+    renderSettings('fields')
+    const defs = screen.getByRole('region', { name: 'Statuses and priorities' })
+    for (const label of ['To Do', 'In Progress', 'Blocked', 'Done', 'Low', 'Normal', 'High', 'On Hold', 'Archived']) {
+      expect(within(defs).getByText(label)).toBeInTheDocument()
+    }
+    expect(within(defs).queryByText('Overdue')).not.toBeInTheDocument()
+    const tags = screen.getByRole('region', { name: 'Project tags in use' })
+    expect(await within(tags).findByText('Sales')).toBeInTheDocument()
+    expect(within(tags).getByText('Ops')).toBeInTheDocument()
   })
 
-  it('Features lists the registry read-only with release badges; About shows the API base URL', () => {
-    renderSettings()
-    const features = screen.getByRole('region', { name: 'Features' })
-    expect(within(features).getByRole('link', { name: 'My Team' })).toHaveAttribute('href', '/team')
-    expect(within(features).getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
-    expect(within(features).getByRole('heading', { name: 'Workspace · Daily work' })).toBeInTheDocument()
-    expect(within(features).getByRole('heading', { name: 'In each project · Project control' })).toBeInTheDocument()
-    // Project-scoped features need a project id, so they are not links here.
-    expect(within(features).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument()
-    const activity = within(features).getByText('Activity').closest('li')!
-    expect(activity).toHaveTextContent('Available')
-    const ai = within(features).getByText('AI Suggestions').closest('li')!
-    expect(ai).toHaveTextContent('Beta')
-    expect(within(features).getAllByText('Available').length).toBeGreaterThan(10)
+  it('counts tags, most used first', () => {
+    expect(tagCounts([['b', 'a'], ['a'], undefined])).toEqual([
+      { tag: 'a', count: 2 },
+      { tag: 'b', count: 1 },
+    ])
+  })
 
-    const about = screen.getByRole('region', { name: 'About' })
-    expect(about).toHaveTextContent('http://localhost:8080')
+  it('Notifications lists what is sent and has no fake toggles', () => {
+    renderSettings('notifications')
+    expect(screen.getByText('A task is assigned to you')).toBeInTheDocument()
+    expect(screen.getByText('Someone mentions you')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+  })
+
+  it('Integrations shows the unreleased connectors as Coming Soon, not as working', () => {
+    renderSettings('integrations')
+    for (const name of ['Google Sheets', 'Pabbly', 'Zoom', 'Zapier']) {
+      const tile = screen.getByText(name).closest('li')!
+      expect(tile).toHaveAttribute('aria-disabled', 'true')
+      expect(within(tile).getByText('Coming Soon')).toBeInTheDocument()
+      expect(within(tile).queryByRole('button')).not.toBeInTheDocument()
+    }
+  })
+
+  it('Subscription & Usage shows the plan and opens the platform wallets', async () => {
+    renderSettings('subscription')
+    expect(await screen.findByText('Advanced')).toBeInTheDocument()
+    expect(screen.getByText('31 Dec 2026')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Manage Plan/ })).toHaveAttribute('href', 'https://workeasy360.com/plans')
+    expect(screen.getAllByRole('link', { name: /Open on WorkEasy360/ })).toHaveLength(3)
+    expect(screen.getByText('AI Credits')).toBeInTheDocument()
   })
 })

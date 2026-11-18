@@ -8,7 +8,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -25,9 +24,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -46,51 +42,54 @@ class CommentControllerTest {
     private RequestContext requestContext;
 
     private static ProjectComment sampleComment(UUID projectId) {
-        return ProjectComment.create(projectId, ExternalUserId.of(UUID.randomUUID()), "Looks good to me");
+        return ProjectComment.createOnTask(projectId, UUID.randomUUID(), ExternalUserId.of(UUID.randomUUID()),
+                "Looks good to me");
     }
 
     @Test
-    @DisplayName("POST creates a comment and returns 201 with a Location header")
-    void createsComment() throws Exception {
-        UUID projectId = UUID.randomUUID();
-        ProjectComment created = sampleComment(projectId);
-        when(commentApplicationService.createComment(eq(requestContext), eq(projectId), any())).thenReturn(created);
+    @DisplayName("POST on a task creates a comment and returns 201")
+    void createsTaskComment() throws Exception {
+        UUID taskId = UUID.randomUUID();
+        ProjectComment created = sampleComment(UUID.randomUUID());
+        when(commentApplicationService.createTaskComment(eq(requestContext), eq(taskId), any())).thenReturn(created);
 
-        mockMvc.perform(post("/api/v1/projects/{projectId}/comments", projectId)
+        mockMvc.perform(post("/api/v1/tasks/{taskId}/comments", taskId)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"body\":\"Looks good to me\"}"))
                 .andExpect(status().isCreated())
-                .andExpect(header().string("Location", org.hamcrest.Matchers.containsString(
-                        "/api/v1/comments/" + created.getId())))
-                .andExpect(jsonPath("$.body").value("Looks good to me"));
+                .andExpect(jsonPath("$.body").value("Looks good to me"))
+                .andExpect(jsonPath("$.taskId").value(created.getTaskId().toString()));
     }
 
     @Test
     @DisplayName("POST with a blank body is rejected")
     void rejectsInvalidCreateRequest() throws Exception {
-        UUID projectId = UUID.randomUUID();
-
-        mockMvc.perform(post("/api/v1/projects/{projectId}/comments", projectId)
+        mockMvc.perform(post("/api/v1/tasks/{taskId}/comments", UUID.randomUUID())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"body\":\"   \"}"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    @DisplayName("GET returns a page of comments, oldest-first by default")
-    void listsComments() throws Exception {
-        UUID projectId = UUID.randomUUID();
-        ProjectComment comment = sampleComment(projectId);
-        Pageable pageable = PageRequest.of(0, 20,
-                org.springframework.data.domain.Sort.by(
-                        org.springframework.data.domain.Sort.Direction.ASC, "createdAt"));
-        when(commentApplicationService.listComments(eq(requestContext), eq(projectId), any()))
-                .thenReturn(new PageImpl<>(List.of(comment), pageable, 1));
+    @DisplayName("GET lists a task's comments, oldest first")
+    void listsTaskComments() throws Exception {
+        UUID taskId = UUID.randomUUID();
+        ProjectComment comment = sampleComment(UUID.randomUUID());
+        when(commentApplicationService.listTaskComments(requestContext, taskId)).thenReturn(List.of(comment));
 
-        mockMvc.perform(get("/api/v1/projects/{projectId}/comments", projectId))
+        mockMvc.perform(get("/api/v1/tasks/{taskId}/comments", taskId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content[0].body").value("Looks good to me"))
-                .andExpect(jsonPath("$.totalElements").value(1));
+                .andExpect(jsonPath("$[0].body").value("Looks good to me"));
+    }
+
+    @Test
+    @DisplayName("project-level comments are gone")
+    void projectLevelCommentsAreGone() throws Exception {
+        mockMvc.perform(post("/api/v1/projects/{projectId}/comments", UUID.randomUUID())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"body\":\"Hello\"}"))
+                .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getStatus())
+                        .isIn(404, 405));
     }
 
     @Test

@@ -14,11 +14,12 @@ import org.junit.jupiter.api.Test;
 class ProjectCommentTest {
 
     private static final UUID PROJECT_ID = UUID.randomUUID();
+    private static final UUID TASK_ID = UUID.randomUUID();
     private static final ExternalUserId AUTHOR = ExternalUserId.of(UUID.randomUUID());
     private static final ExternalUserId OTHER_USER = ExternalUserId.of(UUID.randomUUID());
 
     private static ProjectComment newComment() {
-        return ProjectComment.create(PROJECT_ID, AUTHOR, "Looks good to me");
+        return ProjectComment.createOnTask(PROJECT_ID, TASK_ID, AUTHOR, "Looks good to me");
     }
 
     @Nested
@@ -38,7 +39,7 @@ class ProjectCommentTest {
         @Test
         @DisplayName("rejects a blank body")
         void rejectsBlankBody() {
-            assertThatThrownBy(() -> ProjectComment.create(PROJECT_ID, AUTHOR, "   "))
+            assertThatThrownBy(() -> ProjectComment.createOnTask(PROJECT_ID, TASK_ID, AUTHOR, "   "))
                     .isInstanceOf(ValidationException.class);
         }
     }

@@ -63,7 +63,7 @@ class DashboardControllerTest {
                 .andExpect(jsonPath("$.activeProjectCount").value(5))
                 .andExpect(jsonPath("$.archivedProjectCount").value(1))
                 .andExpect(jsonPath("$.byStatus.ACTIVE").value(3))
-                .andExpect(jsonPath("$.byStatus.PLANNING").value(0))
+                .andExpect(jsonPath("$.byStatus.ON_HOLD").value(0))
                 .andExpect(jsonPath("$.byPriority.HIGH").value(2))
                 .andExpect(jsonPath("$.byPriority.LOW").value(0));
     }

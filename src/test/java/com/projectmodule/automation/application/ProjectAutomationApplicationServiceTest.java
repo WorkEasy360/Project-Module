@@ -68,8 +68,8 @@ class ProjectAutomationApplicationServiceTest {
     }
 
     private ProjectAutomation sampleAutomation() {
-        return ProjectAutomation.create(project.getId(), "Notify on overdue", "task.overdue",
-                AutomationActionType.NOTIFY, UUID.randomUUID(), null, "A task is overdue");
+        return ProjectAutomation.create(project.getId(), "Notify on overdue", "task.blocked",
+                AutomationActionType.NOTIFY, UUID.randomUUID(), "A task is overdue");
     }
 
     @Nested
@@ -83,7 +83,7 @@ class ProjectAutomationApplicationServiceTest {
             when(projectAutomationRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
             ProjectAutomation created = service.createAutomation(context, project.getId(), "Notify on overdue",
-                    "desc", "task.overdue", AutomationActionType.NOTIFY, UUID.randomUUID(), null,
+                    "desc", "task.blocked", AutomationActionType.NOTIFY, UUID.randomUUID(),
                     "A task is overdue");
 
             assertThat(created.getName()).isEqualTo("Notify on overdue");
@@ -100,7 +100,7 @@ class ProjectAutomationApplicationServiceTest {
                     .requirePermission(USER, project.getId(), ProjectPermission.EDIT_PROJECT);
 
             assertThatThrownBy(() -> service.createAutomation(context, project.getId(), "n", null,
-                    "task.overdue", AutomationActionType.NOTIFY, UUID.randomUUID(), null, "m"))
+                    "task.blocked", AutomationActionType.NOTIFY, UUID.randomUUID(), "m"))
                     .isInstanceOf(AuthorizationException.class);
             verify(projectAutomationRepository, never()).save(any());
         }
@@ -208,7 +208,7 @@ class ProjectAutomationApplicationServiceTest {
         void returnsHistoryForArchivedAutomation() {
             ProjectAutomation automation = sampleAutomation();
             automation.archive(USER);
-            AutomationRun run = AutomationRun.succeeded(automation.getId(), project.getId(), "task.overdue");
+            AutomationRun run = AutomationRun.succeeded(automation.getId(), project.getId(), "task.blocked");
             when(projectAutomationRepository.findById(automation.getId())).thenReturn(Optional.of(automation));
             when(projectApplicationService.findActiveProjectInCallerOrganization(context, project.getId()))
                     .thenReturn(project);

@@ -23,7 +23,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 /**
  * REST endpoints for checklist lines.
  *
- * <p><b>Not specified in {@code docs/project/04-API.md}</b>, like Task List and Subtask — this
+ * <p><b>Not specified in {@code docs/project/04-API.md}</b>, like other task details — this
  * extends the same documented URL pattern rather than inventing a different shape. Holds no
  * business logic or authorization decision; both are delegated to
  * {@link ChecklistApplicationService}.

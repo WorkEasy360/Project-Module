@@ -18,12 +18,12 @@ const project: Project = {
 }
 const task: Task = {
   id: 't1', projectId: 'p1', name: 'Repro task', description: null, dueDate: null, assigneeId: null,
-  status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 0,
+  status: 'TODO', archived: false, priority: 'MEDIUM' as const, createdAt: '', updatedAt: '', version: 0,
 }
 
 function board(status: Task['status']) {
   return {
-    columns: (['TODO', 'BLOCKED', 'OVERDUE', 'COMPLETED'] as const).map((s) => ({
+    columns: (['TODO', 'BLOCKED', 'IN_PROGRESS', 'COMPLETED'] as const).map((s) => ({
       status: s,
       tasks: s === status ? [{ ...task, status }] : [],
     })),

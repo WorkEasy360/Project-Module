@@ -14,15 +14,14 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * A single checkable line belonging to a {@link com.projectmodule.work.domain.Task}, optionally
- * scoped to one of its {@link Subtask}s.
+ * A single checkable line belonging to a {@link com.projectmodule.work.domain.Task}.
  *
  * <p>There is no separate "checklist item" entity: {@code docs/project/01-SPEC.md} names only
  * {@code Checklist} among the entities this module owns, so a {@code Checklist} row is itself
  * the checkable unit, not a container. Raises no domain event: {@code docs/project/05-EVENTS.md}
- * defines none for it, the same deliberate absence as {@code TaskList} and {@code Subtask}.
+ * defines none for it.
  *
- * <p>The task and subtask are referenced by plain id, the same convention {@code ProjectMember}
+ * <p>The task is referenced by plain id, the same convention {@code ProjectMember}
  * already uses.
  */
 @Entity
@@ -33,9 +32,6 @@ public class Checklist extends BaseEntity {
 
     @Column(name = "task_id", nullable = false, updatable = false)
     private UUID taskId;
-
-    @Column(name = "subtask_id")
-    private UUID subtaskId;
 
     @Column(name = "text", nullable = false, length = TEXT_MAX_LENGTH)
     private String text;
@@ -53,10 +49,9 @@ public class Checklist extends BaseEntity {
     protected Checklist() {
     }
 
-    private Checklist(UUID id, UUID taskId, UUID subtaskId, String text) {
+    private Checklist(UUID id, UUID taskId, String text) {
         super(id);
         this.taskId = Objects.requireNonNull(taskId, "taskId is required");
-        this.subtaskId = subtaskId;
         this.text = validateText(text);
         this.checked = false;
     }
@@ -64,12 +59,10 @@ public class Checklist extends BaseEntity {
     /**
      * Creates a checklist line, unchecked.
      *
-     * @param subtaskId the owning subtask, or {@code null} if this line belongs directly to the
-     *                  task with no subtask scoping
      * @throws ValidationException if the text is blank or too long
      */
-    public static Checklist create(UUID taskId, UUID subtaskId, String text) {
-        return new Checklist(UuidV7.generate(), taskId, subtaskId, text);
+    public static Checklist create(UUID taskId, String text) {
+        return new Checklist(UuidV7.generate(), taskId, text);
     }
 
     public void relabel(String newText) {
@@ -85,11 +78,6 @@ public class Checklist extends BaseEntity {
     public void uncheck() {
         requireNotArchived("uncheck");
         this.checked = false;
-    }
-
-    public void reassignSubtask(UUID newSubtaskId) {
-        requireNotArchived("reassign the subtask of");
-        this.subtaskId = newSubtaskId;
     }
 
     /**
@@ -129,10 +117,6 @@ public class Checklist extends BaseEntity {
 
     public UUID getTaskId() {
         return taskId;
-    }
-
-    public Optional<UUID> getSubtaskId() {
-        return Optional.ofNullable(subtaskId);
     }
 
     public String getText() {

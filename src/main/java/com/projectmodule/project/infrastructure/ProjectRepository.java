@@ -69,6 +69,30 @@ public interface ProjectRepository extends JpaRepository<Project, UUID> {
     Page<Project> findVisibleToUser(@Param("organizationId") UUID organizationId, @Param("userId") UUID userId,
                                     Pageable pageable);
 
+    /**
+     * Live tasks per project, and how many of them are completed, for progress on project lists.
+     * Native SQL so the project module needs no dependency on the work module's classes.
+     */
+    @Query(value = "SELECT project_id AS projectId, COUNT(*) AS total, "
+            + "COUNT(*) FILTER (WHERE status = 'COMPLETED') AS completed FROM tasks "
+            + "WHERE project_id IN (:projectIds) AND archived_at IS NULL GROUP BY project_id", nativeQuery = true)
+    List<TaskCount> countTasks(@Param("projectIds") java.util.Collection<UUID> projectIds);
+
+    /** Projection for {@link #countTasks}. */
+    interface TaskCount {
+        UUID getProjectId();
+
+        long getTotal();
+
+        long getCompleted();
+    }
+
+    /** The archived projects a person belonged to. */
+    @Query("SELECT p FROM Project p, ProjectMember m WHERE m.projectId = p.id AND m.userId = :userId "
+            + "AND p.organizationId = :organizationId AND p.archivedAt IS NOT NULL")
+    Page<Project> findArchivedVisibleToUser(@Param("organizationId") UUID organizationId, @Param("userId") UUID userId,
+                                            Pageable pageable);
+
     @Query("SELECT p FROM Project p, ProjectMember m WHERE m.projectId = p.id AND m.userId = :userId "
             + "AND p.organizationId = :organizationId AND p.archivedAt IS NULL "
             + "AND LOWER(p.name) LIKE LOWER(CONCAT('%', :term, '%')) ORDER BY p.updatedAt DESC")

@@ -1,66 +1,65 @@
 import { usePeople } from '../../../context/PeopleContext'
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useProjectWorkspace } from '../../../context/ProjectWorkspaceContext'
 import { useAsyncData } from '../../../hooks/useAsyncData'
-import { healthApi } from '../../../api/health'
-import { reportsApi } from '../../../api/reports'
 import { membersApi } from '../../../api/members'
 import { tasksApi } from '../../../api/tasks'
-import { delayDetectionApi } from '../../../api/delayDetection'
 import { ErrorState } from '../../../components/common/ErrorState'
-import { Skeleton, StatGridSkeleton } from '../../../components/common/Skeleton'
+import { Skeleton } from '../../../components/common/Skeleton'
 import { Icon } from '../../../components/common/Icon'
-import { Badge, ArchivedBadge, TaskStatusBadge } from '../../../components/common/Badge'
-import { formatDate, humanizeToken } from '../../../utils/format'
+import { Badge, ArchivedBadge, ProjectStatusBadge, TaskStatusBadge } from '../../../components/common/Badge'
+import { formatDate, humanizeToken, todayIso } from '../../../utils/format'
 import { EditProjectDialog } from '../EditProjectDialog'
 import { ArchiveProjectDialog } from '../ArchiveProjectDialog'
 import { CreateTaskDialog } from '../CreateTaskDialog'
-import { RequestRecommendationDialog } from './AITab'
-import type { DelayedItem, ProjectHealth, Task } from '../../../types/work'
+import type { Task } from '../../../types/work'
+
+/** Task completion summary for a project, worked out from its tasks (V3: never entered by hand). */
+export function completionSummary(tasks: Task[], today: string) {
+  const total = tasks.length
+  const done = tasks.filter((t) => t.status === 'COMPLETED').length
+  const open = tasks.filter((t) => t.status !== 'COMPLETED')
+  return {
+    total,
+    done,
+    open: open.length,
+    blocked: open.filter((t) => t.status === 'BLOCKED').length,
+    overdue: open.filter((t) => t.dueDate !== null && t.dueDate < today).length,
+    unassigned: open.filter((t) => !t.assigneeId).length,
+    progress: total > 0 ? Math.round((done / total) * 100) : null,
+    attention: open
+      .filter((t) => t.status === 'BLOCKED' || (t.dueDate !== null && t.dueDate < today))
+      .sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'))
+      .slice(0, 6),
+  }
+}
 
 /**
- * The first screen after opening a project. Answers, in order: where does this project stand,
- * what needs attention, who's on it — then offers the two most common actions. Every number here
- * comes from a real endpoint (health, reports/summary, tasks?status=…, members).
+ * V3 Project Details > Overview: owner, dates, status and the task completion summary, with the
+ * work that needs attention and who is on the project.
  */
 export function OverviewTab() {
   const { nameOf } = usePeople()
   const { project, can } = useProjectWorkspace()
   const navigate = useNavigate()
-  const [editOpen, setEditOpen] = useState(false)
+  const location = useLocation()
+  // The projects list's "Edit or archive" opens this page with the edit form already open.
+  const [editOpen, setEditOpen] = useState(() => Boolean((location.state as { edit?: boolean } | null)?.edit))
   const [archiveOpen, setArchiveOpen] = useState(false)
   const [taskOpen, setTaskOpen] = useState(false)
-  const [aiOpen, setAiOpen] = useState(false)
 
-  const health = useAsyncData(() => healthApi.get(project.id), [project.id])
-  const summary = useAsyncData(() => reportsApi.summary(project.id), [project.id])
+  const tasks = useAsyncData(() => tasksApi.list(project.id, { sortBy: 'DUE_DATE', sortDir: 'ASC' }), [project.id])
   const members = useAsyncData(() => membersApi.list(project.id), [project.id])
-  // Stored OVERDUE/BLOCKED tasks plus the backend's delayed items (due date passed, not completed —
-  // the same rule the health card's "Overdue items" count uses), so the two cards always agree.
-  const attention = useAsyncData(
-    () =>
-      Promise.all([
-        tasksApi.list(project.id, { status: 'OVERDUE', sortBy: 'DUE_DATE', sortDir: 'ASC' }),
-        tasksApi.list(project.id, { status: 'BLOCKED', sortBy: 'CREATED_AT', sortDir: 'DESC' }),
-        delayDetectionApi.get(project.id),
-      ]).then(([overdue, blocked, delayed]) => mergeAttention([...overdue, ...blocked], delayed.items).slice(0, 8)),
-    [project.id],
-  )
-
-  const total = summary.data ? Object.values(summary.data.taskCountByStatus).reduce((a, b) => a + b, 0) : 0
-  const done = summary.data?.taskCountByStatus.COMPLETED ?? 0
-  const progress = total > 0 ? Math.round((done / total) * 100) : null
+  const summary = tasks.data ? completionSummary(tasks.data, todayIso()) : null
 
   return (
     <div className="overview">
       <header className="overview-header">
         <div className="overview-title">
-          {/* Name, status and priority live in the project header card above the tabs. */}
           <h1>Overview</h1>
           <div className="overview-badges">
             {project.archived && <ArchivedBadge />}
-            {health.data && <HealthBadge health={health.data} />}
           </div>
           {project.description ? (
             <p className="overview-description">{project.description}</p>
@@ -91,48 +90,53 @@ export function OverviewTab() {
       </header>
 
       <div className="overview-grid">
+        <div className="overview-col">
+        <section className="card" aria-labelledby="ov-summary">
+          <h2 id="ov-summary">Summary</h2>
+          <dl className="kv">
+            <div>
+              <dt>Owner</dt>
+              <dd>{nameOf(project.ownerId)}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <ProjectStatusBadge status={project.status} /> {project.archived && <ArchivedBadge />}
+              </dd>
+            </div>
+            <div>
+              <dt>Start date</dt>
+              <dd>{formatDate(project.startDate)}</dd>
+            </div>
+            <div>
+              <dt>Due date</dt>
+              <dd>{formatDate(project.targetEndDate)}</dd>
+            </div>
+          </dl>
+        </section>
+
         <section className="card" aria-labelledby="ov-progress">
-          <h2 id="ov-progress">Progress</h2>
-          {summary.loading && <Skeleton height={10} />}
-          {summary.error && <ErrorState message={summary.error} onRetry={summary.reload} />}
-          {summary.data && (
+          <h2 id="ov-progress">Task completion</h2>
+          {tasks.loading && <Skeleton height={10} />}
+          {tasks.error && <ErrorState message={tasks.error} onRetry={tasks.reload} />}
+          {summary && (
             <>
               <div className="progress-row">
-                <div className="progress-bar" role="progressbar" aria-valuenow={progress ?? 0} aria-valuemin={0} aria-valuemax={100}>
-                  <div className="progress-fill" style={{ width: `${progress ?? 0}%` }} />
+                <div className="progress-bar" role="progressbar" aria-valuenow={summary.progress ?? 0} aria-valuemin={0} aria-valuemax={100}>
+                  <div className="progress-fill" style={{ width: `${summary.progress ?? 0}%` }} />
                 </div>
-                <strong>{progress === null ? '—' : `${progress}%`}</strong>
+                <strong>{summary.progress === null ? 'No tasks' : `${summary.progress}%`}</strong>
               </div>
               <p className="text-muted">
-                {total === 0
-                  ? 'No tasks yet.'
-                  : `${done} of ${total} tasks completed · ${summary.data.taskCountByStatus.OVERDUE} overdue · ${summary.data.taskCountByStatus.BLOCKED} blocked`}
+                {summary.total === 0
+                  ? 'This project has no tasks yet, so there is no progress to show.'
+                  : `${summary.done} of ${summary.total} tasks done · ${summary.overdue} overdue · ${summary.blocked} blocked · ${summary.unassigned} unassigned`}
               </p>
-              <dl className="kv">
-                <div>
-                  <dt>Start</dt>
-                  <dd>{formatDate(project.startDate)}</dd>
-                </div>
-                <div>
-                  <dt>Target end</dt>
-                  <dd>{formatDate(project.targetEndDate)}</dd>
-                </div>
-              </dl>
             </>
           )}
         </section>
 
-        <section className="card" aria-labelledby="ov-attention">
-          <div className="card-title-row">
-            <h2 id="ov-attention">Needs attention</h2>
-            <Link to="../health" relative="path">
-              Full health
-            </Link>
-          </div>
-          {health.loading && <StatGridSkeleton count={3} />}
-          {health.error && <ErrorState message={health.error} onRetry={health.reload} />}
-          {health.data && <AttentionList health={health.data} projectId={project.id} />}
-        </section>
+        </div>
 
         <section className="card" aria-labelledby="ov-work">
           <div className="card-title-row">
@@ -141,24 +145,23 @@ export function OverviewTab() {
               All tasks
             </Link>
           </div>
-          {attention.loading && <Skeleton height={48} />}
-          {attention.error && <ErrorState message={attention.error} onRetry={attention.reload} />}
-          {attention.data && attention.data.length === 0 && (
+          {tasks.loading && <Skeleton height={48} />}
+          {summary && summary.attention.length === 0 && (
             <p className="text-muted">
               <Icon name="tasks" size={14} /> Nothing is overdue or blocked right now.
             </p>
           )}
-          {attention.data && attention.data.length > 0 && (
+          {summary && summary.attention.length > 0 && (
             <ul className="list-plain">
-              {attention.data.map((row) => (
-                <li key={`${row.kind}-${row.id}`} className="work-item">
-                  <Link to={row.to} relative="path">
-                    {row.name}
+              {summary.attention.map((task) => (
+                <li key={task.id} className="work-item">
+                  <Link to={`../tasks/${task.id}`} relative="path">
+                    {task.name}
                   </Link>
                   <span>
-                    {row.status ? <TaskStatusBadge status={row.status} /> : <Badge tone="neutral">{row.kind}</Badge>}{' '}
-                    {row.pastDue && <span className="text-danger">past due</span>}{' '}
-                    {row.dueDate && <span className="text-faint">due {formatDate(row.dueDate)}</span>}
+                    <TaskStatusBadge status={task.status} />{' '}
+                    {task.dueDate && task.dueDate < todayIso() && <span className="text-danger">past due</span>}{' '}
+                    {task.dueDate && <span className="text-faint">due {formatDate(task.dueDate)}</span>}
                   </span>
                 </li>
               ))}
@@ -168,7 +171,7 @@ export function OverviewTab() {
 
         <section className="card" aria-labelledby="ov-team">
           <div className="card-title-row">
-            <h2 id="ov-team">Team</h2>
+            <h2 id="ov-team">Members</h2>
             <Link to="../members" relative="path">
               Manage
             </Link>
@@ -183,23 +186,18 @@ export function OverviewTab() {
                   <Badge tone={m.role === 'OWNER' ? 'primary' : 'neutral'}>{humanizeToken(m.role)}</Badge>
                 </li>
               ))}
-              {members.data.length > 6 && (
-                <li className="text-faint">+{members.data.length - 6} more</li>
-              )}
+              {members.data.length > 6 && <li className="text-faint">+{members.data.length - 6} more</li>}
             </ul>
           )}
         </section>
       </div>
 
       <div className="overview-footer">
-        {can('EDIT_PROJECT') && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setAiOpen(true)}>
-            <Icon name="ai" size={15} /> Analyze project with AI
+        {can('EDIT_PROJECT') && !project.archived && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setEditOpen(true)}>
+            Edit project
           </button>
         )}
-        <Link className="btn btn-ghost btn-sm" to="../more" relative="path">
-          More tools <Icon name="chevronRight" size={14} />
-        </Link>
         {can('ARCHIVE_PROJECT') && !project.archived && (
           <button className="btn btn-ghost btn-sm text-danger" onClick={() => setArchiveOpen(true)}>
             Archive project
@@ -216,93 +214,6 @@ export function OverviewTab() {
           onCreated={(task) => navigate(`/projects/${project.id}/tasks/${task.id}`)}
         />
       )}
-      {aiOpen && (
-        <RequestRecommendationDialog
-          projectId={project.id}
-          initialType="PROJECT_SUMMARY"
-          onClose={() => setAiOpen(false)}
-          onRequested={() => navigate(`/projects/${project.id}/ai`)}
-        />
-      )}
     </div>
   )
-}
-
-function HealthBadge({ health }: { health: ProjectHealth }) {
-  // Same severity mapping as the dashboard's healthLevel(): blocked is red everywhere.
-  const critical = health.overdueItemCount + health.blockedTaskCount + health.brokenDependencyCount
-  const warning = health.unresolvedRiskCount + health.unresolvedIssueCount
-  if (critical > 0) return <Badge tone="danger">Needs attention</Badge>
-  if (warning > 0) return <Badge tone="warning">Watch</Badge>
-  return <Badge tone="success">On track</Badge>
-}
-
-function AttentionList({ health, projectId }: { health: ProjectHealth; projectId: string }) {
-  const rows: { label: string; value: number; tone: 'danger' | 'warning'; to: string }[] = [
-    { label: 'Overdue items', value: health.overdueItemCount, tone: 'danger', to: 'delayed' },
-    { label: 'Tasks blocked by a dependency', value: health.blockedTaskCount, tone: 'danger', to: 'dependencies' },
-    { label: 'Open risks', value: health.unresolvedRiskCount, tone: 'warning', to: 'risks' },
-    { label: 'Open issues', value: health.unresolvedIssueCount, tone: 'warning', to: 'issues' },
-    { label: 'Broken task relationships', value: health.brokenDependencyCount, tone: 'danger', to: 'dependencies' },
-  ]
-  const active = rows.filter((r) => r.value > 0)
-  if (active.length === 0) {
-    return (
-      <p className="text-muted">
-        <Icon name="health" size={14} /> Everything looks healthy.
-      </p>
-    )
-  }
-  return (
-    <ul className="list-plain">
-      {active.map((r) => (
-        <li key={r.label} className="work-item">
-          <Link to={`/projects/${projectId}/${r.to}`}>{r.label}</Link>
-          <Badge tone={r.tone}>{r.value}</Badge>
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-interface AttentionRow {
-  kind: 'Task' | 'Milestone' | 'Phase'
-  id: string
-  name: string
-  /** Stored task status (tasks only). Never rewritten — a Blocked task stays Blocked. */
-  status: Task['status'] | null
-  dueDate: string | null
-  pastDue: boolean
-  to: string
-}
-
-/**
- * One list from two real sources: tasks whose stored status is OVERDUE/BLOCKED, and the delayed
- * items the backend derives (due date passed, not completed). A task in both appears once.
- */
-export function mergeAttention(tasks: Task[], delayed: DelayedItem[]): AttentionRow[] {
-  const rows: AttentionRow[] = tasks.map((t) => ({
-    kind: 'Task',
-    id: t.id,
-    name: t.name,
-    status: t.status,
-    dueDate: t.dueDate,
-    pastDue: delayed.some((d) => d.entityType === 'TASK' && d.id === t.id),
-    to: `../tasks/${t.id}`,
-  }))
-  const seen = new Set(rows.map((r) => r.id))
-  for (const d of delayed) {
-    if (seen.has(d.id)) continue
-    const kind: AttentionRow['kind'] = d.entityType === 'MILESTONE' ? 'Milestone' : d.entityType === 'PHASE' ? 'Phase' : 'Task'
-    rows.push({
-      kind,
-      id: d.id,
-      name: d.name,
-      status: kind === 'Task' ? 'TODO' : null,
-      dueDate: d.dueDate,
-      pastDue: true,
-      to: kind === 'Task' ? `../tasks/${d.id}` : kind === 'Milestone' ? '../milestones' : '../phases',
-    })
-  }
-  return rows
 }

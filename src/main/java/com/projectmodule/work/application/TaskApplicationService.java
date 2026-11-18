@@ -11,11 +11,9 @@ import com.projectmodule.project.application.authorization.ProjectPermission;
 import com.projectmodule.work.api.dto.CreateTaskRequest;
 import com.projectmodule.work.api.dto.UpdateTaskRequest;
 import com.projectmodule.work.domain.Task;
-import com.projectmodule.work.domain.TaskFollower;
 import com.projectmodule.work.domain.TaskSortField;
 import com.projectmodule.work.domain.TaskStatus;
 import com.projectmodule.work.domain.event.TaskDomainEvent;
-import com.projectmodule.work.infrastructure.TaskFollowerRepository;
 import com.projectmodule.work.infrastructure.TaskRepository;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
@@ -31,12 +29,12 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Use cases for task CRUD.
  *
- * <p>Same tenant/authorization pattern as {@link PhaseApplicationService}: the owning project is
+ * <p>The owning project is
  * resolved through {@code ProjectApplicationService.findActiveProjectInCallerOrganization}, and
  * every mutation is gated by the existing {@link ProjectAuthorizationService} — no second
  * authorization system.
  *
- * <p>Status transitions ({@code complete}/{@code markBlocked}/{@code markOverdue}) and
+ * <p>Status transitions ({@code complete}/{@code markBlocked}/{@code startWork}/{@code reopen}) and
  * assignment go through the same {@code PATCH} this service uses for plain field edits, since
  * {@code docs/project/04-API.md} defines no separate action endpoint for a task. A plain field
  * edit raises {@code task.updated}; a status transition or assignment raises exactly the one
@@ -50,16 +48,13 @@ public class TaskApplicationService {
     private final ProjectAuthorizationService projectAuthorizationService;
     private final WorkEventRecorder workEventRecorder;
     private final TaskNotifier taskNotifier;
-    private final TaskFollowerRepository followerRepository;
 
     public TaskApplicationService(TaskRepository taskRepository,
                                   ProjectApplicationService projectApplicationService,
                                   ProjectAuthorizationService projectAuthorizationService,
                                   WorkEventRecorder workEventRecorder,
-                                  TaskNotifier taskNotifier,
-                                  TaskFollowerRepository followerRepository) {
+                                  TaskNotifier taskNotifier) {
         this.taskNotifier = taskNotifier;
-        this.followerRepository = followerRepository;
         this.taskRepository = taskRepository;
         this.projectApplicationService = projectApplicationService;
         this.projectAuthorizationService = projectAuthorizationService;
@@ -85,9 +80,6 @@ public class TaskApplicationService {
         if (request.estimateMinutes() != null) {
             task.estimate(request.estimateMinutes());
         }
-        if (request.recurrence() != null) {
-            task.repeat(request.recurrence());
-        }
         if (request.tags() != null) {
             task.tag(request.tags());
         }
@@ -100,25 +92,6 @@ public class TaskApplicationService {
         }
 
         return task;
-    }
-
-    /** People following the task. */
-    @Transactional(readOnly = true)
-    public List<UUID> listFollowers(RequestContext context, UUID taskId) {
-        Task task = getTask(context, taskId);
-        return followerRepository.findByTaskId(task.getId()).stream().map(TaskFollower::getUserId).toList();
-    }
-
-    /** Start or stop following a task. Anyone who can see it may follow it. */
-    @Transactional
-    public void setFollowing(RequestContext context, UUID taskId, boolean following) {
-        Task task = getTask(context, taskId);
-        TaskFollower.Key key = new TaskFollower.Key(task.getId(), context.requireUserId().value());
-        if (following && !followerRepository.existsById(key)) {
-            followerRepository.save(new TaskFollower(key.taskId(), key.userId()));
-        } else if (!following) {
-            followerRepository.deleteById(key);
-        }
     }
 
     @Transactional(readOnly = true)
@@ -213,15 +186,9 @@ public class TaskApplicationService {
         task.requireDatesInOrder();
 
         boolean justCompleted = statusBefore != TaskStatus.COMPLETED && task.getStatus() == TaskStatus.COMPLETED;
-        Optional<Task> nextOccurrence = justCompleted ? task.spawnNextOccurrence() : Optional.empty();
 
         task = taskRepository.save(task);
         recordEvents(context, task);
-
-        if (nextOccurrence.isPresent()) {
-            Task next = taskRepository.save(nextOccurrence.get());
-            recordEvents(context, next);
-        }
 
         UUID actorId = context.requireUserId().value();
         if (!task.getAssigneeId().equals(assigneeBefore)) {
@@ -273,10 +240,6 @@ public class TaskApplicationService {
             task.estimate(request.estimateMinutes());
             plainFieldChanged = true;
         }
-        if (request.recurrence() != null) {
-            task.repeat(request.recurrence());
-            plainFieldChanged = true;
-        }
         if (request.tags() != null) {
             task.tag(request.tags());
             plainFieldChanged = true;
@@ -296,7 +259,6 @@ public class TaskApplicationService {
         switch (requestedStatus) {
             case COMPLETED -> task.complete();
             case BLOCKED -> task.markBlocked();
-            case OVERDUE -> task.markOverdue();
             case IN_PROGRESS -> task.startWork();
             case TODO -> task.reopen();
         }
@@ -320,7 +282,7 @@ public class TaskApplicationService {
 
     /**
      * Finds a task by id and verifies its owning project is in the caller's organization.
-     * Public so {@code SubtaskApplicationService} and {@code ChecklistApplicationService} can
+     * Public so {@code ChecklistApplicationService} and the comment service can
      * resolve up to the owning project for their own authorization check, the same reuse
      * pattern {@code ProjectApplicationService.findActiveProjectInCallerOrganization} already
      * establishes.

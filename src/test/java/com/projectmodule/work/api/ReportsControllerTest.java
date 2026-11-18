@@ -8,10 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.projectmodule.common.context.RequestContext;
 import com.projectmodule.common.exception.AuthorizationException;
 import com.projectmodule.config.ApiConfiguration;
-import com.projectmodule.project.domain.ProjectPriority;
 import com.projectmodule.work.api.dto.ProjectSummaryReportResponse;
 import com.projectmodule.work.application.ReportsApplicationService;
-import com.projectmodule.work.domain.RiskStatus;
 import com.projectmodule.work.domain.TaskStatus;
 import java.util.EnumMap;
 import java.util.Map;
@@ -46,24 +44,14 @@ class ReportsControllerTest {
             taskCounts.put(status, 0L);
         }
         taskCounts.put(TaskStatus.BLOCKED, 2L);
-        Map<RiskStatus, Long> riskCounts = new EnumMap<>(RiskStatus.class);
-        for (RiskStatus status : RiskStatus.values()) {
-            riskCounts.put(status, 0L);
-        }
-        Map<ProjectPriority, Long> priorityCounts = new EnumMap<>(ProjectPriority.class);
-        for (ProjectPriority priority : ProjectPriority.values()) {
-            priorityCounts.put(priority, 0L);
-        }
 
-        ProjectSummaryReportResponse response = new ProjectSummaryReportResponse(
-                taskCounts, riskCounts, priorityCounts, priorityCounts, 3L, 1L, 0L);
+        ProjectSummaryReportResponse response = new ProjectSummaryReportResponse(taskCounts);
         when(reportsApplicationService.getSummary(requestContext, projectId)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/projects/{projectId}/reports/summary", projectId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.taskCountByStatus.BLOCKED").value(2))
-                .andExpect(jsonPath("$.decisionCount").value(3))
-                .andExpect(jsonPath("$.delayedItemCount").value(1));
+                .andExpect(jsonPath("$.taskCountByStatus.COMPLETED").value(0));
     }
 
     @Test

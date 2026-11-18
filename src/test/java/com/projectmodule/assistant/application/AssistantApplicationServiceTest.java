@@ -183,14 +183,14 @@ class AssistantApplicationServiceTest {
     @Test
     @DisplayName("declining means the change is not made, and the model is told so")
     void declineMakesNoChange() {
-        when(tools.describe(eq(context), eq("log_time"), anyMap())).thenReturn("Log 1h on \"Write post\"");
-        model.replies.add(reply("tool_use", toolUse("tu_1", "log_time", "{\"task_id\":\"t\",\"minutes\":60,\"work_date\":\"2026-11-10\"}")));
-        AssistantApplicationService.Reply asked = service.chat(context, null, "Log an hour", null);
+        when(tools.describe(eq(context), eq("add_comment"), anyMap())).thenReturn("Comment on \"Write post\": \"Done\"");
+        model.replies.add(reply("tool_use", toolUse("tu_1", "add_comment", "{\"task_id\":\"t\",\"body\":\"Done\"}")));
+        AssistantApplicationService.Reply asked = service.chat(context, null, "Comment that it is done", null);
 
         model.replies.add(reply("end_turn", text("No problem, I left it.")));
         service.decide(context, asked.conversationId(), false);
 
-        verify(tools, never()).execute(any(), eq("log_time"), anyMap());
+        verify(tools, never()).execute(any(), eq("add_comment"), anyMap());
         assertThat(model.requests.get(1).messages().get(2).toString()).contains("declined");
     }
 
@@ -272,11 +272,11 @@ class AssistantApplicationServiceTest {
     @Test
     @DisplayName("navigation is passed to the app, and an empty or over-long message is refused")
     void navigatesAndValidates() {
-        when(tools.execute(any(), eq("navigate"), anyMap())).thenReturn(ToolOutcome.navigate("/timesheet", "Opened timesheet."));
-        model.replies.add(reply("tool_use", toolUse("tu_1", "navigate", "{\"page\":\"timesheet\"}")));
-        model.replies.add(reply("end_turn", text("Here is your timesheet.")));
+        when(tools.execute(any(), eq("navigate"), anyMap())).thenReturn(ToolOutcome.navigate("/tasks/all", "Opened all tasks."));
+        model.replies.add(reply("tool_use", toolUse("tu_1", "navigate", "{\"page\":\"all_tasks\"}")));
+        model.replies.add(reply("end_turn", text("Here are all your tasks.")));
 
-        assertThat(service.chat(context, null, "Open my timesheet", null).navigateTo()).isEqualTo("/timesheet");
+        assertThat(service.chat(context, null, "Show me all tasks", null).navigateTo()).isEqualTo("/tasks/all");
         assertThatThrownBy(() -> service.chat(context, null, "  ", null))
                 .isInstanceOf(com.projectmodule.common.exception.ValidationException.class);
         assertThatThrownBy(() -> service.chat(context, null, "x".repeat(4001), null))

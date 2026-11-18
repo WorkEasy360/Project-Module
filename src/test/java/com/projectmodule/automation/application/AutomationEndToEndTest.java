@@ -82,9 +82,9 @@ class AutomationEndToEndTest {
             Optional.of(owner), Optional.of(organization), "corr-e2e", ActorType.HUMAN);
 
     @Test
-    @DisplayName("marking a task overdue fires a matching NOTIFY automation; when the action "
+    @DisplayName("marking a task blocked fires a matching NOTIFY automation; when the action "
             + "fails, the task update still commits and the failure is recorded, not thrown")
-    void taskOverdueTriggersAutomationEvenWhenActionFails() {
+    void taskBlockedTriggersAutomationEvenWhenActionFails() {
         doThrow(new RuntimeException("simulated notification failure"))
                 .when(notificationPort).notify(any(), any(), any(), any());
 
@@ -94,18 +94,18 @@ class AutomationEndToEndTest {
                 context, project.getId(), new CreateTaskRequest("Ship feature", null, null, null));
 
         ProjectAutomation automation = projectAutomationRepository.saveAndFlush(
-                ProjectAutomation.create(project.getId(), "Notify on overdue", "task.overdue",
-                        AutomationActionType.NOTIFY, UUID.randomUUID(), null, "A task is overdue"));
+                ProjectAutomation.create(project.getId(), "Notify on overdue", "task.blocked",
+                        AutomationActionType.NOTIFY, UUID.randomUUID(), "A task is overdue"));
 
         assertThatCode(() -> taskApplicationService.updateTask(context, task.getId(),
-                new UpdateTaskRequest(null, null, null, null, TaskStatus.OVERDUE, task.getVersion())))
+                new UpdateTaskRequest(null, null, null, null, TaskStatus.BLOCKED, task.getVersion())))
                 .as("the triggering request must succeed even though the automation's action fails")
                 .doesNotThrowAnyException();
 
         Task reloaded = taskRepository.findById(task.getId()).orElseThrow();
         assertThat(reloaded.getStatus())
                 .as("the task status change must have committed")
-                .isEqualTo(TaskStatus.OVERDUE);
+                .isEqualTo(TaskStatus.BLOCKED);
 
         List<AutomationRun> runs = automationRunRepository.findByAutomationIdOrderByExecutedAtDesc(automation.getId());
         assertThat(runs).hasSize(1);
@@ -122,12 +122,12 @@ class AutomationEndToEndTest {
                 context, project.getId(), new CreateTaskRequest("Ship feature", null, null, null));
 
         ProjectAutomation automation = ProjectAutomation.create(project.getId(), "Notify on overdue (disabled)",
-                "task.overdue", AutomationActionType.NOTIFY, UUID.randomUUID(), null, "A task is overdue");
+                "task.blocked", AutomationActionType.NOTIFY, UUID.randomUUID(), "A task is overdue");
         automation.disable();
         projectAutomationRepository.saveAndFlush(automation);
 
         taskApplicationService.updateTask(context, task.getId(),
-                new UpdateTaskRequest(null, null, null, null, TaskStatus.OVERDUE, task.getVersion()));
+                new UpdateTaskRequest(null, null, null, null, TaskStatus.BLOCKED, task.getVersion()));
 
         assertThat(automationRunRepository.findByAutomationIdOrderByExecutedAtDesc(automation.getId())).isEmpty();
     }

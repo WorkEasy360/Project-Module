@@ -31,22 +31,12 @@ class BulkActionsApplicationServiceTest {
     @Mock
     private TaskApplicationService taskApplicationService;
 
-    @Mock
-    private RiskApplicationService riskApplicationService;
-
-    @Mock
-    private IssueApplicationService issueApplicationService;
-
-    @Mock
-    private DecisionApplicationService decisionApplicationService;
-
     private BulkActionsApplicationService service;
     private RequestContext context;
 
     @BeforeEach
     void setUp() {
-        service = new BulkActionsApplicationService(
-                taskApplicationService, riskApplicationService, issueApplicationService, decisionApplicationService);
+        service = new BulkActionsApplicationService(taskApplicationService);
         context = new ImmutableRequestContext(Optional.of(USER), Optional.of(ORG), "corr-1", ActorType.HUMAN);
     }
 
@@ -82,38 +72,5 @@ class BulkActionsApplicationServiceTest {
         assertThat(results.get(1).succeeded()).isFalse();
         assertThat(results.get(1).error()).contains("Task");
         verify(taskApplicationService).archiveTask(context, succeeds);
-    }
-
-    @Test
-    @DisplayName("bulkArchiveRisks delegates to RiskApplicationService.archiveRisk per id")
-    void bulkArchiveRisksDelegates() {
-        UUID id = UUID.randomUUID();
-
-        List<BulkArchiveResultResponse> results = service.bulkArchiveRisks(context, List.of(id));
-
-        assertThat(results).containsExactly(new BulkArchiveResultResponse(id, true, null));
-        verify(riskApplicationService).archiveRisk(context, id);
-    }
-
-    @Test
-    @DisplayName("bulkArchiveIssues delegates to IssueApplicationService.archiveIssue per id")
-    void bulkArchiveIssuesDelegates() {
-        UUID id = UUID.randomUUID();
-
-        List<BulkArchiveResultResponse> results = service.bulkArchiveIssues(context, List.of(id));
-
-        assertThat(results).containsExactly(new BulkArchiveResultResponse(id, true, null));
-        verify(issueApplicationService).archiveIssue(context, id);
-    }
-
-    @Test
-    @DisplayName("bulkArchiveDecisions delegates to DecisionApplicationService.archiveDecision per id")
-    void bulkArchiveDecisionsDelegates() {
-        UUID id = UUID.randomUUID();
-
-        List<BulkArchiveResultResponse> results = service.bulkArchiveDecisions(context, List.of(id));
-
-        assertThat(results).containsExactly(new BulkArchiveResultResponse(id, true, null));
-        verify(decisionApplicationService).archiveDecision(context, id);
     }
 }

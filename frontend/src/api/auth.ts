@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, uploadFile } from './client'
 
 export type WorkspaceRole = 'ADMIN' | 'MEMBER'
 
@@ -8,6 +8,8 @@ export interface Account {
   email: string
   name: string
   workspaceRole: WorkspaceRole
+  /** Changes when the profile photo does; null when there is none. */
+  avatarVersion?: string | null
 }
 
 export interface Session {
@@ -17,12 +19,14 @@ export interface Session {
 }
 
 export const authApi = {
+  uploadAvatar: (file: File) => uploadFile<Account>('/auth/me/avatar', file),
+  removeAvatar: () => api.del('/auth/me/avatar'),
   login: (body: { email: string; password: string; rememberMe: boolean }) =>
     api.post<Session>('/auth/login', body),
   register: (body: { name: string; email: string; password: string; rememberMe: boolean }) =>
     api.post<Session>('/auth/register', body),
   logout: () => api.post<void>('/auth/logout'),
-  config: () => api.get<{ googleClientId: string; emailEnabled: boolean; legacyHandover?: boolean }>('/auth/config'),
+  config: () => api.get<{ googleClientId: string; emailEnabled: boolean; legacyHandover?: boolean; workeasy360SignInUrl?: string }>('/auth/config'),
   claimEarlierSignIn: (body: { userId: string; organizationId: string; name: string; email: string; password: string; rememberMe: boolean }) =>
     api.post<Session>('/auth/legacy/claim', body),
   google: (body: { credential: string; rememberMe: boolean }) => api.post<Session>('/auth/google', body),

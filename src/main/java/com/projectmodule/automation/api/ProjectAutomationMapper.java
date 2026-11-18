@@ -19,7 +19,6 @@ public class ProjectAutomationMapper {
                 automation.getTriggerEvent(),
                 automation.getActionType(),
                 automation.getActionRecipientId().map(id -> id.value()).orElse(null),
-                automation.getActionChannelReference().orElse(null),
                 automation.getActionMessage(),
                 automation.isEnabled(),
                 automation.isArchived(),

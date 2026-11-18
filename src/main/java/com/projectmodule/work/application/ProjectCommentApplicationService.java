@@ -19,8 +19,6 @@ import com.projectmodule.work.domain.Task;
 import com.projectmodule.work.infrastructure.ProjectCommentRepository;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -76,7 +74,7 @@ public class ProjectCommentApplicationService {
         return commentRepository.findByTaskIdAndArchivedAtIsNullOrderByCreatedAtAsc(task.getId());
     }
 
-    /** Posts a comment on a task and tells its followers and anyone mentioned. */
+    /** Posts a comment on a task and tells its assignee, earlier commenters and anyone mentioned. */
     @Transactional
     public ProjectComment createTaskComment(RequestContext context, UUID taskId, CreateCommentRequest request) {
         Task task = taskApplicationService.getTask(context, taskId);
@@ -98,27 +96,6 @@ public class ProjectCommentApplicationService {
         return mentions.stream()
                 .filter(person -> projectMemberRepository.existsByProjectIdAndUserId(projectId, person))
                 .toList();
-    }
-
-    @Transactional
-    public ProjectComment createComment(RequestContext context, UUID projectId, CreateCommentRequest request) {
-        projectApplicationService.findActiveProjectInCallerOrganization(context, projectId);
-        ExternalUserId authorId = context.requireUserId();
-        projectAuthorizationService.requirePermission(authorId, projectId, ProjectPermission.VIEW_PROJECT);
-
-        ProjectComment comment = commentRepository.save(ProjectComment.create(projectId, authorId, request.body()));
-        projectActivityRepository.save(ProjectActivity.record(projectId, ActivityType.COMMENT_ADDED, context,
-                "Commented on the project", null));
-        taskNotifier.mentionedInProject(projectId, authorId.value(), onlyProjectMembers(projectId, request.mentions()));
-        return comment;
-    }
-
-    @Transactional(readOnly = true)
-    public Page<ProjectComment> listComments(RequestContext context, UUID projectId, Pageable pageable) {
-        projectApplicationService.findActiveProjectInCallerOrganization(context, projectId);
-        projectAuthorizationService.requirePermission(
-                context.requireUserId(), projectId, ProjectPermission.VIEW_PROJECT);
-        return commentRepository.findProjectLevelComments(projectId, pageable);
     }
 
     @Transactional

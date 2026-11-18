@@ -10,34 +10,19 @@ const TASK_STATUS_TONE: Record<string, BadgeTone> = {
   TODO: 'neutral',
   IN_PROGRESS: 'info',
   BLOCKED: 'danger',
-  OVERDUE: 'warning',
   COMPLETED: 'success',
-}
-
-const MILESTONE_STATUS_TONE: Record<string, BadgeTone> = {
-  PENDING: 'neutral',
-  AT_RISK: 'warning',
-  COMPLETED: 'success',
-}
-
-const RISK_STATUS_TONE: Record<string, BadgeTone> = {
-  OPEN: 'warning',
-  RESOLVED: 'success',
 }
 
 const PRIORITY_TONE: Record<string, BadgeTone> = {
   LOW: 'neutral',
   MEDIUM: 'info',
   HIGH: 'warning',
-  CRITICAL: 'danger',
 }
 
 const PROJECT_STATUS_TONE: Record<string, BadgeTone> = {
-  PLANNING: 'neutral',
   ACTIVE: 'primary',
   ON_HOLD: 'warning',
   COMPLETED: 'success',
-  CANCELLED: 'danger',
 }
 
 const RUN_STATUS_TONE: Record<string, BadgeTone> = {
@@ -45,25 +30,17 @@ const RUN_STATUS_TONE: Record<string, BadgeTone> = {
   FAILED: 'danger',
 }
 
-const RECOMMENDATION_STATUS_TONE: Record<string, BadgeTone> = {
-  PENDING: 'neutral',
-  ACCEPTED: 'success',
-  REJECTED: 'danger',
-  EXPIRED: 'warning',
+function StatusBadge({ value, tones, label }: { value: string; tones: Record<string, BadgeTone>; label?: string }) {
+  return <Badge tone={tones[value] ?? 'neutral'}>{label ?? humanizeToken(value)}</Badge>
 }
 
-function StatusBadge({ value, tones }: { value: string; tones: Record<string, BadgeTone> }) {
-  return <Badge tone={tones[value] ?? 'neutral'}>{humanizeToken(value)}</Badge>
+/** The V3 name of a task status: a finished task reads "Done". */
+export function taskStatusLabel(status: string): string {
+  return status === 'COMPLETED' ? 'Done' : humanizeToken(status)
 }
 
 export const TaskStatusBadge = (p: { status: string }) => (
-  <StatusBadge value={p.status} tones={TASK_STATUS_TONE} />
-)
-export const MilestoneStatusBadge = (p: { status: string }) => (
-  <StatusBadge value={p.status} tones={MILESTONE_STATUS_TONE} />
-)
-export const RiskStatusBadge = (p: { status: string }) => (
-  <StatusBadge value={p.status} tones={RISK_STATUS_TONE} />
+  <StatusBadge value={p.status} tones={TASK_STATUS_TONE} label={taskStatusLabel(p.status)} />
 )
 export const PriorityBadge = (p: { priority: string }) => (
   <StatusBadge value={p.priority} tones={PRIORITY_TONE} />
@@ -73,8 +50,5 @@ export const ProjectStatusBadge = (p: { status: string }) => (
 )
 export const RunStatusBadge = (p: { status: string }) => (
   <StatusBadge value={p.status} tones={RUN_STATUS_TONE} />
-)
-export const RecommendationStatusBadge = (p: { status: string }) => (
-  <StatusBadge value={p.status} tones={RECOMMENDATION_STATUS_TONE} />
 )
 export const ArchivedBadge = () => <Badge tone="neutral">Archived</Badge>

@@ -44,8 +44,8 @@ class ProjectAutomationControllerTest {
     private RequestContext requestContext;
 
     private static ProjectAutomation sample(UUID projectId) {
-        return ProjectAutomation.create(projectId, "Notify on overdue", "task.overdue",
-                AutomationActionType.NOTIFY, UUID.randomUUID(), null, "A task is overdue");
+        return ProjectAutomation.create(projectId, "Notify on overdue", "task.blocked",
+                AutomationActionType.NOTIFY, UUID.randomUUID(), "A task is overdue");
     }
 
     @Test
@@ -54,7 +54,7 @@ class ProjectAutomationControllerTest {
         UUID projectId = UUID.randomUUID();
         ProjectAutomation created = sample(projectId);
         when(projectAutomationApplicationService.createAutomation(eq(requestContext), eq(projectId),
-                        any(), any(), any(), any(), any(), any(), any()))
+                        any(), any(), any(), any(), any(), any()))
                 .thenReturn(created);
 
         mockMvc.perform(post("/api/v1/projects/{projectId}/automations", projectId)
@@ -88,7 +88,7 @@ class ProjectAutomationControllerTest {
     void rejectsUncatalogedTriggerEvent() throws Exception {
         UUID projectId = UUID.randomUUID();
         when(projectAutomationApplicationService.createAutomation(eq(requestContext), eq(projectId),
-                        any(), any(), any(), any(), any(), any(), any()))
+                        any(), any(), any(), any(), any(), any()))
                 .thenThrow(new ValidationException(
                         "triggerEvent must be one of the catalogued event types; was 'task.deleted'"));
 
@@ -144,12 +144,12 @@ class ProjectAutomationControllerTest {
     void listsRuns() throws Exception {
         UUID automationId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
-        AutomationRun run = AutomationRun.succeeded(automationId, projectId, "task.overdue");
+        AutomationRun run = AutomationRun.succeeded(automationId, projectId, "task.blocked");
         when(projectAutomationApplicationService.listRuns(requestContext, automationId)).thenReturn(List.of(run));
 
         mockMvc.perform(get("/api/v1/automations/{id}/runs", automationId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].status").value("SUCCEEDED"))
-                .andExpect(jsonPath("$[0].triggerEvent").value("task.overdue"));
+                .andExpect(jsonPath("$[0].triggerEvent").value("task.blocked"));
     }
 }

@@ -41,7 +41,7 @@ class ChecklistControllerTest {
     private RequestContext requestContext;
 
     private static Checklist sampleChecklist(UUID taskId) {
-        return Checklist.create(taskId, null, "Add password validation");
+        return Checklist.create(taskId, "Add password validation");
     }
 
     @Test

@@ -1,133 +1,26 @@
-import type { ProjectPriority } from './project'
-
-// ---------- Phase ----------
-
-export interface Phase {
-  id: string
-  projectId: string
-  name: string
-  description: string | null
-  startDate: string | null
-  endDate: string | null
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreatePhaseRequest {
-  name: string
-  description?: string | null
-  startDate?: string | null
-  endDate?: string | null
-}
-
-export interface UpdatePhaseRequest {
-  name?: string | null
-  description?: string | null
-  startDate?: string | null
-  endDate?: string | null
-  version: number
-}
-
-// ---------- Milestone ----------
-
-export type MilestoneStatus = 'PENDING' | 'AT_RISK' | 'COMPLETED'
-
-export const MILESTONE_STATUSES: MilestoneStatus[] = ['PENDING', 'AT_RISK', 'COMPLETED']
-
-/** Allowed forward transitions only — the domain never allows moving back to PENDING. */
-export const MILESTONE_STATUS_TRANSITIONS: Record<MilestoneStatus, MilestoneStatus[]> = {
-  PENDING: ['AT_RISK', 'COMPLETED'],
-  AT_RISK: ['COMPLETED'],
-  COMPLETED: [],
-}
-
-export interface Milestone {
-  id: string
-  projectId: string
-  phaseId: string | null
-  name: string
-  description: string | null
-  dueDate: string | null
-  status: MilestoneStatus
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateMilestoneRequest {
-  name: string
-  description?: string | null
-  dueDate?: string | null
-  phaseId?: string | null
-}
-
-export interface UpdateMilestoneRequest {
-  name?: string | null
-  description?: string | null
-  dueDate?: string | null
-  phaseId?: string | null
-  status?: MilestoneStatus | null
-  version: number
-}
-
-// ---------- TaskList ----------
-
-export interface TaskList {
-  id: string
-  projectId: string
-  phaseId: string | null
-  name: string
-  description: string | null
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateTaskListRequest {
-  name: string
-  description?: string | null
-  phaseId?: string | null
-}
-
-export interface UpdateTaskListRequest {
-  name?: string | null
-  description?: string | null
-  phaseId?: string | null
-  version: number
-}
 
 // ---------- Task ----------
 
-export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'OVERDUE' | 'COMPLETED'
+/** V3 task statuses: To Do, In Progress, Blocked and Done (COMPLETED). Overdue is worked out from the due date. */
+export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'BLOCKED' | 'COMPLETED'
 
-export const TASK_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'BLOCKED', 'OVERDUE', 'COMPLETED']
+export const TASK_STATUSES: TaskStatus[] = ['TODO', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED']
 
 /** A task can move from any status to any other. */
 export const TASK_STATUS_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
-  TODO: ['IN_PROGRESS', 'BLOCKED', 'OVERDUE', 'COMPLETED'],
-  IN_PROGRESS: ['TODO', 'BLOCKED', 'OVERDUE', 'COMPLETED'],
-  BLOCKED: ['TODO', 'IN_PROGRESS', 'OVERDUE', 'COMPLETED'],
-  OVERDUE: ['TODO', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED'],
+  TODO: ['IN_PROGRESS', 'BLOCKED', 'COMPLETED'],
+  IN_PROGRESS: ['TODO', 'BLOCKED', 'COMPLETED'],
+  BLOCKED: ['TODO', 'IN_PROGRESS', 'COMPLETED'],
   COMPLETED: ['TODO', 'IN_PROGRESS'],
 }
 
-export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL'
-export const TASK_PRIORITIES: TaskPriority[] = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
+/** V3 priorities: Low, Normal (stored as MEDIUM) and High. */
+export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH'
+export const TASK_PRIORITIES: TaskPriority[] = ['LOW', 'MEDIUM', 'HIGH']
 
-export type TaskRecurrence = 'NONE' | 'DAILY' | 'WEEKLY' | 'MONTHLY'
-export const TASK_RECURRENCES: TaskRecurrence[] = ['NONE', 'DAILY', 'WEEKLY', 'MONTHLY']
-
-/** The optional planning fields a task can be created or edited with. */
+/** The optional fields a task can be created or edited with. */
 export interface TaskPlanningFields {
-  startDate?: string | null
   priority?: TaskPriority | null
-  estimateMinutes?: number | null
-  recurrence?: TaskRecurrence | null
-  tags?: string[] | null
 }
 
 export type TaskSortField = 'CREATED_AT' | 'DUE_DATE' | 'NAME' | 'STATUS'
@@ -146,11 +39,7 @@ export interface Task {
   createdAt: string
   updatedAt: string
   version: number
-  startDate: string | null
   priority: TaskPriority
-  estimateMinutes: number | null
-  recurrence: TaskRecurrence
-  tags: string[]
 }
 
 export interface CreateTaskRequest extends TaskPlanningFields {
@@ -202,38 +91,11 @@ export interface BulkArchiveResponse {
   results: BulkArchiveResult[]
 }
 
-// ---------- Subtask ----------
-
-export interface Subtask {
-  id: string
-  taskId: string
-  name: string
-  description: string | null
-  completed: boolean
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateSubtaskRequest {
-  name: string
-  description?: string | null
-}
-
-export interface UpdateSubtaskRequest {
-  name?: string | null
-  description?: string | null
-  completed?: boolean | null
-  version: number
-}
-
 // ---------- Checklist ----------
 
 export interface ChecklistItem {
   id: string
   taskId: string
-  subtaskId: string | null
   text: string
   checked: boolean
   archived: boolean
@@ -244,157 +106,12 @@ export interface ChecklistItem {
 
 export interface CreateChecklistRequest {
   text: string
-  subtaskId?: string | null
 }
 
 export interface UpdateChecklistRequest {
   text?: string | null
   checked?: boolean | null
-  subtaskId?: string | null
   version: number
-}
-
-// ---------- Dependency ----------
-
-export interface Dependency {
-  id: string
-  dependentTaskId: string
-  prerequisiteTaskId: string
-  broken: boolean
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateDependencyRequest {
-  prerequisiteTaskId: string
-}
-
-export interface UpdateDependencyRequest {
-  broken?: boolean | null
-  version: number
-}
-
-// ---------- Risk ----------
-
-export type RiskStatus = 'OPEN' | 'RESOLVED'
-
-export const RISK_STATUSES: RiskStatus[] = ['OPEN', 'RESOLVED']
-
-export type RiskSortField = 'CREATED_AT' | 'NAME' | 'PRIORITY' | 'STATUS'
-
-export const RISK_SORT_FIELDS: RiskSortField[] = ['CREATED_AT', 'NAME', 'PRIORITY', 'STATUS']
-
-export interface Risk {
-  id: string
-  projectId: string
-  name: string
-  description: string | null
-  priority: ProjectPriority
-  status: RiskStatus
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateRiskRequest {
-  name: string
-  description?: string | null
-  priority: ProjectPriority
-}
-
-export interface UpdateRiskRequest {
-  name?: string | null
-  description?: string | null
-  priority?: ProjectPriority | null
-  status?: RiskStatus | null
-  version: number
-}
-
-export interface RiskListQuery {
-  status?: RiskStatus
-  priority?: ProjectPriority
-  archived?: boolean
-  sortBy?: RiskSortField
-  sortDir?: 'ASC' | 'DESC'
-}
-
-// ---------- Issue ----------
-
-export type IssueSortField = 'CREATED_AT' | 'NAME' | 'PRIORITY'
-
-export const ISSUE_SORT_FIELDS: IssueSortField[] = ['CREATED_AT', 'NAME', 'PRIORITY']
-
-export interface Issue {
-  id: string
-  projectId: string
-  name: string
-  description: string | null
-  priority: ProjectPriority
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateIssueRequest {
-  name: string
-  description?: string | null
-  priority: ProjectPriority
-}
-
-export interface UpdateIssueRequest {
-  name?: string | null
-  description?: string | null
-  priority?: ProjectPriority | null
-  version: number
-}
-
-export interface IssueListQuery {
-  priority?: ProjectPriority
-  archived?: boolean
-  sortBy?: IssueSortField
-  sortDir?: 'ASC' | 'DESC'
-}
-
-// ---------- Decision ----------
-
-export type DecisionSortField = 'CREATED_AT' | 'NAME'
-
-export const DECISION_SORT_FIELDS: DecisionSortField[] = ['CREATED_AT', 'NAME']
-
-export interface Decision {
-  id: string
-  projectId: string
-  name: string
-  description: string | null
-  decidedBy: string | null
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateDecisionRequest {
-  name: string
-  description?: string | null
-  decidedBy?: string | null
-}
-
-export interface UpdateDecisionRequest {
-  name?: string | null
-  description?: string | null
-  decidedBy?: string | null
-  version: number
-}
-
-export interface DecisionListQuery {
-  decidedBy?: string
-  archived?: boolean
-  sortBy?: DecisionSortField
-  sortDir?: 'ASC' | 'DESC'
 }
 
 // ---------- Comment ----------
@@ -420,142 +137,9 @@ export interface UpdateCommentRequest {
   version: number
 }
 
-// ---------- Custom Field ----------
-
-export type CustomFieldValueType = 'TEXT' | 'NUMBER' | 'DATE' | 'BOOLEAN'
-
-export const CUSTOM_FIELD_VALUE_TYPES: CustomFieldValueType[] = ['TEXT', 'NUMBER', 'DATE', 'BOOLEAN']
-
-export interface CustomField {
-  id: string
-  projectId: string
-  name: string
-  valueType: CustomFieldValueType
-  value: string
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-  version: number
-}
-
-export interface CreateCustomFieldRequest {
-  name: string
-  valueType: CustomFieldValueType
-  value: string
-}
-
-export interface UpdateCustomFieldRequest {
-  name?: string | null
-  value?: string | null
-  version: number
-}
-
-// ---------- Search ----------
-
-export interface SearchResult {
-  resourceType: 'TASK' | 'RISK' | 'ISSUE' | 'DECISION' | string
-  id: string
-  projectId: string
-  name: string
-  description: string | null
-  archived: boolean
-  createdAt: string
-  updatedAt: string
-}
-
-// ---------- Calendar ----------
-
-export interface CalendarEntry {
-  entityType: 'TASK' | 'MILESTONE' | 'PHASE' | string
-  id: string
-  name: string
-  date: string | null
-  startDate: string | null
-  endDate: string | null
-}
-
-export interface Calendar {
-  entries: CalendarEntry[]
-}
-
-// ---------- Timeline ----------
-
-export interface TimelinePhase {
-  id: string
-  name: string
-  startDate: string | null
-  endDate: string | null
-  milestones: Milestone[]
-}
-
-export interface Timeline {
-  phases: TimelinePhase[]
-  tasks: Task[]
-}
-
-// ---------- Gantt ----------
-
-export interface GanttBar {
-  id: string
-  name: string
-  startDate: string | null
-  endDate: string | null
-}
-
-export interface GanttPoint {
-  id: string
-  name: string
-  date: string | null
-  startDate?: string | null
-}
-
-export interface Gantt {
-  phases: GanttBar[]
-  tasks: GanttPoint[]
-  milestones: GanttPoint[]
-  dependencies: Dependency[]
-}
-
-// ---------- Delay Detection ----------
-
-export interface DelayedItem {
-  entityType: 'TASK' | 'MILESTONE' | 'PHASE' | string
-  id: string
-  name: string
-  dueDate: string | null
-  daysOverdue: number
-}
-
-export interface DelayedItems {
-  items: DelayedItem[]
-}
-
-// ---------- Dependency Analysis ----------
-
-export interface DependencyAnalysis {
-  cycles: string[][]
-  blockedTaskIds: string[]
-  brokenDependencies: Dependency[]
-}
-
-// ---------- Project Health ----------
-
-export interface ProjectHealth {
-  overdueItemCount: number
-  unresolvedRiskCount: number
-  unresolvedIssueCount: number
-  blockedTaskCount: number
-  brokenDependencyCount: number
-}
-
 // ---------- Reports ----------
 
+/** A project's task counts by status, as the reports endpoint returns them. */
 export interface ProjectSummaryReport {
-  taskCountByStatus: Record<TaskStatus, number>
-  riskCountByStatus: Record<RiskStatus, number>
-  riskCountByPriority: Record<ProjectPriority, number>
-  issueCountByPriority: Record<ProjectPriority, number>
-  decisionCount: number
-  delayedItemCount: number
-  brokenDependencyCount: number
+  taskCountByStatus: Partial<Record<TaskStatus, number>>
 }

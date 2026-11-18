@@ -54,7 +54,7 @@ class DashboardQueryTest {
     @Test
     @DisplayName("counts active projects by status, scoped to one organization")
     void countsActiveByStatus() {
-        persistedProject("Planning A", ProjectStatus.PLANNING, ProjectPriority.LOW);
+        persistedProject("On hold A", ProjectStatus.ON_HOLD, ProjectPriority.LOW);
         persistedProject("Active A", ProjectStatus.ACTIVE, ProjectPriority.LOW);
         persistedProject("Active B", ProjectStatus.ACTIVE, ProjectPriority.LOW);
         Project archived = persistedProject("Archived A", ProjectStatus.ACTIVE, ProjectPriority.LOW);
@@ -72,16 +72,16 @@ class DashboardQueryTest {
                 .extracting(ProjectRepository.StatusCount::getStatus,
                         ProjectRepository.StatusCount::getTotal)
                 .containsExactlyInAnyOrder(
-                        org.assertj.core.groups.Tuple.tuple(ProjectStatus.PLANNING, 1L),
+                        org.assertj.core.groups.Tuple.tuple(ProjectStatus.ON_HOLD, 1L),
                         org.assertj.core.groups.Tuple.tuple(ProjectStatus.ACTIVE, 2L));
     }
 
     @Test
     @DisplayName("counts active projects by priority, scoped to one organization")
     void countsActiveByPriority() {
-        persistedProject("Low A", ProjectStatus.PLANNING, ProjectPriority.LOW);
-        persistedProject("Critical A", ProjectStatus.PLANNING, ProjectPriority.CRITICAL);
-        persistedProject("Critical B", ProjectStatus.PLANNING, ProjectPriority.CRITICAL);
+        persistedProject("Low A", ProjectStatus.ACTIVE, ProjectPriority.LOW);
+        persistedProject("High A", ProjectStatus.ACTIVE, ProjectPriority.HIGH);
+        persistedProject("High B", ProjectStatus.ACTIVE, ProjectPriority.HIGH);
         entityManager.clear();
 
         var counts = projectRepository.countActiveByPriority(organization.value());
@@ -91,7 +91,7 @@ class DashboardQueryTest {
                         ProjectRepository.PriorityCount::getTotal)
                 .containsExactlyInAnyOrder(
                         org.assertj.core.groups.Tuple.tuple(ProjectPriority.LOW, 1L),
-                        org.assertj.core.groups.Tuple.tuple(ProjectPriority.CRITICAL, 2L));
+                        org.assertj.core.groups.Tuple.tuple(ProjectPriority.HIGH, 2L));
     }
 
     @Test

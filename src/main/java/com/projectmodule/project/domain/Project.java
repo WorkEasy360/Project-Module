@@ -10,7 +10,11 @@ import com.projectmodule.project.domain.event.ProjectArchived;
 import com.projectmodule.project.domain.event.ProjectCreated;
 import com.projectmodule.project.domain.event.ProjectDomainEvent;
 import com.projectmodule.project.domain.event.ProjectUpdated;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -19,6 +23,11 @@ import jakarta.persistence.Transient;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+import java.util.Set;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -43,6 +52,9 @@ import java.util.UUID;
 public class Project extends BaseEntity {
 
     private static final int NAME_MAX_LENGTH = 200;
+    private static final int CUSTOMER_MAX_LENGTH = 200;
+    private static final int TAG_MAX_LENGTH = 40;
+    private static final int MAX_TAGS = 10;
 
     /**
      * Events raised since the last {@link #pullDomainEvents()}.
@@ -85,6 +97,15 @@ public class Project extends BaseEntity {
     @Column(name = "archived_by")
     private UUID archivedBy;
 
+    @Column(name = "customer_contact", length = CUSTOMER_MAX_LENGTH)
+    private String customerContact;
+
+    // Eager: responses are mapped after the transaction ends, and projects have only a few tags.
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "project_tags", joinColumns = @JoinColumn(name = "project_id"))
+    @Column(name = "tag", length = TAG_MAX_LENGTH)
+    private Set<String> tags = new LinkedHashSet<>();
+
     /** For JPA only. */
     protected Project() {
     }
@@ -114,7 +135,7 @@ public class Project extends BaseEntity {
                                  ExternalUserId ownerId,
                                  ProjectPriority priority) {
         return new Project(UuidV7.generate(), organizationId, name, ownerId,
-                ProjectStatus.PLANNING, priority);
+                ProjectStatus.ACTIVE, priority);
     }
 
     public void rename(String newName) {
@@ -125,6 +146,37 @@ public class Project extends BaseEntity {
     public void describe(String newDescription) {
         requireNotArchived("update the description of");
         this.description = newDescription;
+    }
+
+    /** Who the project is for. Blank clears it. */
+    public void changeCustomerContact(String newCustomerContact) {
+        requireNotArchived("change the customer of");
+        String trimmed = newCustomerContact == null ? "" : newCustomerContact.trim();
+        if (trimmed.length() > CUSTOMER_MAX_LENGTH) {
+            throw new ValidationException("Customer / contact must be at most " + CUSTOMER_MAX_LENGTH + " characters");
+        }
+        this.customerContact = trimmed.isEmpty() ? null : trimmed;
+    }
+
+    /** Replaces the project's tags. Blank entries and duplicates, ignoring case, are dropped. */
+    public void tag(Collection<String> newTags) {
+        requireNotArchived("tag");
+        Set<String> cleaned = new LinkedHashSet<>();
+        Set<String> seen = new HashSet<>();
+        for (String candidate : newTags) {
+            String trimmed = candidate == null ? "" : candidate.trim();
+            if (trimmed.length() > TAG_MAX_LENGTH) {
+                throw new ValidationException("A tag must be at most " + TAG_MAX_LENGTH + " characters");
+            }
+            if (!trimmed.isEmpty() && seen.add(trimmed.toLowerCase(Locale.ROOT))) {
+                cleaned.add(trimmed);
+            }
+        }
+        if (cleaned.size() > MAX_TAGS) {
+            throw new ValidationException("A project can have at most " + MAX_TAGS + " tags");
+        }
+        this.tags.clear();
+        this.tags.addAll(cleaned);
     }
 
     public void changeStatus(ProjectStatus newStatus) {
@@ -266,6 +318,15 @@ public class Project extends BaseEntity {
 
     public Optional<LocalDate> getStartDate() {
         return Optional.ofNullable(startDate);
+    }
+
+    public Optional<String> getCustomerContact() {
+        return Optional.ofNullable(customerContact);
+    }
+
+    /** In the order they were given. */
+    public List<String> getTags() {
+        return List.copyOf(tags);
     }
 
     public Optional<LocalDate> getTargetEndDate() {

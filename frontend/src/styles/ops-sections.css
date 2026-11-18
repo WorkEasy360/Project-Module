@@ -1,0 +1,554 @@
+/* V3 section pages: Team, Automation, Helpdesk and Settings. Builds on ops.css. */
+
+/* ---------- Layout ---------- */
+.ops-stats-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.ops-filters.ops-filters-3 {
+  grid-template-columns: minmax(0, 2.3fr) repeat(2, minmax(0, 1fr));
+}
+.ops-filters.ops-filters-1 {
+  grid-template-columns: minmax(0, 260px);
+}
+.ops-set-grid,
+.ops-help-grid {
+  align-items: start;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* ---------- Table bits ---------- */
+.ops-avatar-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #eef0f3;
+  color: #4b5563;
+  flex: none;
+}
+.ops-role {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 8px;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.role-admin {
+  background: #ebdfff;
+  color: #7c3aed;
+}
+.role-member {
+  background: #dce9ff;
+  color: #1d5fe0;
+}
+.ops-cell-note {
+  display: block;
+  margin-top: 4px;
+  font-size: 14.5px;
+  color: var(--color-text-muted);
+}
+.ops-cell-wrap {
+  white-space: normal;
+  max-width: 420px;
+}
+.status-failed {
+  background: #ffdcdc;
+  color: #dc2626;
+}
+.ops-link-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  padding: 4px 8px;
+  color: var(--ops-green);
+  font: inherit;
+  font-size: 16.5px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ops-link-btn:hover {
+  text-decoration: underline;
+}
+.ops-link-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.ops-link-btn.danger {
+  color: #dc2626;
+}
+
+/* On / off switch for a rule */
+.ops-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.ops-switch span {
+  position: relative;
+  width: 42px;
+  height: 24px;
+  border-radius: 999px;
+  background: #d1d5db;
+  transition: background 0.15s ease;
+}
+.ops-switch span::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+.ops-switch.on {
+  color: var(--ops-green);
+}
+.ops-switch.on span {
+  background: #16a34a;
+}
+.ops-switch.on span::after {
+  transform: translateX(18px);
+}
+.ops-switch:focus-visible {
+  outline: 3px solid #86efac;
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ---------- Notices and "coming soon" ---------- */
+.ops-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 12px 16px;
+  border: 1px solid #fde3b0;
+  border-radius: 12px;
+  background: #fff8eb;
+  color: #8a5300;
+  font-size: 16.5px;
+}
+.ops-notice svg {
+  flex: none;
+}
+.ops-soon-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: #fff1dc;
+  color: #b45f00;
+  font-size: 14.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+.ops-soon-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+  padding: 26px 28px;
+}
+.ops-soon-card h2 {
+  margin: 10px 0 6px;
+  font-size: 24px;
+  color: var(--ops-ink);
+}
+.ops-soon-card p {
+  margin: 6px 0;
+  font-size: 17.5px;
+}
+.ops-soon-list {
+  margin: 6px 0 10px;
+  padding-left: 22px;
+  font-size: 17.5px;
+  line-height: 1.6;
+}
+.ops-notice-card h2 {
+  margin: 10px 0 8px;
+  font-size: 22px;
+  color: var(--ops-ink);
+}
+.ops-notice-card p {
+  margin: 8px 0;
+  font-size: 17px;
+  line-height: 1.5;
+}
+.ops-ghost-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border: 1px solid #d8c7fb;
+  border-radius: 12px;
+  background: #f3edff;
+  color: #6d28d9;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ops-ghost-btn:hover {
+  background: #ebdfff;
+}
+
+/* ---------- Forms (Raise Ticket) ---------- */
+.ops-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ops-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.ops-field > span {
+  font-size: 16.5px;
+  font-weight: 700;
+  color: var(--ops-ink);
+}
+.ops-field input,
+.ops-field textarea,
+.ops-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 17px;
+}
+.ops-field textarea {
+  resize: vertical;
+  min-height: 110px;
+}
+.ops-field input[type='file'] {
+  padding: 7px 10px;
+  font-size: 15.5px;
+}
+.ops-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.ops-field-note {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--color-text-muted);
+}
+.ops-form-actions {
+  display: flex;
+  justify-content: flex-start;
+  gap: 10px;
+  margin-top: 6px;
+}
+.ops-primary.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.ws-invite-link {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0;
+}
+.ws-invite-link input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------- Settings ---------- */
+.ops-set-card .ops-card-head {
+  margin-bottom: 4px;
+}
+.ops-set-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 14px;
+  padding: 11px 0;
+  border-top: 1px solid var(--ops-card-border);
+}
+.ops-set-row:first-of-type {
+  border-top: 0;
+}
+.ops-set-label strong {
+  display: block;
+  font-size: 17px;
+  color: var(--ops-ink);
+}
+.ops-set-label span {
+  display: block;
+  margin-top: 2px;
+  font-size: 14.5px;
+  color: var(--color-text-muted);
+}
+.ops-set-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 17px;
+  min-width: 0;
+}
+.ops-set-photo {
+  width: 44px;
+  height: 44px;
+}
+.ops-choice {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ops-choice button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 10px;
+  background: var(--color-surface);
+  color: var(--ops-ink);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ops-choice button.on {
+  border-color: var(--ops-green);
+  background: #e3f7ea;
+  color: #0f7a37;
+}
+.ops-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ops-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 15.5px;
+  font-weight: 700;
+}
+.ops-chip em {
+  font-style: normal;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.ops-plan-name {
+  font-size: 22px;
+  color: var(--ops-ink);
+}
+.ops-connect-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+.ops-connect-item,
+.ops-wallets li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--ops-card-border);
+  border-radius: 12px;
+}
+.ops-connect-item strong,
+.ops-wallets strong {
+  display: block;
+  font-size: 17.5px;
+  color: var(--ops-ink);
+}
+.ops-connect-item span,
+.ops-wallets li div span {
+  display: block;
+  margin-top: 2px;
+  font-size: 15.5px;
+  color: var(--color-text-muted);
+}
+.ops-wallets {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ops-wallets li {
+  align-items: center;
+}
+.ops-wallets li div {
+  flex: 1;
+  min-width: 0;
+}
+.ops-soon-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ops-soon-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+.ops-soon-tile strong {
+  font-size: 18px;
+  color: #64748b;
+}
+.ops-soon-tile .ops-muted {
+  font-size: 15px;
+}
+
+/* ---------- Dark theme ---------- */
+:root[data-theme='dark'] .ops-notice {
+  border-color: #6b4a12;
+  background: #2a2010;
+  color: #f6cf8a;
+}
+:root[data-theme='dark'] .ops-soon-tile {
+  border-color: #3b4656;
+  background: #1b222c;
+}
+:root[data-theme='dark'] .ops-avatar-empty {
+  background: #2a3240;
+  color: #cbd5e1;
+}
+:root[data-theme='dark'] .ops-ghost-btn {
+  border-color: #4c3a7a;
+  background: #2a2140;
+  color: #d8c7fb;
+}
+:root[data-theme='dark'] .ops-choice button.on {
+  background: #133524;
+  color: #86efac;
+}
+
+/* ---------- Narrow windows ---------- */
+@media (max-width: 1099px) {
+  .ops-set-grid,
+  .ops-help-grid,
+  .ops-connect-grid {
+    grid-template-columns: 1fr;
+  }
+  .ops-soon-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ops-stats-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .ops-filters.ops-filters-3,
+  .ops-form-row,
+  .ops-set-row {
+    grid-template-columns: 1fr;
+  }
+  .ops-stats-3 {
+    grid-template-columns: 1fr;
+  }
+  .ops-soon-card {
+    flex-direction: column;
+  }
+}
+
+/* Help Articles: ten questions and one open answer fit one laptop window. */
+.ops-section-page .ops-faq button {
+  padding: 11px 4px;
+}
+.ops-section-page .ops-faq-answer {
+  padding: 0 4px 12px;
+}
+.ops-section-page .ops-search-wide {
+  margin-bottom: 6px;
+}
+
+/* Paragraphs inside section cards read at the same size as the rest of the page. */
+.ops-section-page .ops-card > p {
+  font-size: 17px;
+  line-height: 1.5;
+}
+.ops-section-page .ops-card > p.ops-field-note {
+  font-size: 15px;
+}
+/* Cards side by side in Settings share a height. */
+.ops-set-grid {
+  align-items: stretch;
+}
+
+/* Readable floor on the Team, Automation, Helpdesk and Settings pages (about 14–16px on a laptop). */
+.ops-page .ops-role,
+.ops-page .ops-chip,
+.ops-page .ops-soon-badge,
+.ops-page .ops-cell-note,
+.ops-page .ops-field-note,
+.ops-section-page .ops-card > p.ops-field-note,
+.ops-page .ops-set-label span,
+.ops-page .ops-wallets li div span,
+.ops-page .ops-soon-tile .ops-muted,
+.ops-page .ops-field input[type='file'] {
+  font-size: 18px;
+}
+.ops-section-page .ops-card p,
+.ops-section-page .ops-card .ops-muted,
+.ops-section-page .ops-card li span,
+.ops-section-page .ops-set-label strong,
+.ops-section-page .ops-card span:not([class]) {
+  font-size: max(18.5px, 1em);
+}
+.ops-page .ops-card .ops-role,
+.ops-page .ops-card .ops-chip,
+.ops-page .ops-card .ops-soon-badge,
+.ops-page .ops-card .badge,
+.ops-page .ops-card .ops-status,
+.ops-page .ops-card .ops-tag,
+.ops-page .ops-card .ops-count,
+.ops-page .ops-card .ops-overdue-tag {
+  font-size: 17.5px;
+}
+.ops-page .ops-toggle button,
+.ops-page .ops-theme button,
+.ops-page [role='group'] button {
+  font-size: 18px;
+}
+.ops-set-row {
+  grid-template-columns: minmax(170px, 1.15fr) minmax(0, 2fr);
+  padding: 8px 0;
+}
+.ops-page .ops-theme button,
+.ops-page .ops-card [role='radiogroup'] button {
+  font-size: 18px;
+}
+.ops-page .ops-choice button {
+  font-size: 18px;
+}

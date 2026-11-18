@@ -34,16 +34,16 @@ class AutomationTriggerEventTest {
     }
 
     @Test
-    @DisplayName("the catalogue has exactly the 19 event types docs/project/05-EVENTS.md lists, excluding AI/Automation")
-    void catalogueHasExactlyNineteenValues() {
-        assertThat(AutomationTriggerEvent.values()).hasSize(19);
+    @DisplayName("the catalogue has the 8 project and task event types, excluding AI/Automation")
+    void catalogueHasExactlyEightValues() {
+        assertThat(AutomationTriggerEvent.values()).hasSize(8);
     }
 
     @Test
     @DisplayName("fromEventType() round-trips eventType()")
     void fromEventTypeRoundTrips() {
-        assertThat(AutomationTriggerEvent.fromEventType("task.overdue"))
-                .contains(AutomationTriggerEvent.TASK_OVERDUE);
+        assertThat(AutomationTriggerEvent.fromEventType("task.blocked"))
+                .contains(AutomationTriggerEvent.TASK_BLOCKED);
         assertThat(AutomationTriggerEvent.fromEventType("unknown")).isEmpty();
     }
 }

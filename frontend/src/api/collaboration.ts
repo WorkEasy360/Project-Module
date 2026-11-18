@@ -1,5 +1,4 @@
 import { api, downloadFile, uploadFile } from './client'
-import { todayIso } from '../utils/format'
 import type { PageResponse } from '../types/common'
 import type { Comment, CreateCommentRequest } from '../types/work'
 
@@ -37,41 +36,7 @@ export const activityApi = {
 export const taskCommentsApi = {
   list: (taskId: string) => api.get<Comment[]>(`/tasks/${taskId}/comments`),
   create: (taskId: string, body: CreateCommentRequest) => api.post<Comment>(`/tasks/${taskId}/comments`, body),
-}
-
-export const followersApi = {
-  list: (taskId: string) => api.get<string[]>(`/tasks/${taskId}/followers`),
-  follow: (taskId: string) => api.post<void>(`/tasks/${taskId}/followers/me`),
-  unfollow: (taskId: string) => api.del(`/tasks/${taskId}/followers/me`),
-}
-
-export interface TimeEntry {
-  id: string
-  taskId: string
-  projectId: string
-  userId: string
-  workDate: string
-  minutes: number
-  note: string | null
-  billable: boolean
-}
-
-export interface RunningTimer {
-  taskId: string
-  startedAt: string
-}
-
-export const timeApi = {
-  listForTask: (taskId: string) => api.get<TimeEntry[]>(`/tasks/${taskId}/time-entries`),
-  listMine: (from: string, to: string) => api.get<TimeEntry[]>('/time-entries/mine', { from, to }),
-  log: (taskId: string, body: { workDate: string; minutes: number; note?: string; billable: boolean }) =>
-    api.post<TimeEntry>(`/tasks/${taskId}/time-entries`, body),
-  remove: (id: string) => api.del(`/time-entries/${id}`),
-  /** Resolves undefined when no timer is running. */
-  currentTimer: () => api.get<RunningTimer | undefined>('/timer'),
-  startTimer: (taskId: string) => api.post<RunningTimer>(`/tasks/${taskId}/timer`),
-  stopTimer: () => api.post<TimeEntry>('/timer/stop', { workDate: todayIso() }),
-  cancelTimer: () => api.del('/timer'),
+  remove: (id: string) => api.del(`/comments/${id}`),
 }
 
 export interface Attachment {

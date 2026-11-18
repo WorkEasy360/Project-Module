@@ -14,11 +14,11 @@ class AutomationRunTest {
         UUID automationId = UUID.randomUUID();
         UUID projectId = UUID.randomUUID();
 
-        AutomationRun run = AutomationRun.succeeded(automationId, projectId, "task.overdue");
+        AutomationRun run = AutomationRun.succeeded(automationId, projectId, "task.blocked");
 
         assertThat(run.getAutomationId()).isEqualTo(automationId);
         assertThat(run.getProjectId()).isEqualTo(projectId);
-        assertThat(run.getTriggerEvent()).isEqualTo("task.overdue");
+        assertThat(run.getTriggerEvent()).isEqualTo("task.blocked");
         assertThat(run.getStatus()).isEqualTo(AutomationRunStatus.SUCCEEDED);
         assertThat(run.getErrorMessage()).isEmpty();
         assertThat(run.getExecutedAt()).isNotNull();
@@ -29,7 +29,7 @@ class AutomationRunTest {
     @DisplayName("failed() creates a FAILED run with the error message")
     void failedCreatesRun() {
         AutomationRun run = AutomationRun.failed(
-                UUID.randomUUID(), UUID.randomUUID(), "task.overdue", "Notification port unavailable");
+                UUID.randomUUID(), UUID.randomUUID(), "task.blocked", "Notification port unavailable");
 
         assertThat(run.getStatus()).isEqualTo(AutomationRunStatus.FAILED);
         assertThat(run.getErrorMessage()).contains("Notification port unavailable");

@@ -1,40 +1,43 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { TeamPage } from './TeamPage'
+import { TeamPage, type TeamSection } from './TeamPage'
 import { IdentityProvider } from '../../context/IdentityContext'
+import { PeopleProvider } from '../../context/PeopleContext'
 import { setIdentity } from '../../context/identityStore'
-import { projectsApi } from '../../api/projects'
-import { membersApi } from '../../api/members'
-import type { ProjectMember } from '../../types/project'
+import { workspaceApi } from '../../api/workspace'
+import type { Account } from '../../api/auth'
 
-vi.mock('../../api/projects', () => ({ projectsApi: { list: vi.fn() } }))
-vi.mock('../../api/members', () => ({ membersApi: { list: vi.fn() } }))
+vi.mock('../../api/workspace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/workspace')>()),
+  workspaceApi: {
+    people: vi.fn(),
+    invitations: vi.fn(),
+    invite: vi.fn(),
+    revokeInvitation: vi.fn(),
+    resetLink: vi.fn(),
+  },
+}))
 
 const ME = '11111111-2222-4333-8444-555555555555'
 const OTHER = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
-const projects = [
-  { id: 'p1', name: 'Website Redesign', status: 'ACTIVE', priority: 'HIGH', ownerId: ME, updatedAt: '2026-09-10T00:00:00Z' },
-  { id: 'p2', name: 'Mobile App', status: 'PLANNING', priority: 'MEDIUM', ownerId: OTHER, updatedAt: '2026-09-09T00:00:00Z' },
-  { id: 'p3', name: 'Data Migration', status: 'ON_HOLD', priority: 'LOW', ownerId: ME, updatedAt: '2026-09-08T00:00:00Z' },
-] as const
-const m = (over: Partial<ProjectMember>): ProjectMember => ({
-  id: 'x', projectId: 'p1', userId: ME, role: 'MEMBER', joinedAt: '2026-09-01T00:00:00Z', version: 0, ...over,
-})
-const membersById: Record<string, ProjectMember[]> = {
-  p1: [m({ id: 'm1', userId: ME, role: 'OWNER' }), m({ id: 'm2', userId: OTHER, role: 'MANAGER' })],
-  p2: [m({ id: 'm3', projectId: 'p2', userId: OTHER, role: 'OWNER' }), m({ id: 'm4', projectId: 'p2', userId: ME, role: 'MEMBER' })],
+const ORG = '99999999-2222-4333-8444-555555555555'
+
+function people(meRole: 'ADMIN' | 'MEMBER'): Account[] {
+  return [
+    { id: ME, organizationId: ORG, email: 'manoj@acme.example', name: 'Manoj Kumar', workspaceRole: meRole },
+    { id: OTHER, organizationId: ORG, email: 'amit@acme.example', name: 'Amit Singh', workspaceRole: 'MEMBER' },
+  ]
 }
 
-function page(totalElements = 3) {
-  return { content: [...projects], page: 0, size: 50, totalElements, totalPages: 1 }
-}
-function renderTeam() {
+function renderTeam(section: TeamSection) {
   return render(
     <MemoryRouter>
       <IdentityProvider>
-        <TeamPage />
+        <PeopleProvider>
+          <TeamPage section={section} />
+        </PeopleProvider>
       </IdentityProvider>
     </MemoryRouter>,
   )
@@ -42,110 +45,64 @@ function renderTeam() {
 
 describe('TeamPage', () => {
   beforeEach(() => {
-    setIdentity({ userId: ME, orgId: '99999999-2222-4333-8444-555555555555' })
-    vi.mocked(projectsApi.list).mockReset()
-    vi.mocked(membersApi.list).mockReset()
-    vi.mocked(projectsApi.list).mockImplementation(() => Promise.resolve(page()))
-    vi.mocked(membersApi.list).mockImplementation((id: string) =>
-      id === 'p3' ? Promise.reject(new Error('boom')) : Promise.resolve(membersById[id]),
-    )
+    setIdentity({ userId: ME, orgId: ORG, token: 'tok', name: 'Manoj Kumar', email: 'manoj@acme.example' })
+    vi.mocked(workspaceApi.people).mockReset().mockResolvedValue(people('ADMIN'))
+    vi.mocked(workspaceApi.invitations).mockReset().mockResolvedValue([
+      { id: 'i1', email: 'deepti@acme.example', expiresAt: '2026-11-20T10:00:00Z', token: null },
+    ])
+    vi.mocked(workspaceApi.revokeInvitation).mockReset().mockResolvedValue(undefined)
+    vi.mocked(workspaceApi.invite).mockReset().mockResolvedValue({ id: 'i2', email: 'deepti@acme.example', expiresAt: '2026-11-21T10:00:00Z', token: 'tok-new' })
   })
 
-  it('groups members by user id with short-id avatars, highlights the current identity, and links roles to project members', async () => {
-    renderTeam()
-    const people = await screen.findByRole('list', { name: 'People' })
-    expect(vi.mocked(projectsApi.list)).toHaveBeenCalledWith(0, 50, 'updatedAt,DESC')
-    const rows = within(people).getAllByRole('listitem').filter((li) => li.classList.contains('ws-person'))
-    expect(rows).toHaveLength(2)
-    // The current identity comes first and is marked "You"; ids are shown as their first 8 chars only.
-    expect(rows[0]).toHaveClass('is-me')
-    expect(within(rows[0]).getByText('You')).toBeInTheDocument()
-    expect(within(rows[0]).getByText('11111111')).toBeInTheDocument()
-    expect(rows[0]).not.toHaveTextContent(ME)
-    expect(rows[0]).toHaveTextContent('2 projects')
-    expect(within(rows[0]).getByRole('link', { name: 'Website Redesign' })).toHaveAttribute('href', '/projects/p1/members')
-    expect(within(rows[0]).getByRole('link', { name: 'Mobile App' })).toHaveAttribute('href', '/projects/p2/members')
-    expect(rows[0]).toHaveTextContent('Owner')
-    expect(rows[0]).toHaveTextContent('Member')
-    expect(rows[1]).toHaveTextContent('aaaaaaaa')
-    expect(rows[1]).not.toHaveClass('is-me')
-
-    // Summary chips are derived from the loaded member lists (p3 failed, so 2 projects).
-    const chips = screen.getByLabelText('Team summary')
-    expect(chips).toHaveTextContent('2 people')
-    expect(chips).toHaveTextContent('2 projects')
-    expect(chips).toHaveTextContent('2 owners')
-    expect(chips).toHaveTextContent('1 managers')
+  it('Members lists joined people with role and status, plus invited people for admins', async () => {
+    renderTeam('members')
+    expect(await screen.findByText('Amit Singh')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Members' })).toBeInTheDocument()
+    const me = screen.getByText(/Manoj Kumar \(you\)/).closest('tr')!
+    expect(within(me).getByText('Admin')).toBeInTheDocument()
+    expect(within(me).getByText('Active')).toBeInTheDocument()
+    const invited = (await screen.findByText('deepti@acme.example')).closest('tr')!
+    expect(within(invited).getByText('Invited')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Invite Member/ })).toBeInTheDocument()
   })
 
-  it('shows a failing project inline with Retry instead of blanking the page', async () => {
-    renderTeam()
-    const alert = await screen.findByRole('alert')
-    expect(alert).toHaveTextContent('1 project could not be loaded')
-    expect(within(alert).getByRole('link', { name: 'Data Migration' })).toHaveAttribute('href', '/projects/p3')
-    expect(alert).toHaveTextContent('Something went wrong. Please try again.')
-    expect(screen.getByRole('list', { name: 'People' })).toBeInTheDocument()
-
-    vi.mocked(membersApi.list).mockImplementation((id: string) => Promise.resolve(membersById[id] ?? []))
-    await userEvent.click(within(alert).getByRole('button', { name: 'Retry' }))
-    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
-    expect(vi.mocked(membersApi.list)).toHaveBeenCalledTimes(6)
+  it('Members can be filtered by status', async () => {
+    renderTeam('members')
+    await screen.findByText('deepti@acme.example')
+    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Status' }), 'Invited')
+    expect(screen.queryByText('Amit Singh')).not.toBeInTheDocument()
+    expect(screen.getByText('deepti@acme.example')).toBeInTheDocument()
   })
 
-  it('search by user id / project name and the role filter narrow the people list', async () => {
-    renderTeam()
-    await screen.findByRole('list', { name: 'People' })
-    await userEvent.type(screen.getByRole('searchbox'), 'aaaa')
-    expect(screen.getByText('1 person')).toBeInTheDocument()
-    expect(screen.queryByText('11111111')).not.toBeInTheDocument()
-    await userEvent.clear(screen.getByRole('searchbox'))
-    await userEvent.type(screen.getByRole('searchbox'), 'mobile')
-    // Both people are on Mobile App, but only that project's role is listed for them.
-    expect(screen.getByText('2 people')).toBeInTheDocument()
-    expect(screen.queryByRole('link', { name: 'Website Redesign' })).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Reset filters' }))
-    await userEvent.selectOptions(screen.getByLabelText('Role'), 'MANAGER')
-    expect(screen.getByText('1 person')).toBeInTheDocument()
-    expect(screen.getByText('aaaaaaaa')).toBeInTheDocument()
-    await userEvent.selectOptions(screen.getByLabelText('Role'), 'VIEWER')
-    expect(screen.getByText('No people match these filters.')).toBeInTheDocument()
+  it('a member who is not an admin cannot invite and does not see invitations', async () => {
+    vi.mocked(workspaceApi.people).mockResolvedValue(people('MEMBER'))
+    renderTeam('members')
+    await screen.findByText('Amit Singh')
+    expect(screen.queryByRole('button', { name: /Invite Member/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('deepti@acme.example')).not.toBeInTheDocument()
   })
 
-  it('"By project" view shows a card per project with members, an inline error, and a Manage members link', async () => {
-    renderTeam()
-    await screen.findByRole('list', { name: 'People' })
-    await userEvent.click(screen.getByRole('button', { name: 'By project' }))
-    const grid = screen.getByRole('list', { name: 'Projects' })
-    const cards = within(grid).getAllByRole('listitem').filter((li) => li.classList.contains('ws-card'))
-    expect(cards).toHaveLength(3)
-    const website = cards.find((c) => c.textContent?.includes('Website Redesign'))!
-    expect(within(website).getByRole('link', { name: /Manage members/ })).toHaveAttribute('href', '/projects/p1/members')
-    expect(website).toHaveTextContent('11111111 (you)')
-    expect(website).toHaveTextContent('Manager')
-    expect(website).toHaveTextContent('2 members')
-    expect(website).not.toHaveTextContent(OTHER)
-    const failed = cards.find((c) => c.textContent?.includes('Data Migration'))!
-    expect(failed).toHaveTextContent('Members could not be loaded')
-    // With a filter active, only projects that still have a matching member are shown.
-    await userEvent.selectOptions(screen.getByLabelText('Role'), 'MANAGER')
-    expect(within(screen.getByRole('list', { name: 'Projects' })).getAllByRole('listitem').filter((li) => li.classList.contains('ws-card'))).toHaveLength(1)
+  it('Teams says plainly that it is coming, with nothing that looks working', async () => {
+    renderTeam('teams')
+    expect(screen.getByText('Coming in the next update')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Teams are not available yet' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create team/i })).not.toBeInTheDocument()
   })
 
-  it('tells the user when the organisation has more projects than the page loads', async () => {
-    vi.mocked(projectsApi.list).mockImplementation(() => Promise.resolve(page(120)))
-    renderTeam()
-    expect(await screen.findByRole('note')).toHaveTextContent('3 most recently updated projects out of 120')
-  })
+  it('Invitations: pending status, resend makes a new link, revoke withdraws it', async () => {
+    renderTeam('invitations')
+    const row = (await screen.findByText('deepti@acme.example')).closest('tr')!
+    expect(within(row).getByText('Pending')).toBeInTheDocument()
 
-  it('shows the error state when the project list fails and an empty state for an org with no projects', async () => {
-    vi.mocked(projectsApi.list).mockImplementation(() => Promise.reject(new Error('down')))
-    const { unmount } = renderTeam()
-    expect(await screen.findByRole('alert')).toHaveTextContent(/something went wrong/i)
-    unmount()
-    vi.mocked(projectsApi.list).mockImplementation(() => Promise.resolve({ ...page(0), content: [] }))
-    renderTeam()
-    expect(await screen.findByText('No projects yet')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Go to Projects' })).toHaveAttribute('href', '/projects')
-    expect(vi.mocked(membersApi.list)).not.toHaveBeenCalled()
+    await userEvent.click(within(row).getByRole('button', { name: 'Resend' }))
+    expect(screen.getByLabelText(/Email address/)).toHaveValue('deepti@acme.example')
+    await userEvent.click(screen.getByRole('button', { name: 'Send invitation' }))
+    expect(workspaceApi.invite).toHaveBeenCalledWith('deepti@acme.example')
+    expect((await screen.findByRole('textbox', { name: 'Invitation link' }) as HTMLInputElement).value).toContain('#/join/tok-new')
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }))
+
+    await userEvent.click(within(screen.getByText('deepti@acme.example').closest('tr')!).getByRole('button', { name: 'Revoke' }))
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Revoke' }))
+    expect(workspaceApi.revokeInvitation).toHaveBeenCalledWith('i1')
   })
 })

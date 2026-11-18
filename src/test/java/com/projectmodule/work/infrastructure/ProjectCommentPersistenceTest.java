@@ -20,9 +20,6 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -47,6 +44,14 @@ class ProjectCommentPersistenceTest {
     @Autowired
     private ProjectCommentRepository commentRepository;
 
+    @Autowired
+    private TaskRepository taskRepository;
+
+    private UUID taskOn(Project project) {
+        return taskRepository.saveAndFlush(
+                com.projectmodule.work.domain.Task.create(project.getId(), "Write spec", null, null)).getId();
+    }
+
     private final OrganizationId organization = OrganizationId.of(UUID.randomUUID());
     private final ExternalUserId owner = ExternalUserId.of(UUID.randomUUID());
     private final ExternalUserId author = ExternalUserId.of(UUID.randomUUID());
@@ -63,7 +68,7 @@ class ProjectCommentPersistenceTest {
         @DisplayName("round-trips a comment, including its author")
         void roundTripsComment() {
             Project project = persistedProject("Apollo");
-            ProjectComment comment = ProjectComment.create(project.getId(), author, "Looks good to me");
+            ProjectComment comment = ProjectComment.createOnTask(project.getId(), taskOn(project), author, "Looks good to me");
             UUID id = comment.getId();
 
             commentRepository.saveAndFlush(comment);
@@ -80,7 +85,7 @@ class ProjectCommentPersistenceTest {
         void softArchiveRetainsRow() {
             Project project = persistedProject("Apollo");
             ProjectComment comment = commentRepository.saveAndFlush(
-                    ProjectComment.create(project.getId(), author, "Looks good to me"));
+                    ProjectComment.createOnTask(project.getId(), taskOn(project), author, "Looks good to me"));
 
             comment.archive(owner);
             commentRepository.saveAndFlush(comment);
@@ -94,7 +99,7 @@ class ProjectCommentPersistenceTest {
         @Test
         @DisplayName("cannot reference a project that does not exist")
         void enforcesProjectForeignKey() {
-            ProjectComment comment = ProjectComment.create(UUID.randomUUID(), author, "Orphan");
+            ProjectComment comment = ProjectComment.createOnTask(UUID.randomUUID(), UUID.randomUUID(), author, "Orphan");
 
             assertThatThrownBy(() -> commentRepository.saveAndFlush(comment))
                     .isInstanceOf(DataIntegrityViolationException.class);
@@ -105,7 +110,7 @@ class ProjectCommentPersistenceTest {
         void databaseRejectsBlankBody() {
             Project project = persistedProject("Apollo");
             ProjectComment comment = commentRepository.saveAndFlush(
-                    ProjectComment.create(project.getId(), author, "Looks good to me"));
+                    ProjectComment.createOnTask(project.getId(), taskOn(project), author, "Looks good to me"));
 
             assertThatThrownBy(() -> {
                 entityManager.getEntityManager()
@@ -117,26 +122,21 @@ class ProjectCommentPersistenceTest {
         }
 
         @Test
-        @DisplayName("lists a project's active comments, oldest-first, excluding archived ones")
+        @DisplayName("lists a task's active comments, oldest-first, excluding archived ones")
         void listsActiveCommentsOldestFirst() {
             Project project = persistedProject("Apollo");
-            ProjectComment first = commentRepository.saveAndFlush(
-                    ProjectComment.create(project.getId(), author, "First"));
-            ProjectComment second = commentRepository.saveAndFlush(
-                    ProjectComment.create(project.getId(), author, "Second"));
+            UUID task = taskOn(project);
+            commentRepository.saveAndFlush(ProjectComment.createOnTask(project.getId(), task, author, "First"));
+            commentRepository.saveAndFlush(ProjectComment.createOnTask(project.getId(), task, author, "Second"));
             ProjectComment archived = commentRepository.saveAndFlush(
-                    ProjectComment.create(project.getId(), author, "Legacy"));
+                    ProjectComment.createOnTask(project.getId(), task, author, "Legacy"));
             archived.archive(owner);
             commentRepository.saveAndFlush(archived);
             entityManager.clear();
 
-            Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "createdAt"));
-            var page = commentRepository.findProjectLevelComments(project.getId(), pageable);
-
-            assertThat(page.getContent())
+            assertThat(commentRepository.findByTaskIdAndArchivedAtIsNullOrderByCreatedAtAsc(task))
                     .extracting(ProjectComment::getBody)
                     .containsExactly("First", "Second");
-            assertThat(page.getTotalElements()).isEqualTo(2);
         }
     }
 }

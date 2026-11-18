@@ -75,8 +75,8 @@ public class WorkspaceApplicationService {
         WorkspaceInvitation invitation = invitationRepository.save(WorkspaceInvitation.create(
                 admin.getOrganizationId(), normalizedEmail, SecureTokens.hash(token), admin.getId(),
                 now.plus(INVITATION_LIFETIME)));
-        emailPort.send(normalizedEmail, admin.getDisplayName() + " invited you to WorkEasyProject",
-                admin.getDisplayName() + " invited you to join their workspace on WorkEasyProject.\n\n"
+        emailPort.send(normalizedEmail, admin.getDisplayName() + " invited you to WorkEasy360 Operations",
+                admin.getDisplayName() + " invited you to join their workspace on WorkEasy360 Operations.\n\n"
                         + "Set up your account: " + appBaseUrl + "/#/join/" + token
                         + "\n\nThis link works once and expires in " + INVITATION_LIFETIME.toDays() + " days.\n");
         return new CreatedInvitation(invitation, token);

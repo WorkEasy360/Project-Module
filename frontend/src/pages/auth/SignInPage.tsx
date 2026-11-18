@@ -5,9 +5,11 @@ import { forgetEarlierSignIn, getEarlierSignIn } from '../../context/identitySto
 import { authApi, type Session } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { toUserMessage } from '../../api/errorMessage'
-import { Icon } from '../../components/common/Icon'
-import { BRAND_NAME, BrandMark, BrandName } from '../../components/layout/Brand'
+import { Icon, type IconName } from '../../components/common/Icon'
+import { BRAND_NAME, BrandMark, BrandName, OperationsBadge } from '../../components/layout/Brand'
 import '../../styles/signin.css'
+import '../../styles/ops.css'
+import '../../styles/signin-ops.css'
 
 /** The small part of Google's sign-in script this page uses. */
 interface GoogleIdentity {
@@ -47,7 +49,7 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
     inviteToken ? 'register' : earlier ? 'handover' : 'sign-in',
   )
   const [notice, setNotice] = useState<string | null>(null)
-  const [config, setConfig] = useState<{ googleClientId: string; emailEnabled: boolean; legacyHandover?: boolean } | null>(null)
+  const [config, setConfig] = useState<{ googleClientId: string; emailEnabled: boolean; legacyHandover?: boolean; workeasy360SignInUrl?: string } | null>(null)
   const googleButtonRef = useRef<HTMLDivElement>(null)
   const [inviteInvalid, setInviteInvalid] = useState(false)
   const [name, setName] = useState('')
@@ -251,28 +253,70 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
     window.setTimeout(() => setPhase((p) => (p === 'shake' ? 'idle' : p)), 500)
   }
 
+  function forgotPassword() {
+    setError(null)
+    if (config?.emailEnabled) {
+      setMode('forgot')
+      setNotice(null)
+    } else {
+      setNotice('Ask your workspace admin for a password reset link. They can create one from My Team.')
+    }
+  }
+
+  function continueWithWorkEasy360() {
+    if (config?.workeasy360SignInUrl) {
+      window.location.href = config.workeasy360SignInUrl
+    } else {
+      setError(null)
+      setNotice('Signing in with a WorkEasy360 account is not set up for this workspace yet. Please log in with your email and password.')
+    }
+  }
+
+  const plainLogin = mode === 'sign-in' && !inviteToken && !resetToken
+
   return (
-    <div className="si-page">
+    <div className="si-page si-ops">
       <section className="si-brand" aria-label={`About ${BRAND_NAME}`}>
-        <div className="si-brand-head">
-          <BrandMark size={40} />
-          <div>
-            <div className="si-brand-name">
-              <BrandName />
-            </div>
-            <div className="si-brand-tag">Plan · Collaborate · Achieve</div>
-          </div>
+        <div className="si-brand-top">
+          <span className="si-brand-logo">
+            <BrandMark size={56} />
+            <BrandName />
+          </span>
+          <OperationsBadge size="lg" />
         </div>
         <h1 className="si-headline">
-          Turn Ideas into <span>Real Progress</span>
+          WorkEasy <span>Operations</span>
         </h1>
-        <p className="si-sub">All your projects, tasks, and teams in one powerful workspace.</p>
-        <FloatingScene />
-        <p className="si-quote">&ldquo;Small steps make big progress.&rdquo;</p>
+        <p className="si-tagline">Plan • Assign • Track • Get Work Done</p>
+        <p className="si-sub">A simple workspace to manage projects, tasks and teams for your business.</p>
+        <div className="si-showcase">
+          <ul className="si-features">
+            <Feature icon="clipboard" title="Project Management" text="Organize and track projects with your team" />
+            <Feature icon="tasks" title="Task Management" text="Create, assign and track tasks with deadlines" />
+            <Feature icon="team" title="Team Collaboration" text="Work together, share updates and stay aligned" />
+            <Feature icon="barChart" title="Progress & Reports" text="Get clear visibility on team and project performance" />
+          </ul>
+          <LaptopPreview />
+        </div>
+        <ul className="si-checks" aria-label="Included">
+          {['Projects', 'Tasks', 'Teams', 'Automation', 'Reports', 'AI Assistant'].map((item) => (
+            <li key={item}>
+              <Icon name="checkCircle" size={22} /> {item}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <section className="si-form-wrap" aria-labelledby="si-title">
         <form className={`si-card${phase === 'shake' ? ' shake' : ''}`} onSubmit={handleSubmit} noValidate>
+          <div className="si-card-brand">
+            <span className="si-brand-logo si-brand-logo-dark">
+              <BrandMark size={44} />
+              <BrandName />
+            </span>
+            <span className="si-card-brand-sep" aria-hidden="true" />
+            <OperationsBadge size="md" />
+          </div>
           <h2 id="si-title">
             {resetToken
               ? 'Choose a new password'
@@ -282,9 +326,9 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
                   ? "You've been invited"
                   : handingOver
                     ? 'Welcome back! One quick step'
-                  : registering
-                    ? 'Create your account'
-                    : 'Welcome back'}
+                    : registering
+                      ? 'Create your account'
+                      : 'Operations Login'}
           </h2>
           <p className="si-form-sub">
             {resetToken
@@ -292,12 +336,12 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
               : forgetting
                 ? "We'll email you a link to set a new one"
                 : inviteToken
-              ? <>Set up your account to join your team on <BrandName /></>
-              : handingOver
-                ? 'We now use email sign-in. Choose the email and password you will use from now on. All your projects and tasks stay exactly as they are.'
-              : registering
-                ? <>Get started with <BrandName /></>
-                : <>Sign in to continue to <BrandName /></>}
+                  ? <>Set up your account to join your team on {BRAND_NAME}</>
+                  : handingOver
+                    ? 'We now use email sign-in. Choose the email and password you will use from now on. All your projects and tasks stay exactly as they are.'
+                    : registering
+                      ? <>Get started with {BRAND_NAME}</>
+                      : <>Manage projects, tasks and teams<br />in one place.</>}
           </p>
 
           {error && (
@@ -316,12 +360,12 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
             <label className="si-field">
               <span className="si-label">Full name</span>
               <span className="si-input">
-                <Icon name="user" size={16} />
+                <Icon name="user" size={22} />
                 <input
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Your name"
+                  placeholder="Enter your name"
                   autoComplete="name"
                   maxLength={120}
                   required
@@ -330,62 +374,62 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
             </label>
           )}
           {!resetToken && (
-          <label className="si-field">
-            <span className="si-label">Email</span>
-            <span className="si-input">
-              <Icon name="user" size={16} />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
-                autoComplete="username"
-                spellCheck={false}
-                readOnly={Boolean(inviteToken)}
-                required
-              />
-            </span>
-          </label>
+            <label className="si-field">
+              <span className="si-label">Email Address</span>
+              <span className="si-input">
+                <Icon name="mail" size={22} />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
+                  autoComplete="username"
+                  spellCheck={false}
+                  readOnly={Boolean(inviteToken)}
+                  required
+                />
+              </span>
+            </label>
           )}
           {!forgetting && (
-          <label className="si-field">
-            <span className="si-label">{resetToken ? 'New password' : 'Password'}</span>
-            <span className="si-input">
-              <Icon name="settings" size={16} />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={registering || resetToken ? `At least ${MIN_PASSWORD_LENGTH} characters` : 'Your password'}
-                autoComplete={registering || resetToken ? 'new-password' : 'current-password'}
-                required
-              />
-              <button
-                type="button"
-                className="si-eye"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                <Icon name={showPassword ? 'eyeOff' : 'eye'} size={16} />
-              </button>
-            </span>
-          </label>
+            <label className="si-field">
+              <span className="si-label">{resetToken ? 'New password' : 'Password'}</span>
+              <span className="si-input">
+                <Icon name="lock" size={22} />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={registering || resetToken ? `At least ${MIN_PASSWORD_LENGTH} characters` : 'Enter your password'}
+                  autoComplete={registering || resetToken ? 'new-password' : 'current-password'}
+                  required
+                />
+                <button
+                  type="button"
+                  className="si-eye"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  <Icon name={showPassword ? 'eyeOff' : 'eye'} size={22} />
+                </button>
+              </span>
+            </label>
           )}
 
           {!forgetting && !resetToken && (
-          <div className="si-row">
-            <label className="checkbox-row">
-              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              Remember me
-            </label>
-            {mode === 'sign-in' && config?.emailEnabled ? (
-              <button type="button" className="si-switch si-forgot" onClick={() => { setMode('forgot'); setError(null); setNotice(null) }}>
-                Forgot password?
-              </button>
-            ) : (
-              <span className="si-hint">{remember ? 'Kept on this device' : 'This tab only'}</span>
-            )}
-          </div>
+            <div className="si-row">
+              <label className="checkbox-row">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                Remember me
+              </label>
+              {mode === 'sign-in' ? (
+                <button type="button" className="si-switch si-forgot" onClick={forgotPassword}>
+                  Forgot Password?
+                </button>
+              ) : (
+                <span className="si-hint">{remember ? 'Kept on this device' : 'This tab only'}</span>
+              )}
+            </div>
           )}
 
           <button
@@ -396,21 +440,46 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
             {phase === 'checking' ? (
               <>
                 <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />{' '}
-                {resetToken || forgetting ? 'Sending…' : handingOver ? 'Saving…' : registering ? 'Creating your account…' : 'Signing in…'}
+                {resetToken || forgetting ? 'Sending…' : handingOver ? 'Saving…' : registering ? 'Creating your account…' : 'Logging in…'}
               </>
             ) : (
               <>
-                {resetToken ? 'Set new password' : forgetting ? 'Send reset link' : inviteToken ? 'Join workspace' : handingOver ? 'Keep my workspace' : registering ? 'Create account' : 'Sign in'}{' '}
-                <Icon name="arrowRight" size={16} />
+                {!resetToken && !forgetting && !registering && <Icon name="login" size={24} />}
+                {resetToken ? 'Set new password' : forgetting ? 'Send reset link' : inviteToken ? 'Join workspace' : handingOver ? 'Keep my workspace' : registering ? 'Create account' : 'Log In to Operations'}
+                {(resetToken || forgetting || registering) && <Icon name="arrowRight" size={16} />}
               </>
             )}
           </button>
 
-          {googleClientId && !inviteToken && !resetToken && !forgetting && !handingOver && (
-            <div className="si-google">
-              <span className="si-divider">or</span>
-              <div ref={googleButtonRef} />
-            </div>
+          {plainLogin && (
+            <>
+              <div className="si-or" aria-hidden="true">
+                <span>OR</span>
+              </div>
+              <button type="button" className="si-sso" onClick={continueWithWorkEasy360}>
+                <BrandMark size={30} />
+                Continue with WorkEasy360 Account
+              </button>
+              {googleClientId && (
+                <div className="si-google">
+                  <div ref={googleButtonRef} />
+                </div>
+              )}
+              <ul className="si-tiles" aria-hidden="true">
+                <li>
+                  <Icon name="clipboard" size={34} />
+                  Manage Projects
+                </li>
+                <li>
+                  <Icon name="checkCircle" size={34} />
+                  Track Tasks
+                </li>
+                <li>
+                  <Icon name="team" size={34} />
+                  Collaborate with Teams
+                </li>
+              </ul>
+            </>
           )}
 
           {handingOver && (
@@ -428,9 +497,9 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
 
           {!inviteToken && !resetToken && !handingOver && (
             <p className="si-foot">
-              {forgetting ? 'Remembered it?' : registering ? 'Already have an account?' : <>New to <BrandName />?</>}{' '}
+              {forgetting ? 'Remembered it?' : registering ? 'Already have an account?' : 'New here?'}{' '}
               <button type="button" className="si-switch" onClick={switchMode}>
-                {registering || forgetting ? 'Sign in' : 'Create an account'}
+                {registering || forgetting ? 'Log in' : 'Create an account'}
               </button>
             </p>
           )}
@@ -440,9 +509,7 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
               <span className="si-check">
                 <Icon name="check" size={34} />
               </span>
-              <strong>
-                Welcome to <BrandName />
-              </strong>
+              <strong>Welcome to {BRAND_NAME}</strong>
               <span>Opening your workspace…</span>
             </div>
           )}
@@ -452,41 +519,73 @@ export function SignInPage({ successDelayMs = 1100 }: { successDelayMs?: number 
   )
 }
 
-/** Decorative, CSS-animated "floating cards" scene (no images, respects reduced motion). */
-function FloatingScene() {
+function Feature({ icon, title, text }: { icon: IconName; title: string; text: string }) {
   return (
-    <div className="si-scene" aria-hidden="true">
-      <div className="si-folder">
-        <div className="si-folder-tab" />
-        <div className="si-folder-body" />
+    <li>
+      <span className="si-feature-icon">
+        <Icon name={icon} size={34} />
+      </span>
+      <span>
+        <strong>{title}</strong>
+        <span>{text}</span>
+      </span>
+    </li>
+  )
+}
+
+/** A drawn (not photographed) laptop showing the Operations home page, for the welcome panel. */
+function LaptopPreview() {
+  const bars: [string, number][] = [
+    ['Website Redesign', 80],
+    ['Product Launch', 60],
+    ['Marketing Campaign', 40],
+  ]
+  return (
+    <div className="si-laptop" aria-hidden="true">
+      <div className="si-laptop-screen">
+        <div className="si-mini">
+          <aside className="si-mini-side">
+            <span className="si-mini-brand">
+              <BrandMark size={14} /> WorkEasy<b>360</b> Operations
+            </span>
+            {['Home', 'Projects', 'Tasks', 'Team', 'Reports', 'Automation', 'Helpdesk', 'Settings'].map((item, i) => (
+              <span key={item} className={`si-mini-link${i === 0 ? ' on' : ''}`}>
+                {item}
+              </span>
+            ))}
+          </aside>
+          <div className="si-mini-main">
+            <div className="si-mini-stats">
+              <span><small>My Tasks</small><b>12</b></span>
+              <span><small>Due Today</small><b className="amber">3</b></span>
+              <span><small>Overdue</small><b className="red">2</b></span>
+              <span><small>Active Projects</small><b>8</b></span>
+            </div>
+            <div className="si-mini-row">
+              <div className="si-mini-card">
+                <small>Project Progress</small>
+                {bars.map(([label, pct]) => (
+                  <span key={label} className="si-mini-bar">
+                    <i>{label}</i>
+                    <em><u style={{ width: `${pct}%` }} /></em>
+                    <i>{pct}%</i>
+                  </span>
+                ))}
+              </div>
+              <div className="si-mini-card si-mini-donut">
+                <small>Tasks by Status</small>
+                <span className="si-mini-ring"><b>24</b><i>Tasks</i></span>
+              </div>
+            </div>
+            <div className="si-mini-actions">
+              <span className="g">+ Add Task</span>
+              <span className="b">Create Project</span>
+              <span className="p">Invite Member</span>
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="si-float si-float-1">
-        <Icon name="check" size={14} /> Plan
-      </div>
-      <div className="si-float si-float-2">
-        <Icon name="kanban" size={14} /> Build
-      </div>
-      <div className="si-float si-float-3">
-        <Icon name="check" size={14} /> Deliver
-      </div>
-      <div className="si-chip si-chip-1">
-        <Icon name="tasks" size={16} />
-      </div>
-      <div className="si-chip si-chip-2">
-        <Icon name="calendar" size={16} />
-      </div>
-      <div className="si-chip si-chip-3">
-        <Icon name="team" size={16} />
-      </div>
-      <svg className="si-path" viewBox="0 0 320 120" preserveAspectRatio="none">
-        <path d="M5 95 C 80 20, 160 130, 315 30" fill="none" stroke="url(#si-grad)" strokeWidth="3" strokeLinecap="round" strokeDasharray="8 8" />
-        <defs>
-          <linearGradient id="si-grad" x1="0" x2="1">
-            <stop offset="0" stopColor="#00bf62" />
-            <stop offset="1" stopColor="#ffc940" />
-          </linearGradient>
-        </defs>
-      </svg>
+      <div className="si-laptop-base" />
     </div>
   )
 }

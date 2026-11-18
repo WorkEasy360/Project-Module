@@ -7,10 +7,13 @@ import { useAsyncData } from '../../../hooks/useAsyncData'
 import { tasksApi } from '../../../api/tasks'
 import { LoadingState } from '../../../components/common/LoadingState'
 import { ErrorState, InlineError } from '../../../components/common/ErrorState'
-import { humanizeToken, formatDate, initials } from '../../../utils/format'
-import { TASK_STATUS_TRANSITIONS, type KanbanColumn, type Task, type TaskStatus } from '../../../types/work'
+import { formatDate } from '../../../utils/format'
+import { TASK_STATUS_TRANSITIONS, type KanbanColumn, type Task, type TaskStatus, TASK_STATUSES } from '../../../types/work'
 import { toUserMessage } from '../../../api/errorMessage'
 import { TaskStatusControl } from '../../../components/task/TaskStatusControl'
+import { ListBoardSwitch } from '../../../components/task/ListBoardSwitch'
+import { taskStatusLabel } from '../../../components/common/Badge'
+import { Avatar } from '../../../components/common/Avatar'
 
 export function KanbanTab() {
   const { nameOf } = usePeople()
@@ -34,7 +37,7 @@ export function KanbanTab() {
 
     const allowed = TASK_STATUS_TRANSITIONS[task.status].includes(column.status)
     if (!allowed) {
-      setMessage(`Cannot move a task from ${humanizeToken(task.status)} to ${humanizeToken(column.status)}.`)
+      setMessage(`Cannot move a task from ${taskStatusLabel(task.status)} to ${taskStatusLabel(column.status)}.`)
       return
     }
 
@@ -53,10 +56,11 @@ export function KanbanTab() {
 
   return (
     <div>
+      <ListBoardSwitch current="board" />
       {message && <InlineError message={message} />}
       {moving && <p className="text-muted">Updating…</p>}
       <div className="kanban-board">
-        {data.columns.map((column) => (
+        {data.columns.filter((column) => TASK_STATUSES.includes(column.status)).map((column) => (
           <div
             key={column.status}
             className={`kanban-column kanban-status-${column.status.toLowerCase()}${dropTarget === column.status ? ' drop-target' : ''}`}
@@ -71,7 +75,7 @@ export function KanbanTab() {
             }}
           >
             <div className="kanban-column-header">
-              <span>{humanizeToken(column.status)}</span>
+              <span>{taskStatusLabel(column.status)}</span>
               <span className="text-muted">{column.tasks.length}</span>
             </div>
             <div className="kanban-column-body">
@@ -90,8 +94,8 @@ export function KanbanTab() {
                     <PriorityBadge priority={task.priority} />
                     {task.dueDate && <span className="text-faint">{formatDate(task.dueDate)}</span>}
                     {task.assigneeId && (
-                      <span className="task-avatar sm" title={nameOf(task.assigneeId)}>
-                        {initials(nameOf(task.assigneeId))}
+                      <span title={nameOf(task.assigneeId)}>
+                        <Avatar userId={task.assigneeId} name={nameOf(task.assigneeId)} className="task-avatar sm" />
                       </span>
                     )}
                   </div>

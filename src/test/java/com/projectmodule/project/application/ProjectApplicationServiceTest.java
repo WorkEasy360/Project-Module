@@ -96,7 +96,7 @@ class ProjectApplicationServiceTest {
             assertThat(created.getOrganizationId()).isEqualTo(ORG);
             assertThat(created.getOwnerId()).isEqualTo(USER);
             assertThat(created.getPriority()).isEqualTo(ProjectPriority.HIGH);
-            assertThat(created.getStatus()).isEqualTo(ProjectStatus.PLANNING);
+            assertThat(created.getStatus()).isEqualTo(ProjectStatus.ACTIVE);
             assertThat(created.getStartDate()).contains(LocalDate.of(2026, 1, 1));
             verify(projectRepository).save(any(Project.class));
         }
@@ -301,7 +301,7 @@ class ProjectApplicationServiceTest {
 
             UpdateProjectRequest request = new UpdateProjectRequest(
                     "Apollo Renamed", "New description", ProjectStatus.ACTIVE,
-                    ProjectPriority.CRITICAL, null, null, project.getVersion());
+                    ProjectPriority.HIGH, null, null, project.getVersion());
 
             Project updated = service.updateProject(context, project.getId(), request);
 
@@ -323,13 +323,13 @@ class ProjectApplicationServiceTest {
             when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
             UpdateProjectRequest request = new UpdateProjectRequest(
-                    null, null, ProjectStatus.ACTIVE, ProjectPriority.CRITICAL, null, null,
+                    null, null, ProjectStatus.ON_HOLD, ProjectPriority.HIGH, null, null,
                     project.getVersion());
 
             Project updated = service.updateProject(context, project.getId(), request);
 
-            assertThat(updated.getStatus()).isEqualTo(ProjectStatus.ACTIVE);
-            assertThat(updated.getPriority()).isEqualTo(ProjectPriority.CRITICAL);
+            assertThat(updated.getStatus()).isEqualTo(ProjectStatus.ON_HOLD);
+            assertThat(updated.getPriority()).isEqualTo(ProjectPriority.HIGH);
         }
 
         @Test

@@ -9,7 +9,16 @@ export interface Invitation {
   token: string | null
 }
 
+export interface WorkspaceSettings {
+  name: string
+  canEdit: boolean
+  plan: { name: string; validUntil: string | null; manageUrl: string }
+  supportEmail: string
+}
+
 export const workspaceApi = {
+  settings: () => api.get<WorkspaceSettings>('/workspace/settings'),
+  rename: (name: string) => api.patch<WorkspaceSettings>('/workspace/settings', { name }),
   people: () => api.get<Account[]>('/workspace/people'),
   invitations: () => api.get<Invitation[]>('/workspace/invitations'),
   invite: (email: string) => api.post<Invitation>('/workspace/invitations', { email }),

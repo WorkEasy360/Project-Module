@@ -74,7 +74,7 @@ class ChecklistApplicationServiceTest {
         void createsChecklist() {
             when(checklistRepository.save(any(Checklist.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            CreateChecklistRequest request = new CreateChecklistRequest("Add password validation", null);
+            CreateChecklistRequest request = new CreateChecklistRequest("Add password validation");
             Checklist created = service.createChecklist(context, task.getId(), request);
 
             assertThat(created.getText()).isEqualTo("Add password validation");
@@ -89,7 +89,7 @@ class ChecklistApplicationServiceTest {
         @Test
         @DisplayName("lists checklist lines for the task")
         void listsChecklists() {
-            Checklist checklist = Checklist.create(task.getId(), null, "Add password validation");
+            Checklist checklist = Checklist.create(task.getId(), "Add password validation");
             when(checklistRepository.findByTaskIdAndArchivedAtIsNullOrderByCreatedAtAsc(task.getId()))
                     .thenReturn(List.of(checklist));
 
@@ -103,12 +103,12 @@ class ChecklistApplicationServiceTest {
         @Test
         @DisplayName("toggles checked via the checked field")
         void togglesChecked() {
-            Checklist checklist = Checklist.create(task.getId(), null, "Add password validation");
+            Checklist checklist = Checklist.create(task.getId(), "Add password validation");
             when(checklistRepository.findByIdAndArchivedAtIsNull(checklist.getId()))
                     .thenReturn(Optional.of(checklist));
             when(checklistRepository.save(any(Checklist.class))).thenAnswer(inv -> inv.getArgument(0));
 
-            UpdateChecklistRequest request = new UpdateChecklistRequest(null, true, null, checklist.getVersion());
+            UpdateChecklistRequest request = new UpdateChecklistRequest(null, true, checklist.getVersion());
             Checklist updated = service.updateChecklist(context, checklist.getId(), request);
 
             assertThat(updated.isChecked()).isTrue();
@@ -117,12 +117,12 @@ class ChecklistApplicationServiceTest {
         @Test
         @DisplayName("rejects an update against a stale version")
         void rejectsStaleVersion() {
-            Checklist checklist = Checklist.create(task.getId(), null, "Add password validation");
+            Checklist checklist = Checklist.create(task.getId(), "Add password validation");
             when(checklistRepository.findByIdAndArchivedAtIsNull(checklist.getId()))
                     .thenReturn(Optional.of(checklist));
 
             UpdateChecklistRequest request = new UpdateChecklistRequest(
-                    "Renamed", null, null, checklist.getVersion() + 1);
+                    "Renamed", null, checklist.getVersion() + 1);
 
             assertThatThrownBy(() -> service.updateChecklist(context, checklist.getId(), request))
                     .isInstanceOf(ConflictException.class);
@@ -135,7 +135,7 @@ class ChecklistApplicationServiceTest {
             UUID id = UUID.randomUUID();
             when(checklistRepository.findByIdAndArchivedAtIsNull(id)).thenReturn(Optional.empty());
 
-            UpdateChecklistRequest request = new UpdateChecklistRequest("Renamed", null, null, 0L);
+            UpdateChecklistRequest request = new UpdateChecklistRequest("Renamed", null, 0L);
 
             assertThatThrownBy(() -> service.updateChecklist(context, id, request))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -148,7 +148,7 @@ class ChecklistApplicationServiceTest {
         @Test
         @DisplayName("archives the checklist line")
         void archivesChecklist() {
-            Checklist checklist = Checklist.create(task.getId(), null, "Add password validation");
+            Checklist checklist = Checklist.create(task.getId(), "Add password validation");
             when(checklistRepository.findByIdAndArchivedAtIsNull(checklist.getId()))
                     .thenReturn(Optional.of(checklist));
             when(checklistRepository.save(any(Checklist.class))).thenAnswer(inv -> inv.getArgument(0));

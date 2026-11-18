@@ -1,6 +1,5 @@
 package com.projectmodule.work.api;
 
-import com.projectmodule.common.api.PageResponse;
 import com.projectmodule.common.context.RequestContext;
 import com.projectmodule.work.api.dto.CommentResponse;
 import com.projectmodule.work.api.dto.CreateCommentRequest;
@@ -8,13 +7,8 @@ import com.projectmodule.work.api.dto.UpdateCommentRequest;
 import com.projectmodule.work.application.ProjectCommentApplicationService;
 import com.projectmodule.work.domain.ProjectComment;
 import jakarta.validation.Valid;
-import java.net.URI;
 import java.util.List;
 import java.util.UUID;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -25,16 +19,11 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
- * REST endpoints for project comments, per {@code docs/project/10-COMMENT-SPEC.md} (approved) —
- * the "collection nested under a project, item flat" pattern Phase/Milestone/Risk/Issue/Decision
- * already use, with no single-item {@code GET}. Unlike those, listing is paginated
- * ({@link PageResponse}/{@link Pageable}), reusing the same convention
- * {@link com.projectmodule.project.api.ProjectController#listProjects} already establishes,
- * ordered oldest-first by default. Holds no business logic or authorization decision; both are
- * delegated to {@link ProjectCommentApplicationService}.
+ * REST endpoints for task comments: list and post under a task, edit and archive by comment id.
+ * Holds no business logic or authorization decision; both are delegated to
+ * {@link ProjectCommentApplicationService}.
  */
 @RestController
 public class CommentController {
@@ -51,20 +40,6 @@ public class CommentController {
         this.requestContext = requestContext;
     }
 
-    @PostMapping("/projects/{projectId}/comments")
-    public ResponseEntity<CommentResponse> createComment(@PathVariable UUID projectId,
-                                                          @Valid @RequestBody CreateCommentRequest request) {
-        ProjectComment created = commentApplicationService.createComment(requestContext, projectId, request);
-        CommentResponse response = commentMapper.toResponse(created);
-
-        URI location = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/api/v1/comments/{id}")
-                .buildAndExpand(created.getId())
-                .toUri();
-
-        return ResponseEntity.created(location).body(response);
-    }
-
     @GetMapping("/tasks/{taskId}/comments")
     public List<CommentResponse> listTaskComments(@PathVariable UUID taskId) {
         return commentApplicationService.listTaskComments(requestContext, taskId).stream()
@@ -76,15 +51,6 @@ public class CommentController {
     public CommentResponse createTaskComment(@PathVariable UUID taskId,
                                              @Valid @RequestBody CreateCommentRequest request) {
         return commentMapper.toResponse(commentApplicationService.createTaskComment(requestContext, taskId, request));
-    }
-
-    @GetMapping("/projects/{projectId}/comments")
-    public PageResponse<CommentResponse> listComments(
-            @PathVariable UUID projectId,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.ASC) Pageable pageable) {
-
-        Page<ProjectComment> page = commentApplicationService.listComments(requestContext, projectId, pageable);
-        return PageResponse.of(page, page.map(commentMapper::toResponse).getContent());
     }
 
     @PatchMapping("/comments/{id}")

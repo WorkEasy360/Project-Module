@@ -1,12 +1,17 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Modal } from '../../components/common/Modal'
-import { TextField, TextareaField, SelectField, FormActions } from '../../components/forms/fields'
+import { TextField, TextareaField, FormActions } from '../../components/forms/fields'
 import { InlineError } from '../../components/common/ErrorState'
 import { toUserMessage } from '../../api/errorMessage'
 import { projectsApi } from '../../api/projects'
-import { PROJECT_PRIORITIES, type Project, type ProjectPriority } from '../../types/project'
+import { useIdentity } from '../../context/IdentityContext'
+import type { Project } from '../../types/project'
 
+/**
+ * V3 Create Project: Project Name and Owner first (the creator is the owner); description, dates,
+ * customer/contact and tags sit behind More Details.
+ */
 export function CreateProjectDialog({
   onClose,
   onCreated,
@@ -17,9 +22,12 @@ export function CreateProjectDialog({
   const navigate = useNavigate()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [priority, setPriority] = useState<ProjectPriority>('MEDIUM')
+  const { identity } = useIdentity()
+  const [moreOpen, setMoreOpen] = useState(false)
   const [startDate, setStartDate] = useState('')
   const [targetEndDate, setTargetEndDate] = useState('')
+  const [customerContact, setCustomerContact] = useState('')
+  const [tags, setTags] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [openAfterCreate, setOpenAfterCreate] = useState(true)
@@ -32,9 +40,11 @@ export function CreateProjectDialog({
       const project = await projectsApi.create({
         name,
         description: description || null,
-        priority,
+        priority: 'MEDIUM',
         startDate: startDate || null,
         targetEndDate: targetEndDate || null,
+        customerContact: customerContact.trim() || null,
+        tags: splitTags(tags),
       })
       onCreated(project)
       if (openAfterCreate) navigate(`/projects/${project.id}`)
@@ -49,26 +59,27 @@ export function CreateProjectDialog({
     <Modal title="New Project" onClose={onClose}>
       <form onSubmit={handleSubmit} className="form-grid">
         {error && <InlineError message={error} />}
-        <TextField id="name" label="Name" value={name} onChange={setName} required maxLength={200} />
-        <TextareaField id="description" label="Description" value={description} onChange={setDescription} />
-        <SelectField
-          id="priority"
-          label="Priority"
-          value={priority}
-          onChange={setPriority}
-          required
-          options={PROJECT_PRIORITIES.map((p) => ({ value: p, label: p }))}
-        />
-        <div className="form-row">
-          <TextField id="startDate" label="Start date" type="date" value={startDate} onChange={setStartDate} />
-          <TextField
-            id="targetEndDate"
-            label="Target end date"
-            type="date"
-            value={targetEndDate}
-            onChange={setTargetEndDate}
-          />
+        <TextField id="name" label="Project Name" value={name} onChange={setName} required maxLength={200} />
+        <div className="field">
+          <span className="field-label">Project Owner</span>
+          <span className="field-static">{identity?.name ? `${identity.name} (you)` : 'You'}</span>
         </div>
+        <button type="button" className="btn btn-sm btn-ghost more-details-toggle" aria-expanded={moreOpen} onClick={() => setMoreOpen(!moreOpen)}>
+          {moreOpen ? 'Fewer details' : 'More Details'}
+        </button>
+        {moreOpen && (
+          <>
+            <TextareaField id="description" label="Description" value={description} onChange={setDescription} />
+            <div className="form-row">
+              <TextField id="startDate" label="Start date" type="date" value={startDate} onChange={setStartDate} />
+              <TextField id="targetEndDate" label="Due date" type="date" value={targetEndDate} onChange={setTargetEndDate} />
+            </div>
+            <div className="form-row">
+              <TextField id="customer" label="Customer / Contact" value={customerContact} onChange={setCustomerContact} maxLength={200} placeholder="e.g. Rajni Machinery Store" />
+              <TextField id="tags" label="Tags" value={tags} onChange={setTags} placeholder="e.g. Website, Marketing" />
+            </div>
+          </>
+        )}
         <label className="checkbox-row">
           <input
             type="checkbox"
@@ -88,4 +99,9 @@ export function CreateProjectDialog({
       </form>
     </Modal>
   )
+}
+
+/** "Website, Marketing" becomes ["Website", "Marketing"]. */
+export function splitTags(text: string): string[] {
+  return text.split(',').map((t) => t.trim()).filter(Boolean)
 }

@@ -98,7 +98,7 @@ class ProjectControllerTest {
                         "/api/v1/projects/" + created.getId())))
                 .andExpect(jsonPath("$.id").value(created.getId().toString()))
                 .andExpect(jsonPath("$.name").value("Apollo"))
-                .andExpect(jsonPath("$.status").value("PLANNING"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
                 .andExpect(jsonPath("$.archived").value(false));
     }
 
@@ -168,8 +168,23 @@ class ProjectControllerTest {
                 .andExpect(jsonPath("$.content[0].name").value("Apollo"))
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.page").value(0))
-                // The summary view omits fields the full response carries.
-                .andExpect(jsonPath("$.content[0].description").doesNotExist());
+                // The list carries what the projects table shows; it still omits the version.
+                .andExpect(jsonPath("$.content[0].description").value("Lunar programme"))
+                .andExpect(jsonPath("$.content[0].taskCount").value(0))
+                .andExpect(jsonPath("$.content[0].tags").isArray())
+                .andExpect(jsonPath("$.content[0].version").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("GET list with archived=true lists archived projects")
+    void listsArchivedProjects() throws Exception {
+        Project project = sampleProject();
+        when(projectApplicationService.listArchivedProjects(eq(requestContext), any()))
+                .thenReturn(new PageImpl<>(List.of(project), PageRequest.of(0, 20), 1));
+
+        mockMvc.perform(get("/api/v1/projects").param("archived", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].name").value("Apollo"));
     }
 
     @Test
