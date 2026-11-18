@@ -2,8 +2,11 @@ package com.projectmodule.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.projectmodule.security.backchannel.SignInSessions;
+import com.projectmodule.security.support.SsoTestApplication;
 import com.projectmodule.security.web.SignInHandlers;
 import com.projectmodule.security.web.SignedOutMarker;
+import java.time.Clock;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -24,7 +27,9 @@ class SignInHandlersTest {
         request.setSession(session);
         MockHttpServletResponse response = new MockHttpServletResponse();
 
-        SignInHandlers.success(new HttpSessionSecurityContextRepository(), new SignedOutMarker(true))
+        SignInHandlers.success(new HttpSessionSecurityContextRepository(), new SignedOutMarker(true),
+                        new SignInSessions(Clock.systemUTC()),
+                        new SsoTestApplication.InMemorySignInRecords(Clock.systemUTC()))
                 .onAuthenticationSuccess(request, response, new TestingAuthenticationToken("intruder", "x"));
 
         assertThat(session.isInvalid()).isTrue();

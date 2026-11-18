@@ -105,8 +105,10 @@ shows "Continue with Workeasy360" instead), or arrive from the Workeasy360 launc
 the backend then creates a server-side session (`HttpOnly`, `SameSite=Lax`, CSRF-protected). While the
 session lasts, Easy Project keeps asking Workeasy360 whether the person's organization may still use it.
 The backend refuses to start outside the `local` and `test` profiles without the `WORKEASY360_*`
-settings. Everything - how sign-in works, the variables, registration with
-`manage.py connect_product_sso --product easy_project ...`, entitlement behaviour, sign-out - is in
+settings. When a Workeasy360 sign-in ends, Workeasy360 ends the Easy Project sessions it opened (back-channel
+logout, once its URI is registered). Everything - how sign-in works, the variables, registration with
+`manage.py connect_product_sso --product easy_project ...`, entitlement behaviour, sign-out, back-channel
+logout - is in
 [`docs/workeasy360-sso.md`](docs/workeasy360-sso.md). See [`frontend/README.md`](frontend/README.md) for
 the architecture, the feature registry (how to add a screen without touching navigation), and the full
 route list.

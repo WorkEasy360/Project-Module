@@ -2,6 +2,12 @@ package com.projectmodule.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jose.jwk.JWK;
+import com.projectmodule.security.backchannel.BackchannelLogoutController;
+import com.projectmodule.security.backchannel.LogoutTokenVerifier;
+import com.projectmodule.security.backchannel.SignInRecordCleanup;
+import com.projectmodule.security.backchannel.SignInRecords;
+import com.projectmodule.security.backchannel.SignInRevocationFilter;
+import com.projectmodule.security.backchannel.SignInSessions;
 import com.projectmodule.security.entitlement.EntitlementClient;
 import com.projectmodule.security.entitlement.EntitlementFilter;
 import com.projectmodule.security.entitlement.EntitlementService;
@@ -10,6 +16,7 @@ import com.projectmodule.security.oidc.AuthorizationRequestResolver;
 import com.projectmodule.security.oidc.IdTokenDecoderFactory;
 import com.projectmodule.security.oidc.PendingFlowRepository;
 import com.projectmodule.security.oidc.ProviderHttp;
+import com.projectmodule.security.oidc.ProviderKeySet;
 import com.projectmodule.security.oidc.Workeasy360OidcUserService;
 import com.projectmodule.security.oidc.Workeasy360Provider;
 import com.projectmodule.security.web.CsrfSupport;
@@ -26,12 +33,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.converter.FormHttpMessageConverter;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.oauth2.client.OAuth2AuthorizedClient;
 import org.springframework.security.oauth2.client.endpoint.NimbusJwtClientAuthenticationParametersConverter;
@@ -54,10 +64,12 @@ import org.springframework.security.web.authentication.www.BasicAuthenticationFi
 import org.springframework.security.web.savedrequest.NullRequestCache;
 import com.projectmodule.security.web.SameOriginWritesFilter;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.RequestAttributeSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfException;
 import org.springframework.security.web.csrf.CsrfFilter;
+import org.springframework.security.web.header.HeaderWriterFilter;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -79,6 +91,11 @@ import java.util.Map;
  *       in that browser before.
  *   <li>CSRF is on, with the cookie-and-header pattern for the single-page app. The OAuth redirects are
  *       GETs, not writes.
+ *   <li>The back-channel logout endpoint, which Workeasy360's server calls, has a chain of its own ahead of
+ *       the browser chain: no session, no cookie, no CSRF token (see {@link #backchannelLogoutFilterChain}).
+ *   <li>Every request that comes with a signed-in session is checked against the shared sign-in record
+ *       ({@link SignInRevocationFilter}), so a session that a logout token ended on any instance is ended on
+ *       this one too.
  * </ul>
  */
 @Configuration
@@ -120,10 +137,69 @@ public class SecurityConfiguration {
         return new IdTokenDecoderFactory(properties.productCode(), http);
     }
 
+    /** Workeasy360's signing keys, for logout tokens. */
+    @Bean
+    public ProviderKeySet providerKeySet(Workeasy360Provider provider, Clock clock) {
+        return new ProviderKeySet(provider, clock);
+    }
+
+    @Bean
+    public LogoutTokenVerifier logoutTokenVerifier(Workeasy360Properties properties, ProviderKeySet keys,
+                                                   Clock clock) {
+        return new LogoutTokenVerifier(properties, keys, clock);
+    }
+
+    /**
+     * Which of this instance's sessions each Workeasy360 sign-in opened. Also an {@code HttpSessionListener} and
+     * {@code HttpSessionIdListener}, which Spring Boot registers with the servlet container.
+     */
+    @Bean
+    public SignInSessions signInSessions(Clock clock) {
+        return new SignInSessions(clock);
+    }
+
+    /**
+     * Forgets the shared sign-in record of a session that ends by itself. An {@code HttpSessionListener}, which
+     * Spring Boot registers with the servlet container. The record itself ({@link SignInRecords}) is the
+     * PostgreSQL {@code JdbcSignInRecords} service.
+     */
+    @Bean
+    public SignInRecordCleanup signInRecordCleanup(SignInRecords records) {
+        return new SignInRecordCleanup(records);
+    }
+
     @Bean
     public EntitlementService entitlementService(Workeasy360Provider provider, Clock clock,
             @Value("${server.servlet.session.timeout:8h}") java.time.Duration sessionIdleTimeout) {
         return new EntitlementService(new EntitlementClient(provider), clock, sessionIdleTimeout);
+    }
+
+    /**
+     * The back-channel logout endpoint ({@link BackchannelLogoutController}): Workeasy360's server calls it,
+     * never a browser. It has its own chain, ahead of the browser chain, so none of the browser machinery
+     * applies: no session is read or created, no cookie is read or set (not even the CSRF cookie), there is no
+     * CSRF token and no same-origin check. The logout token's signature is the authentication, and the
+     * controller verifies it. Every answer is {@code Cache-Control: no-store}.
+     */
+    @Bean
+    @Order(Ordered.HIGHEST_PRECEDENCE)
+    public SecurityFilterChain backchannelLogoutFilterChain(HttpSecurity http) throws Exception {
+        http
+                .securityMatcher(BackchannelLogoutController.PATH)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .securityContext(context -> context
+                        .securityContextRepository(new RequestAttributeSecurityContextRepository()))
+                .requestCache(cache -> cache.disable())
+                .csrf(csrf -> csrf.disable())
+                .cors(cors -> cors.disable())
+                .logout(logout -> logout.disable())
+                .headers(headers -> headers
+                        .cacheControl(HeadersConfigurer.CacheControlConfig::disable)
+                        .referrerPolicy(referrer -> referrer
+                                .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN)))
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
+                .addFilterBefore(new NoStoreFilter(), HeaderWriterFilter.class);
+        return http.build();
     }
 
     @Bean
@@ -136,6 +212,8 @@ public class SecurityConfiguration {
             ProblemResponses problems,
             Clock clock,
             ProviderHttp providerHttp,
+            SignInSessions signIns,
+            SignInRecords signInRecords,
             @Value("${server.servlet.session.cookie.secure:true}") boolean secureCookies,
             @Value("${server.servlet.session.cookie.name:JSESSIONID}") String sessionCookieName) throws Exception {
 
@@ -211,7 +289,7 @@ public class SecurityConfiguration {
                                 .userService(request -> {
                                     throw new OAuth2AuthenticationException(new OAuth2Error("refused"));
                                 }))
-                        .successHandler(SignInHandlers.success(contexts, signedOut))
+                        .successHandler(SignInHandlers.success(contexts, signedOut, signIns, signInRecords))
                         .failureHandler(SignInHandlers.failure()))
                 .logout(logout -> logout
                         .logoutUrl("/api/auth/logout")
@@ -222,6 +300,9 @@ public class SecurityConfiguration {
                         .logoutSuccessHandler(new HttpStatusReturningLogoutSuccessHandler(HttpStatus.NO_CONTENT)))
                 .addFilterAfter(new CsrfSupport.CsrfCookieFilter(), BasicAuthenticationFilter.class)
                 .addFilterBefore(new NoStoreFilter(), CsrfFilter.class)
+                // Before anything reads who the request is for: a session whose sign-in a logout token ended (on
+                // any instance) is ended here, and the request goes on as anonymous.
+                .addFilterBefore(new SignInRevocationFilter(signInRecords, problems), CsrfFilter.class)
                 .addFilterBefore(new SameOriginWritesFilter(problems), CsrfFilter.class)
                 .addFilterBefore(new SignInEntryFilter(provider), OAuth2AuthorizationRequestRedirectFilter.class)
                 .addFilterAfter(new EntitlementFilter(entitlements, problems), AuthorizationFilter.class);
