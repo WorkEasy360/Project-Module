@@ -45,10 +45,11 @@ load starts a sign-in by itself and brings them back to the page they were on, w
 (Workeasy360's own session continues). See `docs/workeasy360-sso.md`, "Sessions, deployment shape and edge
 protection", which also asks for rate limiting of `/api/auth/**` at Cloudflare.
 
-**Back-channel logout** (`docs/workeasy360-sso.md`, "Back-channel logout") is one more reason for a single
-instance: Workeasy360's logout `POST` reaches one instance, which can end only the sessions it holds. Keep
-`POST /api/auth/workeasy360/backchannel-logout` reachable from the internet without a browser challenge: the
-caller is Workeasy360's server.
+**Back-channel logout** (`docs/workeasy360-sso.md`, "Back-channel logout") is not a reason for a single
+instance: Workeasy360's logout `POST` reaches one instance, but the sign-in record it ends is shared in PostgreSQL
+and every instance checks it on every signed-in request, so the person's sessions end on all of them (and a
+restart cannot bring one back). Keep `POST /api/auth/workeasy360/backchannel-logout` reachable from the internet
+without a browser challenge: the caller is Workeasy360's server.
 
 ## Required environment properties
 

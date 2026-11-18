@@ -54,8 +54,9 @@ Workeasy360 repository). The code is in `com.projectmodule.security`.
    holds the user id, the organization id, the issuer, the subject, the e-mail address and name (profile
    data), the assurance level and the authentication time. It holds no token of any kind. The session is also
    recorded against the person's (issuer, subject) and the ID token's `sid`, the Workeasy360 sign-in it came from,
-   so that a [back-channel logout](#back-channel-logout) can end it. Workeasy360 sends `sid` only once the
-   back-channel logout URI is registered.
+   in a table every instance shares (`signed_in_sessions`), so that a [back-channel logout](#back-channel-logout)
+   delivered to any instance can end it. Workeasy360 sends `sid` only once the back-channel logout URI is
+   registered.
 8. The browser lands on the app at the route in `next` (`/#/projects/123`), or on the home page.
 
 Everything the API does afterwards is for that user in that organization. **The organization is pinned to
@@ -282,7 +283,8 @@ that request's entitlement check: a denied or read-only organization cannot trig
 an organization whose access has ended cannot have a rule fire. This satisfies "class A" of the universal-SSO
 design (section 5) by construction. The [back-channel logout](#back-channel-logout) endpoint is not background
 work either: it runs inside Workeasy360's request, ends sessions and writes no organization's data, and its
-clean-up of old `jti` records happens in that same request. **If background jobs are ever added**, they must re-check the
+clean-up of old `jti` records happens in that same request. Neither is the shared sign-in record: it is read by
+the request that carries the session, and its clean-up runs inside a sign-in's own transaction. **If background jobs are ever added**, they must re-check the
 organization's entitlement (organization-level, `write=true`) when they run and skip the effect when it is
 denied; `EntitlementService` is the place to extend.
 
@@ -323,8 +325,8 @@ authentication. Every answer is `Cache-Control: no-store`.
 
 | Answer | When | What Workeasy360 does |
 |---|---|---|
-| `200`, empty body | The token verified, and the sessions it names have ended (or had already ended). | Marks the delivery `delivered`. |
-| `400 {"error":"invalid_request"}` | The token does not verify, or its `jti` was accepted before. Nothing was ended. | Marks it `failed`. No retry. |
+| `200`, empty body | The token verified, and the sessions it names have ended (or had already ended), on every instance. Also the answer to the **same token delivered again** (its `jti` was already acted on, here or on another instance): nothing more is ended. | Marks the delivery `delivered`. |
+| `400 {"error":"invalid_request"}` | The token does not verify. Nothing was ended. | Marks it `failed`. No retry. |
 | `503 {"error":"temporarily_unavailable"}` | Workeasy360's discovery document or key set could not be read; or recording the `jti` (the database) or ending a session failed. Nothing was recorded. | Retries with a fresh token: 0 s, 15 s, 1 min, 5 min, 15 min, 1 h, 6 h, 24 h. |
 | `405` | Any method other than `POST`. | - |
 
@@ -351,11 +353,14 @@ attack, as for the ID token:
 8. `events` is an object holding `http://schemas.openid.net/event/backchannel-logout`, itself an object.
 9. There is **no** `nonce`. A `typ` claim, when present, is `logout_token`.
 10. `sub` and/or `sid` are present (strings of at most 255 characters), and `jti` is present.
-11. A `jti` is never accepted twice. Accepted ones are recorded in `received_logout_tokens` (migration `V15`)
-    **in the same database transaction** that ends the sessions. If ending them fails, nothing is recorded and
-    the answer is `503`, so the retry is not refused as a replay. A row is kept until its token could no longer
-    pass the checks above (at most about 11 minutes), then deleted by the next accepted token. No background job
-    is involved.
+11. A `jti` is acted on once. Accepted ones are recorded in `received_logout_tokens` (migration `V15`)
+    **in the same database transaction** that ends the sessions. The same token arriving again (a duplicate, a
+    retry whose first answer was lost, two instances receiving it at once) is answered with the same `200` and
+    ends nothing: it cannot end sessions opened since, so a captured token is useless. If ending the sessions
+    fails, nothing is recorded and the answer is `503`, so the retry is processed afresh. A row is kept until its
+    token could no longer pass the checks above (at most about 11 minutes), then deleted by the next accepted
+    token; after that a copy fails check 7. No background job is involved. (Workeasy360 itself never resends a
+    `jti`: it mints a fresh token for every attempt.)
 
 **What ends.**
 
@@ -364,43 +369,97 @@ attack, as for the ID token:
   person's sessions from other sign-ins, such as another browser, continue.
 - **A token with only `sub`** ("sign out everywhere"): every Easy Project session of that person, matched on
   (issuer, `sub`), whichever sign-in opened it, including sessions whose ID token carried no `sid`.
-- Ending is server-side: the session is invalidated, so its cookie opens nothing afterwards. The app's next API
-  call gets a `401`, and the app starts a sign-in by itself for the page the person is on. Workeasy360 then shows
+- Ending is server-side, on every instance: the session records are deleted from the shared table, the receiving
+  instance invalidates its own sessions at once, and every other instance invalidates its copy at that session's
+  next request (see [Every instance, and restarts](#every-instance-and-restarts)). The cookie opens nothing
+  afterwards, on any instance. The app's next API call gets a `401`, and the app starts a sign-in by itself for
+  the page the person is on. Workeasy360 then shows
   its own sign-in page (the person signed out of it) or completes a sign-in as the account the person switched
   to. No [signed-out marker](#opening-easy-project-directly-automatic-sign-in) is set, because no browser takes part.
 - Delivery is at least once. Ending a session that has already ended is not an error and still answers `200`.
 
-**How sessions are recorded.** At sign-in, the new session is recorded in memory (`SignInSessions`) with the
-person's issuer and `sub` and the ID token's `sid` (absent when the token carried none). The servlet container
-reports every session that ends (sign-out, idle timeout, account switch, a back-channel logout), so the record
-never outlives the session. A logout token can overtake the sign-in it ends: the browser may still be on its way
-back to the callback with an ID token for that `sid`. Ended `sid`s are therefore remembered for 10 minutes, and
-such a callback fails with `expired` and leaves no session.
+**How sessions are recorded.** At sign-in, the new session is recorded twice, with the person's issuer and
+`sub` and the ID token's `sid` (absent when the token carried none):
 
-**Sessions are in memory, so back-channel logout reaches one instance.** Easy Project's sessions are the
-servlet container's own `HttpSession`s, held in memory by the instance that created them. There is no Spring
-Session and no shared store. A logout token can therefore end only the sessions of the instance that receives
-the `POST`. With one instance, as deployed, that is every session. With several instances behind a load
-balancer, the token reaches whichever instance the balancer picks, which ends what it holds and answers `200`.
-Sessions on the other instances are **not** ended; the entitlement re-check (15 minutes) and the idle timeout
-remain their bound. Do not scale out without moving sessions, and this record, to a shared store such as Spring
-Session JDBC or Redis. The `jti` record is already in PostgreSQL: it is shared by every instance and survives
-restarts, so a captured token cannot be replayed against sessions opened after a deploy.
+- in PostgreSQL, in `signed_in_sessions` (migration `V16`), shared by every instance: one row per signed-in
+  session, keyed by a random record id that the session keeps as an attribute. **The session id itself is never
+  stored**: it is a bearer credential. If the row cannot be written, the sign-in fails with `unavailable` and
+  leaves no session, so no session exists that a logout token could not reach;
+- in this instance's memory (`SignInSessions`), so that a logout token delivered here ends this instance's sessions
+  at once.
+
+The servlet container reports every session that ends by itself (sign-out, idle timeout, account switch), and its
+row is deleted. A logout token can overtake the sign-in it ends: the browser may still be on its way back to the
+callback with an ID token for that `sid`, perhaps to another instance. Ended `sid`s are therefore remembered for
+10 minutes in `ended_sign_ins`, shared too, and such a callback fails with `expired` and leaves no session. A
+sign-in and a logout token for the same `sid` take the same PostgreSQL transaction-scoped advisory lock (keyed on
+issuer and `sid`), so on two instances at once one finishes before the other looks: either the session's row
+exists before the logout deletes rows, or the ended `sid` is recorded before the sign-in checks.
+
+#### Every instance, and restarts
+
+Easy Project's sessions are still the servlet container's own `HttpSession`s, in the memory of the instance that
+created them; what every instance shares is the sign-in record above. **Every request that comes with a signed-in
+session checks that the session's row still exists** (`SignInRevocationFilter`, in the browser chain, before
+anything reads who the request is for; one primary-key read, nothing cached; `seen_at` is written at most every
+5 minutes):
+
+| The row... | What happens |
+|---|---|
+| exists | The request goes on as usual. |
+| is gone (a logout token ended the sign-in, on any instance), or the session carries no record id at all | The session is invalidated on this instance, at this request, and the request goes on as anonymous: `401` on the API, exactly as for an expired session, and the app starts a sign-in by itself. Logged as `workeasy360.session_ended`. |
+| cannot be read (the database) | `503` problem document with `code` `session_unverifiable` (`Cache-Control: no-store`). The session is neither used nor ended; the next request asks again. |
+
+So with several instances behind a load balancer, a logout token can reach any of them and the person's sessions
+end on all of them: on the receiving instance at once, on the others at their next request. **A restart cannot
+bring an ended session back**: by default sessions are not persisted, so a restart loses them anyway; and if they
+are ever persisted (`server.servlet.session.persistent`) or kept anywhere else, a session that comes back whose row
+is gone is ended at its first request, because the shared row, not the session, is the authority. Both are proved
+by `MultiInstanceBackchannelLogoutTest`: two copies of the application on two embedded servers sharing one
+PostgreSQL database; sign-ins on one instance, logout tokens delivered to the other; and a restart of an instance
+that persists its sessions, where a session that was not ended comes back (200) and one that was ended does not
+(401).
+
+Why this and not Spring Session JDBC (sessions themselves in PostgreSQL): it is the smaller change for the same
+guarantee here. Sessions, the pending sign-in in them and the container's session events stay exactly as they
+were; there is no new dependency, no requirement that every session attribute be serialisable, no write of the
+whole session on every request, and no scheduled clean-up job (Spring Session JDBC runs one; Easy Project has no
+background work). The cost is one indexed read per signed-in request.
+
+Rows are deleted when their session ends by itself. A row can be left behind when an instance stops without ending
+its sessions (at shutdown the container ends them after the database pool has closed); it is deleted once it has
+not been seen for longer than the session idle timeout plus 65 minutes, by the next sign-in, in that sign-in's own
+transaction. Deleting a row can only ever sign someone out, never in.
+
+**Still per instance:** a sign-in in progress (state, nonce, PKCE verifier) lives in the browser's session, so the
+callback must reach the instance that started it: with several instances, use **sticky sessions** (see
+[Sessions, deployment shape and edge protection](#sessions-deployment-shape-and-edge-protection)). Entitlement
+answers are cached per process. The `jti` record and the sign-in record are shared by every instance and survive
+restarts.
 
 **Logs** carry codes and ids, never the token:
 
-- `workeasy360.backchannel_logout jti=... subject=... sign_in=<sid, or all> sessions_ended=<n>` (200)
+- `workeasy360.backchannel_logout jti=... subject=... sign_in=<sid, or all> sessions_ended=<n> ended_here=<m>`
+  (200): `n` session records ended, on every instance; `m` sessions held by the receiving instance and ended at
+  once
+- `workeasy360.logout_token_duplicate jti=... sessions_ended=0` (200, a warning: the same token again)
 - `workeasy360.logout_token_rejected reason=...` (400). The reason is one of `wrong_issuer`, `wrong_audience`,
   `expired`, `stale`, `issued_in_future`, `bad_signature`, `unknown_key`, `algorithm_mismatch`, `nonce_present`,
   `missing_logout_event`, `not_a_logout_token`, `no_subject_or_session`, `missing_claim`, `malformed`,
-  `replayed`, `not_configured`, ...
+  `not_configured`, ...
 - `workeasy360.logout_token_unverifiable` (503: discovery or the key set)
 - `workeasy360.backchannel_logout_failed` (503: the database or a session)
+- `workeasy360.session_ended reason=<sign_in_ended, or no_record> record=...` (the instance holding the session
+  ended it at its next request)
+- `workeasy360.sign_in_unverifiable` (503 `session_unverifiable`: the sign-in record could not be read)
+- `workeasy360.sign_in_record_failed` (the sign-in failed with `unavailable`: its record could not be written)
 
 ### Rollout
 
-1. Deploy this version. It adds the migration `V15__create_received_logout_tokens.sql`, which Flyway applies at
-   start-up. There is no new setting. The endpoint is live, but nothing calls it yet and ID tokens carry no `sid`.
+1. Deploy this version. It adds the migrations `V15__create_received_logout_tokens.sql` and
+   `V16__create_signed_in_sessions.sql`, which Flyway applies at start-up. There is no new setting. The endpoint is
+   live, but nothing calls it yet and ID tokens carry no `sid`. Everyone signs in again after the deploy (as after
+   any deploy), and every new session has its shared record.
 2. Check the endpoint from outside: `curl -i -X POST https://ops.workeasy360.com/api/auth/workeasy360/backchannel-logout -d logout_token=x`
    must answer `400 {"error":"invalid_request"}` with `Cache-Control: no-store`. A `403`, a `404` or the app's
    HTML means something in front (Cloudflare, nginx) is blocking or rewriting the path. Exempt this path from
@@ -426,8 +485,9 @@ restarts, so a captured token cannot be replayed against sessions opened after a
   whatever still reaches it.
 - **The application:** clear the URL first, then redeploy the previous version. Without the endpoint, deliveries
   would meet a `403` from the browser chain and be marked `failed` in the console. The previous version starts
-  with the `received_logout_tokens` table in place (Flyway ignores an applied migration newer than the ones it
-  ships, and Hibernate validates only the tables it maps); the table can be dropped by hand.
+  with the `received_logout_tokens`, `signed_in_sessions` and `ended_sign_ins` tables in place (Flyway ignores an
+  applied migration newer than the ones it ships, and Hibernate validates only the tables it maps); the tables can
+  be dropped by hand.
 
 ## Account switching
 
@@ -445,8 +505,9 @@ session as it was.
   **A deploy or restart signs everyone out**: the next page load starts a sign-in by itself (a restart is
   not a sign-out, so there is no marker), and Workeasy360's own session, which is untouched, brings the person
   back to the page they were on without a password. Entitlement answers are in memory too and are simply asked
-  again. **Back-channel logout reaches only the instance that receives Workeasy360's `POST`**, so with
-  several instances it misses sessions held by the others (see [Back-channel logout](#back-channel-logout)).
+  again. **Back-channel logout reaches every instance**, whichever one receives Workeasy360's `POST`: the
+  sign-in record is shared in PostgreSQL and checked on every signed-in request (see
+  [Every instance, and restarts](#every-instance-and-restarts)).
 - **Anonymous requests create no session.** A browser only gets a session cookie when it starts a sign-in, and
   that pre-sign-in session lives **10 minutes** (the life of the flow). The signed-in session is a new one
   with the 8 h idle timeout (`PROJECTMODULE_SESSION_IDLE_TIMEOUT`).
@@ -546,6 +607,9 @@ Workeasy360.
 - `POST /api/auth/workeasy360/backchannel-logout` is public too, and has a filter chain of its own ahead of
   the browser chain: no session, no cookie, no CSRF token. A request there can do nothing without a logout
   token signed by Workeasy360's key for this client (see [Back-channel logout](#back-channel-logout)).
+- Every request that comes with a signed-in session is checked against the shared sign-in record, so a session
+  that a logout token ended on any instance opens nothing anywhere; when the record cannot be read the answer is
+  `503`, never access (see [Every instance, and restarts](#every-instance-and-restarts)).
 - CSRF is on: the `__Host-XSRF-TOKEN` cookie (`XSRF-TOKEN` under the `local` profile; readable by the app, `SameSite=Lax`, `Secure`) is echoed in the
   `X-XSRF-TOKEN` header on every POST, PATCH and DELETE. The OAuth redirects are GETs and are not writes.
 - API and authentication responses are `Cache-Control: no-store`. `X-Content-Type-Options`, `X-Frame-Options:
@@ -556,8 +620,8 @@ Workeasy360.
 ## What this does not do
 
 - No password, no local accounts, no "dev headers" mode, no fallback of any kind.
-- No front-channel logout; no refresh tokens; no access token is kept. Back-channel logout reaches only the
-  instance that receives it (sessions are in memory).
+- No front-channel logout; no refresh tokens; no access token is kept. Sessions are not shared between
+  instances (only the sign-in record is), so a sign-in in progress still needs sticky sessions.
 - Two small divergences from the reference clients, deliberate: the ID token's nonce is compared by Spring
   Security (the provider echoes a hash of it, compared with `equals`, not in constant time; the nonce is not a
   secret an attacker can probe, as it only protects against a token replayed from another session), and the
