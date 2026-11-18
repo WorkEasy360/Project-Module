@@ -188,6 +188,47 @@ class AccountTokenFilterTest {
     }
 
     @Test
+    @DisplayName("trusted headers: surrounding whitespace is trimmed, and both ids are read")
+    void trimsTrustedHeaders() throws Exception {
+        MockHttpServletRequest request = api("GET");
+        request.addHeader(RequestContextHeaders.USER_ID, "  " + USER + " ");
+        request.addHeader(RequestContextHeaders.ORGANIZATION_ID, " " + ORG + "  ");
+
+        run(filter(true), request);
+
+        TrustedGatewayAuthentication gateway = (TrustedGatewayAuthentication) seen.get();
+        assertThat(gateway.userId()).isEqualTo(UUID.fromString(USER));
+        assertThat(gateway.organizationId()).isEqualTo(UUID.fromString(ORG));
+    }
+
+    @Test
+    @DisplayName("trusted headers: a blank header is absent, so blank headers alone identify nobody")
+    void blankTrustedHeadersAreAbsent() throws Exception {
+        MockHttpServletRequest request = api("GET");
+        request.addHeader(RequestContextHeaders.USER_ID, "   ");
+        request.addHeader(RequestContextHeaders.ORGANIZATION_ID, "");
+
+        run(filter(true), request);
+
+        assertThat(chainCalled).isTrue();
+        assertThat(seen.get()).isNull();
+        assertThat(AccountTokenFilter.carriesExplicitCredential(request, true)).isFalse();
+    }
+
+    @Test
+    @DisplayName("trusted headers: a malformed organization id is answered 400 too")
+    void rejectsMalformedOrganization() throws Exception {
+        MockHttpServletRequest request = api("GET");
+        request.addHeader(RequestContextHeaders.USER_ID, USER);
+        request.addHeader(RequestContextHeaders.ORGANIZATION_ID, "not-a-uuid");
+
+        MockHttpServletResponse response = run(filter(true), request);
+
+        assertThat(response.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(chainCalled).isFalse();
+    }
+
+    @Test
     @DisplayName("only the business API: /api/auth/** (the Workeasy360 session) never reads a bearer token")
     void onlyTheBusinessApi() throws Exception {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/auth/session");
