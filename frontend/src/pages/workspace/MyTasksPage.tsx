@@ -102,7 +102,7 @@ export function MyTasksPage() {
           icon="user"
           tone="info"
           label="Assigned to me"
-          sub={userId ? (mineActive ? 'open tasks · showing' : 'open tasks') : 'set your identity'}
+          sub={userId ? (mineActive ? 'open tasks · showing' : 'open tasks') : 'sign in to see yours'}
           value={summary.assignedToMe}
           loading={loading}
         />
@@ -177,7 +177,7 @@ export function MyTasksPage() {
           ))}
         </select>
         <div className="mt-toggles">
-          <label className={`mt-switch${userId ? '' : ' disabled'}`} title={userId ? undefined : 'Set your identity to filter by assignee'}>
+          <label className={`mt-switch${userId ? '' : ' disabled'}`} title={userId ? undefined : 'Sign in to filter by assignee'}>
             <input
               type="checkbox"
               checked={mineActive}

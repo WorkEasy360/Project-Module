@@ -111,11 +111,11 @@ describe('summarizeTasks', () => {
     expect(summarizeTasks(items, ME, TODAY)).toEqual({ assignedToMe: 4, overdue: 3, dueThisWeek: 1, blocked: 2 })
   })
 
-  it('reports 0 assigned without an identity but still counts the rest', () => {
+  it('reports 0 assigned without a signed-in user but still counts the rest', () => {
     expect(summarizeTasks(items, null, TODAY)).toEqual({ assignedToMe: 0, overdue: 3, dueThisWeek: 1, blocked: 2 })
   })
 
-  it('scopeTasks narrows to the identity only when both the toggle and an identity are set', () => {
+  it('scopeTasks narrows to the signed-in user only when both the toggle is on and a user is signed in', () => {
     expect(scopeTasks(items, true, ME)).toHaveLength(5)
     expect(scopeTasks(items, false, ME)).toHaveLength(6)
     expect(scopeTasks(items, true, null)).toHaveLength(6)
@@ -136,7 +136,7 @@ describe('applyTaskFilters', () => {
     expect(ids(applyTaskFilters(items, DEFAULT_FILTERS, ME, 'dueDate,ASC', TODAY))).toEqual(['1', '3'])
   })
 
-  it('shows everything open when the identity toggle is off', () => {
+  it('shows everything open when the “mine only” toggle is off', () => {
     expect(ids(applyTaskFilters(items, { ...DEFAULT_FILTERS, mineOnly: false }, ME, 'dueDate,ASC', TODAY))).toEqual(['1', '4', '3', '5'])
   })
 

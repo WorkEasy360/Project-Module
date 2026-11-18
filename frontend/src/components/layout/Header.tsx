@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useMatch, useNavigate } from 'react-router-dom'
 import { IdentityWidget } from '../common/IdentityWidget'
+import { AccountMenu } from '../common/AccountMenu'
 import { NotificationBell } from '../common/NotificationBell'
 import { TimerChip } from '../common/TimerChip'
 import { openAssistant } from '../assistant/AssistantPanel'
+import { useIdentity } from '../../context/IdentityContext'
 import { IconButton } from '../common/IconButton'
 import { Icon } from '../common/Icon'
 import { useSidebar } from '../../context/SidebarContext'
@@ -21,12 +23,14 @@ function useBreadcrumb(): string[] {
 }
 
 /**
- * Top bar: hamburger, breadcrumb, global search, theme toggle and the identity control.
+ * Top bar: hamburger, breadcrumb, global search, theme toggle and the account menu.
  *
  * Inside a project, search opens that project's search; elsewhere it searches projects and tasks
  * across everything the person belongs to. Ctrl/Cmd+K focuses the box, "/" still jumps straight to project search.
  */
 export function Header() {
+  const { identity } = useIdentity()
+  const workeasy360 = identity?.provider === 'workeasy360'
   const { toggle, collapsed, isMobile } = useSidebar()
   const { resolved, toggle: toggleTheme } = useTheme()
   const crumbs = useBreadcrumb()
@@ -109,7 +113,8 @@ export function Header() {
       </button>
       <TimerChip />
       <NotificationBell />
-      <IdentityWidget />
+      {/* A Workeasy360 sign-in has its own menu: two ways to sign out, and no password of ours. */}
+      {workeasy360 ? <AccountMenu /> : <IdentityWidget />}
     </header>
   )
 }

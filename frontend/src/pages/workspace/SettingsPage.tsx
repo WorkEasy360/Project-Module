@@ -1,7 +1,9 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import '../../styles/workspace.css'
 import { useIdentity } from '../../context/IdentityContext'
+import { useSession } from '../../context/SessionContext'
+import { useSignOutActions } from '../../hooks/useSignOutActions'
 import { useTheme } from '../../context/ThemeContext'
 import { useSidebar } from '../../context/SidebarContext'
 import type { ThemePreference } from '../../context/themeStore'
@@ -34,9 +36,11 @@ const RELEASE_TONE: Record<ReleaseState, BadgeTone> = {
 }
 
 /**
- * Settings: only things this frontend really controls. The account is who is signed in, theme and
- * sidebar state are per-browser preferences, and the feature list is the registry the navigation
- * is built from. Nothing here is a fake preference: the backend has no notification settings.
+ * Settings: only things this frontend really controls. The account is who is signed in (an email
+ * account can change its name and password here; a Workeasy360 sign-in is read-only, managed in
+ * Workeasy360), theme and sidebar state are per-browser preferences, and the feature list is the
+ * registry the navigation is built from. Nothing here is a fake preference: the backend has no
+ * notification settings.
  */
 export function SettingsPage() {
   return (
@@ -85,6 +89,12 @@ function Section({
 }
 
 function AccountSection() {
+  const { identity } = useIdentity()
+  return identity?.provider === 'workeasy360' ? <Workeasy360AccountSection /> : <EmailAccountSection />
+}
+
+/** An email account: its name and email, which it can change here, and its password. */
+function EmailAccountSection() {
   const { identity, clearIdentity } = useIdentity()
   const [dialog, setDialog] = useState<'profile' | 'password' | null>(null)
   return (
@@ -121,6 +131,105 @@ function AccountSection() {
       {dialog === 'profile' && <EditNameDialog onClose={() => setDialog(null)} />}
       {dialog === 'password' && <ChangePasswordDialog onClose={() => setDialog(null)} />}
     </Section>
+  )
+}
+
+/**
+ * A Workeasy360 sign-in: who Workeasy360 says the person is, read-only (the name, email and password
+ * are managed in Workeasy360), and the two ways to sign out.
+ */
+function Workeasy360AccountSection() {
+  const { user, organization } = useSession()
+  const { busy, error, workeasy360SignOut, signOut, signOutEverywhere } = useSignOutActions()
+  return (
+    <Section id="account" icon="user" title="Account" description="Who you are signed in as.">
+      <div className="ws-row">
+        <div className="ws-row-label">
+          <strong>Name</strong>
+          <span>From your Workeasy360 account</span>
+        </div>
+        {user?.name ? <span>{user.name}</span> : <span className="text-faint">Not shared</span>}
+      </div>
+      <div className="ws-row">
+        <div className="ws-row-label">
+          <strong>Email</strong>
+          <span>From your Workeasy360 account</span>
+        </div>
+        {user?.email ? <span>{user.email}</span> : <span className="text-faint">Not shared</span>}
+      </div>
+      <div className="ws-row">
+        <div className="ws-row-label">
+          <strong>User ID</strong>
+          <span>Read-only</span>
+        </div>
+        <CopyValue label="user ID" value={user?.id ?? null} />
+      </div>
+      <div className="ws-row">
+        <div className="ws-row-label">
+          <strong>Organization ID</strong>
+          <span>Read-only</span>
+        </div>
+        <CopyValue label="organization ID" value={organization?.id ?? null} />
+      </div>
+      <p className="ws-hint">
+        You signed in to Easy Project with Workeasy360. Your name, email, password and organization come from
+        that sign-in and are changed in Workeasy360, not here; the server decides what you may do.
+      </p>
+      {error && (
+        <div className="banner banner-error" role="alert">
+          {error}
+        </div>
+      )}
+      <div className="page-actions">
+        <button type="button" className="btn btn-danger" onClick={signOut} disabled={busy}>
+          <Icon name="logout" size={15} /> Sign out of Easy Project
+        </button>
+        {workeasy360SignOut && (
+          <button type="button" className="btn btn-danger" onClick={signOutEverywhere} disabled={busy}>
+            <Icon name="logout" size={15} /> Sign out of Easy Project and Workeasy360
+          </button>
+        )}
+      </div>
+    </Section>
+  )
+}
+
+function CopyValue({ label, value }: { label: string; value: string | null }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  useEffect(() => {
+    if (state === 'idle') return
+    const timer = window.setTimeout(() => setState('idle'), 2000)
+    return () => window.clearTimeout(timer)
+  }, [state])
+
+  if (!value) return <span className="text-faint">Not set</span>
+
+  async function copy() {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(value as string)
+      setState('copied')
+    } catch {
+      setState('failed')
+    }
+  }
+
+  return (
+    <span className="ws-copy">
+      <code className="ws-code">{value}</code>
+      <button type="button" className="btn btn-sm" onClick={copy} aria-label={`Copy ${label}`}>
+        {state === 'copied' ? (
+          <>
+            <Icon name="check" size={14} /> Copied
+          </>
+        ) : state === 'failed' ? (
+          'Copy failed'
+        ) : (
+          'Copy'
+        )}
+      </button>
+    </span>
   )
 }
 
@@ -313,14 +422,17 @@ function AboutSection() {
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>API base URL</strong>
-          <span>Resolved at build time; VITE_API_BASE_URL overrides it</span>
+          <span>Same origin by default; VITE_API_BASE_URL overrides it</span>
         </div>
         <code className="ws-code">{API_BASE_LABEL}</code>
       </div>
       <div className="ws-row">
         <div className="ws-row-label">
           <strong>Stored in this browser</strong>
-          <span>Your sign-in session, theme and sidebar preference — nothing else</span>
+          <span>
+            Your email sign-in session, theme and sidebar preference — nothing else. A Workeasy360 sign-in is a
+            secure cookie set by the server.
+          </span>
         </div>
       </div>
     </Section>

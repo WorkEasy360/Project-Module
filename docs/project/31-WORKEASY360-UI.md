@@ -18,14 +18,18 @@ backend has no such data or capability. Nothing in the UI is simulated.
 
 | Reference | Implementation | Why |
 |---|---|---|
-| Email + password login | User ID + Organization ID (`pages/auth/SignInPage.tsx`) | The backend has no accounts or passwords; every request is authorised by `X-User-Id` / `X-Org-Id` headers |
-| "Success animation on valid login" | Identity is **verified against the backend** (`GET /dashboard` with those headers must succeed) → checkmark animation → workspace | Nothing is stored unless the backend accepts it; 401/403 clears it and shakes the form |
-| "Remember me" | localStorage (device) vs sessionStorage (tab) | `context/identityStore.ts` |
-| Continue with Google / Microsoft | **Omitted** | No SSO integration exists in the backend |
-| Forgot password / Create account | **Omitted** | No such flows exist |
+| Email + password login | **Kept** (email sign-in, register, "Sign in with Google", invitations, password reset, the hand-over of an earlier sign-in: `33-AUTHENTICATION.md`), plus a **Continue with Workeasy360** link when Workeasy360 sign-in is configured (`pages/auth/SignInPage.tsx`) | The product is `sso_optional` by default: the page offers both, and never starts Workeasy360 sign-in by itself (integration guide 6b point 6). The link starts `GET /api/auth/workeasy360/start?next=<route>`. Only with `WORKEASY360_SIGN_IN_MODE=sso_only` is the page Workeasy360-only and does opening any other route with no session start it automatically (`SignedOutGate`), except after a sign-out here, within 60 s of a previous automatic start, or when the session check failed: see `docs/workeasy360-sso.md`. |
+| "Success animation on valid login" | Email sign-in: the app opens; Workeasy360: sign-in happens at Workeasy360 and the browser returns to the app signed in | The Workeasy360 session is created by the backend (`docs/workeasy360-sso.md`); failures come back as `/#/sign-in?sso_error=<code>` and are explained on the page. |
+| "Remember me" | Email sign-in only | An email session lasts 30 days with it, 12 hours without. A Workeasy360 session has an idle timeout (default 8 hours); nothing identity-related is stored in the browser for it. |
+| Continue with Google / Microsoft | Google, when `PROJECTMODULE_GOOGLE_CLIENT_ID` is set; Workeasy360 offers whatever sign-in methods the organization allows | |
+| Forgot password / Create account | Email sign-in only | A Workeasy360 account's password and profile are managed in Workeasy360. |
 
-The app shell (`components/layout/AppLayout.tsx`) redirects to `/sign-in` while no identity is
-configured; Settings and the header widget offer "Sign out" (clears the identity).
+The app shell (`components/layout/AppLayout.tsx`) opens straight away for an email session; otherwise it asks
+`GET /api/auth/session` on load and redirects to `/sign-in` while there is no session (or, in `sso_only` mode,
+starts Workeasy360 sign-in); for a Workeasy360 session the header account menu and Settings offer "Sign out of
+Easy Project" and, when configured, "Sign out of Easy Project and Workeasy360". When Workeasy360 says the organization's
+access has ended the whole app is replaced by one "access has ended" screen (Try again / Sign out); a
+read-only subscription shows a notice and refuses writes.
 
 ## Dashboard (reference: "Home")
 
@@ -58,7 +62,7 @@ per-project APIs over the first page of up to 50 most-recently-updated projects
 | Templates | `/templates` | `GET/POST /templates` |
 | Automations | `/automations` | per-project `GET /projects/{id}/automations`; runs loaded on demand |
 | **Integrations** | **omitted** | No integration API exists |
-| Settings | `/settings` | identity, theme, sidebar, feature registry, API base URL — no fake preferences |
+| Settings | `/settings` | signed-in account, theme, sidebar, feature registry, API base URL — no fake preferences |
 
 ## Project calendar (reference: "add, view, edit events")
 

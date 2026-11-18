@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import '../../styles/dashboard.css'
 import { useAsyncData } from '../../hooks/useAsyncData'
 import { useIdentity } from '../../context/IdentityContext'
+import type { Identity } from '../../context/identityStore'
 import { dashboardApi } from '../../api/dashboard'
 import { projectsApi } from '../../api/projects'
 import { healthApi } from '../../api/health'
@@ -41,6 +42,15 @@ import {
 } from './dashboardUtils'
 
 const LOADED_PAGE_SIZE = 10
+
+/** The greeting's name: a first name, else the part of the email before @, else a short id. */
+function greetingName(identity: Identity | null): string | null {
+  if (!identity) return null
+  const first = identity.name?.trim().split(/\s+/)[0]
+  if (first) return first
+  if (identity.email?.includes('@')) return identity.email.split('@')[0]
+  return identity.userId.slice(0, 8)
+}
 const CARD_TONES = ['blue', 'purple', 'amber', 'green'] as const
 
 /**
@@ -92,7 +102,7 @@ export function DashboardPage() {
     <div className="hb">
       <HeroSection
         greeting={greetingForHour(new Date().getHours())}
-        name={identity ? (identity.name?.split(' ')[0] ?? identity.userId.slice(0, 8)) : null}
+        name={greetingName(identity)}
         nextStep={projects.data ? nextStepFor(loaded, identity?.userId ?? null, today) : undefined}
       />
 

@@ -3,8 +3,8 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { MyTasksPage } from './MyTasksPage'
-import { IdentityProvider } from '../../context/IdentityContext'
-import { setIdentity } from '../../context/identityStore'
+import { SessionProvider } from '../../context/SessionContext'
+import { signInAs, signOutForTest } from '../../test/session'
 import { projectsApi } from '../../api/projects'
 import { tasksApi } from '../../api/tasks'
 import type { Task } from '../../types/work'
@@ -40,9 +40,9 @@ function page(totalElements = 2) {
 function renderPage() {
   return render(
     <MemoryRouter>
-      <IdentityProvider>
+      <SessionProvider autoLoad={false}>
         <MyTasksPage />
-      </IdentityProvider>
+      </SessionProvider>
     </MemoryRouter>,
   )
 }
@@ -54,7 +54,7 @@ describe('MyTasksPage', () => {
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(new Date(2026, 8, 19, 9))
-    setIdentity({ userId: ME, orgId: '99999999-2222-4333-8444-555555555555' })
+    signInAs(ME)
     vi.mocked(projectsApi.list).mockReset()
     vi.mocked(tasksApi.list).mockReset()
     vi.mocked(tasksApi.update).mockReset()
@@ -189,8 +189,8 @@ describe('MyTasksPage', () => {
     expect(screen.getByRole('note')).toHaveTextContent('Showing tasks from the 50 most recently updated projects (120 in total)')
   })
 
-  it('without an identity the "Assigned to me" toggle is disabled and every open task is listed', async () => {
-    setIdentity(null)
+  it('without a signed-in user the "Assigned to me" toggle is disabled and every open task is listed', async () => {
+    signOutForTest()
     renderPage()
     await screen.findByRole('link', { name: 'Fix authentication bug' })
     expect(screen.getByRole('checkbox', { name: 'Assigned to me' })).toBeDisabled()

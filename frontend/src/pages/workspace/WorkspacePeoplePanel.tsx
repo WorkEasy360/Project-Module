@@ -24,7 +24,16 @@ export function WorkspacePeoplePanel() {
     setResetLink({ email, link: passwordResetLink(token) })
   }
 
-  if (people.length === 0) return null
+  if (people.length === 0) {
+    // A Workeasy360 sign-in has no email workspace to administer here: its people are managed in Workeasy360.
+    if (identity?.provider !== 'workeasy360') return null
+    return (
+      <p className="ws-hint ws-people-hint">
+        You signed in with Workeasy360: the people in your organization are managed in Workeasy360. Add a teammate
+        to a project from its Team tab.
+      </p>
+    )
+  }
 
   return (
     <section className="ws-section ws-people-panel" aria-labelledby="ws-people-title">

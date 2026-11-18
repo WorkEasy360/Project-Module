@@ -36,6 +36,7 @@ type View = 'people' | 'projects'
 export function TeamPage() {
   const { identity } = useIdentity()
   const { nameOf } = usePeople()
+  const meUserId = identity?.userId
   const projectsState = useAllProjects()
   const projects = projectsState.data?.content ?? null
   const members = usePerProject(projects, (id) => membersApi.list(id))
@@ -46,7 +47,7 @@ export function TeamPage() {
 
   const all = useMemo(() => collectMemberships(projects ?? [], members.byProject), [projects, members.byProject])
   const filtered = useMemo(() => filterMemberships(all, { query, role }, nameOf), [all, query, role, nameOf])
-  const people = useMemo(() => groupPeople(filtered, identity?.userId), [filtered, identity?.userId])
+  const people = useMemo(() => groupPeople(filtered, meUserId), [filtered, meUserId])
   const summary = useMemo(() => teamSummary(all), [all])
   const hasFilters = query.trim() !== '' || role !== ''
 
@@ -163,7 +164,7 @@ export function TeamPage() {
           errors={members.errors}
           filtered={filtered}
           hasFilters={hasFilters}
-          meId={identity?.userId}
+          meId={meUserId}
         />
       )}
     </div>

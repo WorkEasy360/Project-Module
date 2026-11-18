@@ -5,6 +5,7 @@ import com.projectmodule.account.domain.WorkspaceRole;
 import com.projectmodule.account.infrastructure.UserAccountRepository;
 import com.projectmodule.common.exception.BusinessRuleViolationException;
 import com.projectmodule.common.exception.ConflictException;
+import com.projectmodule.common.identity.UserIdOwnership;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import java.util.UUID;
@@ -24,6 +25,9 @@ import org.springframework.transaction.annotation.Transactional;
  * ids that own existing work and have no account yet. After that, the account's password is the only
  * way in. Turn it off with {@code projectmodule.auth.legacy-handover.enabled=false} once everyone has
  * moved over.
+ *
+ * <p>An id that a Workeasy360 sign-in already holds is not handed over: one id, one credential holder
+ * ({@link UserIdOwnership}).
  */
 @Service
 public class LegacyHandoverService {
@@ -55,8 +59,14 @@ public class LegacyHandoverService {
         if (!enabled) {
             throw new BusinessRuleViolationException("Moving an earlier sign-in is no longer available. Sign in or create an account.");
         }
+        // Serialised with a first Workeasy360 sign-in that might adopt the same id (UserIdOwnership).
+        UserIdOwnership.lock(entityManager, userId);
         if (accountRepository.existsById(userId)) {
             throw new ConflictException("Your workspace already has an account. Sign in with its email and password.");
+        }
+        if (UserIdOwnership.heldByFederatedIdentity(entityManager, userId)) {
+            throw new ConflictException("This earlier sign-in now belongs to a Workeasy360 account. "
+                    + "Use \"Continue with Workeasy360\" instead.");
         }
         if (!ownsExistingWork(userId, organizationId)) {
             throw new BusinessRuleViolationException("We couldn't find earlier work for this sign-in. Create a new account instead.");

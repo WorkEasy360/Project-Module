@@ -10,6 +10,14 @@ spring:
 projectmodule:
   app-base-url: http://localhost:8080
 
+server:
+  servlet:
+    session:
+      cookie:
+        # Plain http on localhost: a Secure cookie would never be sent back, and the __Host- prefix needs Secure.
+        name: ep_session
+        secure: ${PROJECTMODULE_SESSION_COOKIE_SECURE:false}
+
 logging:
   level:
     com.projectmodule: DEBUG

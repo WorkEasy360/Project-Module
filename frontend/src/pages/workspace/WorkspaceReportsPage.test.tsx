@@ -3,8 +3,8 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { WorkspaceReportsPage } from './WorkspaceReportsPage'
-import { IdentityProvider } from '../../context/IdentityContext'
-import { setIdentity } from '../../context/identityStore'
+import { SessionProvider } from '../../context/SessionContext'
+import { signInAs } from '../../test/session'
 import { projectsApi } from '../../api/projects'
 import { reportsApi } from '../../api/reports'
 import type { ProjectSummaryReport } from '../../types/work'
@@ -45,9 +45,9 @@ function page(totalElements = 3) {
 function renderReports() {
   return render(
     <MemoryRouter>
-      <IdentityProvider>
+      <SessionProvider autoLoad={false}>
         <WorkspaceReportsPage />
-      </IdentityProvider>
+      </SessionProvider>
     </MemoryRouter>,
   )
 }
@@ -59,7 +59,7 @@ function cardNames() {
 
 describe('WorkspaceReportsPage', () => {
   beforeEach(() => {
-    setIdentity({ userId: '11111111-2222-4333-8444-555555555555', orgId: '99999999-2222-4333-8444-555555555555' })
+    signInAs('11111111-2222-4333-8444-555555555555')
     vi.mocked(projectsApi.list).mockReset()
     vi.mocked(reportsApi.summary).mockReset()
     vi.mocked(projectsApi.list).mockImplementation(() => Promise.resolve(page()))

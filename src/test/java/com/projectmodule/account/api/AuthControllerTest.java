@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -33,6 +34,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 @WebMvcTest(AuthController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @Import(ApiConfiguration.class)
 class AuthControllerTest {
 
@@ -187,5 +189,19 @@ class AuthControllerTest {
         when(requestContext.requireUserId()).thenThrow(new MissingIdentityException("none"));
 
         mockMvc.perform(get("/api/v1/auth/me")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("the sign-in page's configuration says whether Workeasy360 is offered (off when the server has no settings)")
+    void configurationIncludesWorkeasy360() throws Exception {
+        when(googleSignInService.clientId()).thenReturn("");
+        when(emailPort.isEnabled()).thenReturn(false);
+        when(legacyHandoverService.isEnabled()).thenReturn(true);
+
+        mockMvc.perform(get("/api/v1/auth/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.legacyHandover").value(true))
+                .andExpect(jsonPath("$.workeasy360.enabled").value(false))
+                .andExpect(jsonPath("$.workeasy360.signInMode").value("sso_optional"));
     }
 }

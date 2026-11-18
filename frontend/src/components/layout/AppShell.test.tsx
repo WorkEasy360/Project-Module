@@ -4,7 +4,10 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { SidebarProvider } from '../../context/SidebarContext'
 import { setCollapsed } from '../../context/sidebarStore'
+import { SessionProvider } from '../../context/SessionContext'
 import { IdentityProvider } from '../../context/IdentityContext'
+import { setIdentity } from '../../context/identityStore'
+import { resetSessionForTest, signInAs } from '../../test/session'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
 
@@ -25,12 +28,14 @@ function mockViewport(isMobile: boolean) {
 function renderShell() {
   return render(
     <MemoryRouter initialEntries={['/dashboard']}>
-      <IdentityProvider>
-        <IdentityProvider><SidebarProvider>
-          <Header />
-          <Sidebar />
-        </SidebarProvider></IdentityProvider>
-      </IdentityProvider>
+      <SessionProvider autoLoad={false}>
+        <IdentityProvider>
+          <SidebarProvider>
+            <Header />
+            <Sidebar />
+          </SidebarProvider>
+        </IdentityProvider>
+      </SessionProvider>
     </MemoryRouter>,
   )
 }
@@ -38,11 +43,30 @@ function renderShell() {
 describe('AppShell — hamburger / sidebar navigation', () => {
   beforeEach(() => {
     setCollapsed(false)
+    signInAs('11111111-2222-4333-8444-555555555555', { name: 'Ada Lovelace' })
   })
 
   afterEach(() => {
     setCollapsed(false)
+    setIdentity(null)
+    resetSessionForTest()
     vi.restoreAllMocks()
+  })
+
+  it('the account control follows the sign-in: Workeasy360 offers its two sign-outs, an email account its own', async () => {
+    mockViewport(false)
+    const user = userEvent.setup()
+    const first = renderShell()
+    await user.click(screen.getByRole('button', { name: /ada lovelace/i }))
+    expect(screen.getByRole('button', { name: 'Sign out of Easy Project' })).toBeInTheDocument()
+    first.unmount()
+
+    setIdentity({ userId: 'email-user', orgId: 'org-1', token: 'tok', name: 'Ben Email', email: 'ben@example.com' })
+    renderShell()
+    await user.click(screen.getByRole('button', { name: /ben email/i }))
+    expect(screen.getByText('ben@example.com')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^sign out$/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sign out of Easy Project' })).not.toBeInTheDocument()
   })
 
   it('desktop: clicking the hamburger collapses the sidebar and persists the preference', () => {
