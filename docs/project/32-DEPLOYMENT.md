@@ -54,6 +54,34 @@ Repository secrets the workflow uses:
   without it, the pipeline relies on RDS automated backups.
 - `ANTHROPIC_API_KEY` (optional).
 
+**Sessions.** The backend has no view layer and no server-rendered pages. Email sign-in uses bearer tokens
+kept (hashed) in the database, so they survive a deploy. A person signed in with **Workeasy360** has a
+server-side session instead (see `docs/workeasy360-sso.md`).
+
+**Workeasy360 sign-in is optional for this pipeline.** The workflow sets no `WORKEASY360_*` property. Without
+them the application starts with Workeasy360 sign-in off (email sign-in only, as before), so deploying this
+version changes nothing for existing users. To turn it on, add **all** of them as environment properties
+(the private key as a file on the instance or as `WORKEASY360_PRIVATE_KEY`) in the same change: a deployment
+with only some of them refuses to start, and the release check then puts the previous version back.
+
+## One instance, and what a deploy does
+
+Workeasy360 sessions and pending Workeasy360 sign-ins are held in memory by the instance that created them.
+Run **a single instance** (as this environment does), or enable **sticky sessions** on the load balancer if you
+ever scale out; a request that reaches a different instance has no session and a sign-in callback that reaches
+a different instance finds no pending flow (`expired`). Every deploy or restart therefore **signs Workeasy360
+users out** (email sign-ins are unaffected): with `WORKEASY360_SIGN_IN_MODE=sso_only` their next page load starts
+a sign-in by itself and brings them back to the page they were on, without another password (Workeasy360's own
+session continues); otherwise the sign-in page offers "Continue with Workeasy360". See
+`docs/workeasy360-sso.md`, "Sessions, deployment shape and edge protection", which also asks for rate limiting of
+`/api/auth/**` at Cloudflare.
+
+**Back-channel logout** (`docs/workeasy360-sso.md`, "Back-channel logout") is not a reason for a single
+instance: Workeasy360's logout `POST` reaches one instance, but the sign-in record it ends is shared in PostgreSQL
+and every instance checks it on every signed-in request, so the person's sessions end on all of them (and a
+restart cannot bring one back). Keep `POST /api/auth/workeasy360/backchannel-logout` reachable from the internet
+without a browser challenge: the caller is Workeasy360's server.
+
 ## Required environment properties
 
 Elastic Beanstalk's Java SE platform runs the jar behind nginx and expects the application on
@@ -65,6 +93,14 @@ port 5000, so `SERVER_PORT` must be `5000` (Spring maps it to `server.port`).
 | `PROJECTMODULE_DB_URL` | `jdbc:postgresql://<rds-endpoint>:5432/<database>` |
 | `PROJECTMODULE_DB_USERNAME` | RDS master user |
 | `PROJECTMODULE_DB_PASSWORD` | RDS master password (set in the environment only) |
+| `WORKEASY360_ISSUER` | **For Workeasy360 sign-in (all five, or none).** Workeasy360's issuer, `https://accounts.workeasy360.com` (WorkEasy360 Accounts, platform ADR-067; never `app.`, which serves no discovery document). With none of the five, Workeasy360 sign-in is off; with only some, the jar **refuses to start**. |
+| `WORKEASY360_CLIENT_ID` | **For Workeasy360 sign-in.** The client id printed by `manage.py connect_product_sso --product easy_project ...`. |
+| `WORKEASY360_REDIRECT_URI` | **For Workeasy360 sign-in.** `https://ops.workeasy360.com/api/auth/callback/workeasy360`, exactly as registered. |
+| `WORKEASY360_KEY_ID` | **For Workeasy360 sign-in.** The credential id printed at registration. |
+| `WORKEASY360_PRIVATE_KEY_FILE` / `WORKEASY360_PRIVATE_KEY` | **For Workeasy360 sign-in (one of them).** The PEM private key matching the registered public key; the variable form accepts literal backslash-n for newlines. Keep it out of the repository and the workflow. |
+| `WORKEASY360_POST_LOGOUT_REDIRECT_URI` | Optional. `https://ops.workeasy360.com/`; enables "Sign out of Easy Project and Workeasy360". |
+| `WORKEASY360_SIGN_IN_MODE` | Optional. `sso_optional` (default; register the product `sso_optional` with `login_url` = the sign-in page) or `sso_only` (Workeasy360 is the only way in; needs the five settings above, and refuses new email sign-ins). |
+| `PROJECTMODULE_SESSION_IDLE_TIMEOUT` | Optional. Session idle timeout, default `8h`. |
 | `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | **Not needed for this deployment.** The UI is served from the same origin as the API, so the browser makes no cross-origin request and no CORS exchange occurs. The default (the local Vite ports) exists for `npm run dev`. Set this only if a frontend is ever hosted on a different origin. |
 
 `SPRING_DATASOURCE_URL` / `SPRING_DATASOURCE_USERNAME` / `SPRING_DATASOURCE_PASSWORD` are also
@@ -106,8 +142,12 @@ The environment URL now opens the application. The API is unchanged and shares t
 | `/` | The React application (`200 text/html`). |
 | `/assets/...` | The hashed JavaScript and CSS bundles the entry page references. |
 | `/actuator/health` | `200 {"status":"UP"}`. Reports `DOWN` if the database is unreachable, so it is a real health signal. |
-| `/api/v1/dashboard` | `401` without a session token, `200` with `Authorization: Bearer <token>`. A `200` here proves the database is connected. |
-| `/swagger-ui.html` | API documentation. |
+| `/api/v1/dashboard` | `401` without a session token or a Workeasy360 sign-in session (the old `X-User-Id` / `X-Org-Id` headers are ignored); `200` with `Authorization: Bearer <token>` or a signed-in session. A `200` here proves the database is connected. |
+| `/api/v1/auth/config` | Public. What the sign-in page offers, including `workeasy360.enabled` and `workeasy360.signInMode`. The release check looks for `legacyHandover` here. |
+| `/api/auth/session` | `401` without a Workeasy360 session; `200` with who is signed in. |
+| `/api/auth/workeasy360/start` | `302` to Workeasy360 (or to `/#/sign-in?sso_error=unavailable` when it cannot be reached or is not configured). |
+| `POST /api/auth/workeasy360/backchannel-logout` | Workeasy360's back-channel logout. `400 {"error":"invalid_request"}` to anything but a valid logout token, with no session or CSRF token needed; `405` to a `GET`. |
+| `/swagger-ui.html` | API documentation (needs a signed-in Workeasy360 session in the same browser). |
 | `/api/v1/<anything unmapped>` | `404` as a problem document, never the application HTML. |
 | `/<anything unmapped>` | `404` as a problem document. The UI uses `HashRouter`, so its routes live in the fragment (`/#/projects`) and the browser never asks the server for them. There is deliberately no catch-all rewriting unknown paths to `index.html`, because that would turn genuine API and server errors into a silent HTML page. |
 
@@ -123,7 +163,7 @@ configuration, so it is left to an operator to apply.
 | Build | API base | Why |
 |---|---|---|
 | production (`vite build`) | empty, so requests go to `/api/v1/...` | Same origin as the page that served the app. No CORS, and no hostname baked into the bundle. |
-| development (`npm run dev`) | `http://localhost:8080` | The Vite server is a different origin from the backend; the CORS default already allows it. |
+| development (`npm run dev`) | empty; the Vite server proxies `/api` to `http://localhost:8080` | Keeps the browser on one origin so the session cookie, CSRF cookie and sign-in redirects work. |
 | either, with `VITE_API_BASE_URL` | that value | For hosting the UI apart from the API. |
 
 No AWS hostname appears anywhere in the source. `VITE_` variables are embedded in the browser
@@ -137,8 +177,9 @@ The production build emits no source maps, and only `index.html`, `favicon.svg` 
 Two ways to run it:
 
 - **Two processes (fast feedback):** `mvnw spring-boot:run` with the `local` profile, and
-  `npm run dev` in `frontend/`. The UI is on :5173 and calls the backend on :8080 across origins,
-  which the CORS default permits. This is unchanged by the packaging work.
+  `npm run dev` in `frontend/`. The UI is on :5173 and the Vite server proxies `/api` to the backend on
+  :8080, so the browser sees one origin. Sign-in needs a Workeasy360 client registered with the redirect
+  URI `http://localhost:5173/api/auth/callback/workeasy360` (`docs/workeasy360-sso.md`).
 - **One process (as deployed):** `mvnw clean package` then run the jar, and open
   <http://localhost:8080/>. Same-origin, exactly like the deployed environment.
 
@@ -147,9 +188,11 @@ application has no UI, and the tests that serve it skip rather than pass vacuous
 
 ## What this does not change
 
-- **Authentication is separate.** Serving the UI from the same origin grants nothing. People sign
-  in with email and password; see `33-AUTHENTICATION.md`, including the step that keeps access to
-  existing data before deploying. Membership and cross-organisation checks are untouched.
+- **Serving the UI from the same origin grants nothing.** Every API request needs a credential: an email
+  sign-in's bearer token (see `33-AUTHENTICATION.md`, including the step that keeps access to existing data
+  before deploying) or the session that "Sign in with Workeasy360" creates (`docs/workeasy360-sso.md`). The
+  former `X-User-Id` / `X-Org-Id` headers are ignored unless a deployment declares a trusted gateway.
+  Membership and cross-organisation checks are untouched.
 - **The AI provider is still unavailable.** `UnavailableAIProviderAdapter` throws
   `IntegrationUnavailableException`, so AI requests return `503 integration-unavailable` rather
   than inventing an answer. Nothing in this packaging changes that.
@@ -160,6 +203,9 @@ application has no UI, and the tests that serve it skip rather than pass vacuous
 - The Elastic Beanstalk URL itself serves **HTTP, not HTTPS**. Passwords and session tokens would
   travel in clear text there, so sign in only through `https://ops.workeasy360.com`, where
   Cloudflare terminates TLS. The Cloudflare-to-origin leg should also be confirmed as encrypted.
+  Workeasy360 sign-in needs HTTPS at the public address anyway (its session cookie is `Secure`, and the
+  production start-up check requires an https issuer and redirect URI): a direct HTTP environment URL cannot
+  hold a Workeasy360 session.
 - The RDS instance accepts connections on 5432 from the public internet. It should be restricted
   to the Elastic Beanstalk instances' security group.
 - The health check path recommendation below still applies.

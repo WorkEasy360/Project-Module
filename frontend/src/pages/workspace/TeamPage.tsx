@@ -94,6 +94,8 @@ interface MemberRow {
 /** Members: joined people and, for admins, the people invited but not joined yet. */
 function MembersView({ refreshKey }: { refreshKey: number }) {
   const { identity } = useIdentity()
+  // A Workeasy360 sign-in has no email workspace to administer here: its people are managed in Workeasy360.
+  const workeasy360 = identity?.provider === 'workeasy360'
   const { people, isAdmin } = usePeople()
   const invitations = useAsyncData(() => (isAdmin ? workspaceApi.invitations() : Promise.resolve([] as Invitation[])), [isAdmin, refreshKey])
   const [query, setQuery] = useState('')
@@ -180,7 +182,11 @@ function MembersView({ refreshKey }: { refreshKey: number }) {
               {shown.length === 0 && (
                 <tr>
                   <td colSpan={isAdmin ? 7 : 6} className="ops-empty">
-                    {rows.length === 0 ? 'No members to show yet.' : 'No members match these filters.'}
+                    {rows.length === 0
+                      ? workeasy360
+                        ? 'You signed in with Workeasy360: the people in your organization are managed in Workeasy360. Add a teammate to a project from its Members tab.'
+                        : 'No members to show yet.'
+                      : 'No members match these filters.'}
                   </td>
                 </tr>
               )}

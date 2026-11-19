@@ -1,18 +1,25 @@
 /**
- * Who is signed in on this browser. Signing in (see pages/auth/SignInPage.tsx) yields a session
- * token, which the API client sends on every request; the backend works out the user and
- * organization from that token and remains the sole authority on what they may do.
+ * The email-account session on this browser. Signing in with an email and password (or Google, an
+ * invitation, the hand-over; see pages/auth/SignInPage.tsx) yields a session token, which the API
+ * client sends on every request; the backend works out the user and organization from that token and
+ * remains the sole authority on what they may do.
  *
  * "Remember me" decides where the session lives: localStorage (survives closing the browser) or
  * sessionStorage (this tab only).
+ *
+ * A Workeasy360 sign-in is not kept here: its credential is an HttpOnly cookie, and `sessionStore`
+ * describes it. `useIdentity()` (context/IdentityContext.tsx) presents whichever of the two is signed in.
  */
 
 export interface Identity {
   userId: string
   orgId: string
+  /** The email session's token. A Workeasy360 identity never has one. */
   token?: string
   email?: string
   name?: string
+  /** How this person signed in. Set by `useIdentity()`; never stored. */
+  provider?: 'password' | 'workeasy360'
 }
 
 const STORAGE_KEY = 'projectmodule.identity'
@@ -82,6 +89,14 @@ export function getIdentity(): Identity | null {
 }
 
 export function setIdentity(identity: Identity | null, remember = true): void {
+  // Only an email session (with its token) belongs here. Storing an identity without one would look
+  // like the ids an earlier version kept (see getEarlierSignIn) and authenticate nothing.
+  if (identity && !identity.token) return
+  if (identity) {
+    const { provider: _provider, ...stored } = identity
+    void _provider
+    identity = stored
+  }
   current = identity
   try {
     window.localStorage.removeItem(STORAGE_KEY)

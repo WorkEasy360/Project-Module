@@ -54,12 +54,27 @@
         </dependency>
 
         <!--
-          Password hashing (BCrypt) only. This is the standalone crypto jar: it brings no filter
-          chain, no auto-configuration and no change to how requests are handled.
+          Password hashing (BCrypt) for email sign-in. Spring Security (below) brings this jar too;
+          it is named here because the account package uses it directly.
         -->
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-crypto</artifactId>
+        </dependency>
+
+        <!--
+          Sign in with Workeasy360 (docs/workeasy360-sso.md): Spring Security protects the API
+          (a Workeasy360 server-side session, or an email sign-in's bearer token), and its OAuth2
+          client carries the OpenID Connect protocol (authorization code + PKCE, private_key_jwt
+          client authentication, ID token validation).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
         </dependency>
 
         <!-- Email: optional at runtime, sends only when spring.mail.host is set -->
@@ -109,6 +124,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

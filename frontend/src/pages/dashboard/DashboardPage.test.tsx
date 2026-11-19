@@ -5,6 +5,7 @@ import { DashboardPage } from './DashboardPage'
 import { IdentityProvider } from '../../context/IdentityContext'
 import { PeopleProvider } from '../../context/PeopleContext'
 import { setIdentity } from '../../context/identityStore'
+import { resetSessionForTest, signInAs } from '../../test/session'
 import { projectsApi } from '../../api/projects'
 import { tasksApi } from '../../api/tasks'
 import { activityApi } from '../../api/collaboration'
@@ -94,6 +95,7 @@ describe('DashboardPage (V3 Home)', () => {
   })
   afterEach(() => {
     setIdentity(null)
+    resetSessionForTest()
     vi.clearAllMocks()
   })
 
@@ -105,6 +107,14 @@ describe('DashboardPage (V3 Home)', () => {
     await vi.waitFor(() => expect(tile('My Open Tasks').querySelector('.ops-tile-value')).toHaveTextContent('1'))
     expect(tile('Due Today').querySelector('.ops-tile-value')).toHaveTextContent('1')
     expect(tile('Overdue').querySelector('.ops-tile-value')).toHaveTextContent('0')
+  })
+
+  it('greets a Workeasy360 account that shares only an email by the part before @', () => {
+    setIdentity(null)
+    signInAs('me', { email: 'manoj.k@acme.example' })
+    renderPage()
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/Good (Morning|Afternoon|Evening), manoj\.k!/)
+    expect(screen.getByRole('heading', { level: 1 })).not.toHaveTextContent('acme.example')
   })
 
   it('opens the matching filtered list from every count', async () => {

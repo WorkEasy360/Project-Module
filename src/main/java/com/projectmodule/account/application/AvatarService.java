@@ -67,9 +67,9 @@ public class AvatarService {
     /** Someone's photo, for a person in the same workspace. */
     @Transactional(readOnly = true)
     public Photo read(RequestContext context, UUID accountId) {
-        UserAccount me = caller(context);
+        UUID organizationId = callerOrganization(context);
         UserAccount them = accounts.findById(accountId)
-                .filter(a -> a.getOrganizationId().equals(me.getOrganizationId()))
+                .filter(a -> a.getOrganizationId().equals(organizationId))
                 .orElseThrow(() -> new ResourceNotFoundException("Photo", accountId));
         List<Photo> found = jdbc.query("SELECT content_type, content, updated_at FROM user_avatars WHERE account_id = ?",
                 (rs, n) -> new Photo(rs.getString(1), rs.getBytes(2), rs.getTimestamp(3).toInstant()), them.getId());
@@ -95,6 +95,18 @@ public class AvatarService {
             return Optional.of("image/gif");
         }
         return Optional.empty();
+    }
+
+    /**
+     * The caller's workspace: their email account's or, for a Workeasy360 sign-in (which has no email account
+     * here, and so no photo of its own), the organization it signed in to.
+     */
+    private UUID callerOrganization(RequestContext context) {
+        return accounts.findById(context.requireUserId().value())
+                .map(UserAccount::getOrganizationId)
+                .orElseGet(() -> context.organizationId()
+                        .orElseThrow(() -> new MissingIdentityException("Your session is no longer valid"))
+                        .value());
     }
 
     private UserAccount caller(RequestContext context) {

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useMatch, useNavigate } from 'react-router-dom'
 import { IdentityWidget } from '../common/IdentityWidget'
+import { AccountMenu } from '../common/AccountMenu'
 import { NotificationBell } from '../common/NotificationBell'
 import { openAssistant } from '../assistant/AssistantPanel'
+import { useIdentity } from '../../context/IdentityContext'
 import { IconButton } from '../common/IconButton'
 import { Icon } from '../common/Icon'
 import { useSidebar } from '../../context/SidebarContext'
@@ -14,6 +16,8 @@ import { useWorkspaceSettings } from '../../context/WorkspaceSettingsContext'
  * Ctrl/Cmd+K opens it, and "/" inside a project jumps to that project's search.
  */
 export function Header() {
+  const { identity } = useIdentity()
+  const workeasy360 = identity?.provider === 'workeasy360'
   const { toggle, isMobile } = useSidebar()
   const navigate = useNavigate()
   const projectMatch = useMatch('/projects/:projectId/*')
@@ -86,7 +90,8 @@ export function Header() {
         <Icon name="help" size={22} />
       </Link>
       <span className="header-divider" aria-hidden="true" />
-      <IdentityWidget />
+      {/* A Workeasy360 sign-in has its own menu: two ways to sign out, and no password of ours. */}
+      {workeasy360 ? <AccountMenu /> : <IdentityWidget />}
     </header>
   )
 }

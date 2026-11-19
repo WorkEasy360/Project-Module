@@ -20,24 +20,36 @@ public class ApiConfiguration implements WebMvcConfigurer {
     public static final String API_PREFIX = "/api/v1";
 
     private static final String BASE_PACKAGE = "com.projectmodule";
+    private static final String SECURITY_PACKAGE = "com.projectmodule.security";
 
     /**
-     * The React frontend (docs/project frontend/) is a separate origin from this backend, so
-     * browsers require CORS to be enabled explicitly — without it every request from the SPA
-     * would be blocked before reaching any controller, regardless of authorization. Origins are
-     * configurable (never a wildcard, since requests carry the caller-identity headers below) and
-     * default to the frontend's Vite dev/preview ports for local development.
+     * Cross-origin callers the browser may let through. The packaged single-page app and its API are
+     * the same origin (the Vite dev server proxies {@code /api} to keep that true in development), so
+     * this list is not on the normal path. Credentials stay off: the session cookie is never sent
+     * cross-origin, so a cross-origin page can read nothing that needs a sign-in. An email sign-in's
+     * bearer token is sent explicitly ({@code Authorization}), so an allowed origin can still call the
+     * API with one. Origins are configurable and never a wildcard.
      */
     @Value("${projectmodule.cors.allowed-origins:"
             + "http://localhost:5173,http://localhost:4173,"
             + "https://workeasy360.com,https://ops.workeasy360.com}")
     private String[] allowedOrigins;
 
+    /**
+     * The identity headers are advertised to browsers only in the trusted-gateway mode, the only mode in
+     * which they mean anything (see {@code RequestContextHeaders}).
+     */
+    @Value("${projectmodule.auth.trust-identity-headers:false}")
+    private boolean trustIdentityHeaders;
+
     @Override
     public void configurePathMatch(PathMatchConfigurer configurer) {
         // Scoped to controllers in this module, leaving actuator and the OpenAPI endpoints
-        // on their conventional paths.
-        configurer.addPathPrefix(API_PREFIX, HandlerTypePredicate.forBasePackage(BASE_PACKAGE));
+        // on their conventional paths. The sign-in controllers (security package) keep their own
+        // /api/auth paths: they are not part of the versioned business API.
+        HandlerTypePredicate moduleControllers = HandlerTypePredicate.forBasePackage(BASE_PACKAGE);
+        configurer.addPathPrefix(API_PREFIX,
+                type -> moduleControllers.test(type) && !type.getPackageName().startsWith(SECURITY_PACKAGE));
     }
 
     @Override
@@ -45,7 +57,13 @@ public class ApiConfiguration implements WebMvcConfigurer {
         registry.addMapping(API_PREFIX + "/**")
                 .allowedOrigins(allowedOrigins)
                 .allowedMethods("GET", "POST", "PATCH", "DELETE", "OPTIONS")
-                .allowedHeaders("Authorization", "Content-Type", "X-User-Id", "X-Org-Id", "X-Correlation-Id")
+                .allowedHeaders(allowedHeaders())
                 .exposedHeaders("Location");
+    }
+
+    private String[] allowedHeaders() {
+        return trustIdentityHeaders
+                ? new String[] {"Authorization", "Content-Type", "X-Correlation-Id", "X-User-Id", "X-Org-Id"}
+                : new String[] {"Authorization", "Content-Type", "X-Correlation-Id"};
     }
 }

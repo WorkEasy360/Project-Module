@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import '../../styles/ops.css'
 import { useIdentity } from '../../context/IdentityContext'
+import type { Identity } from '../../context/identityStore'
 import { usePeople } from '../../context/PeopleContext'
 import { type ActivityEntry } from '../../api/collaboration'
 import { ErrorState } from '../../components/common/ErrorState'
@@ -14,6 +15,17 @@ import { AddTaskButton } from '../workspace/AddTaskButton'
 import { formatDate, todayIso } from '../../utils/format'
 import { greeting, timeAgo } from './opsDashboard'
 import { isOverdue, myWork, projectProgress, teamOverview, useWorkData } from '../workspace/workRules'
+
+/**
+ * The greeting's name: a first name, else the part of the email before @ (a Workeasy360 account may
+ * share an email but no name), else none.
+ */
+function greetingName(identity: Identity | null): string {
+  const first = identity?.name?.trim().split(/\s+/)[0]
+  if (first) return first
+  if (identity?.email?.includes('@')) return identity.email.split('@')[0]
+  return ''
+}
 
 /**
  * V3 Home: actionable work first. My Work Summary (my open, due today, overdue and upcoming tasks),
@@ -38,7 +50,7 @@ export function DashboardPage() {
     () => projects.slice(0, 5).map((p) => ({ project: p, ...projectProgress(p.id, tasks, today) })),
     [projects, tasks, today],
   )
-  const firstName = identity?.name?.split(' ')[0] ?? identity?.email ?? ''
+  const firstName = greetingName(identity)
   const projectName = (id: string) => projects.find((p) => p.id === id)?.name ?? ''
 
   if (data.error) return <ErrorState message={data.error} onRetry={data.reload} />

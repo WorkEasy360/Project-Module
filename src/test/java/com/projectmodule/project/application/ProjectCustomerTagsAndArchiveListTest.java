@@ -120,5 +120,11 @@ class ProjectCustomerTagsAndArchiveListTest {
         assertThat(settings.get(asMember).name()).isEqualTo("Acme Enterprises Pvt. Ltd.");
         assertThat(settings.get(asMember).canEdit()).isFalse();
         assertThatThrownBy(() -> settings.rename(asMember, "Hijacked")).isInstanceOf(AuthorizationException.class);
+
+        // A Workeasy360 sign-in to the same organization has no email account here: it sees the workspace, read only.
+        RequestContext asWorkeasy360 = new ImmutableRequestContext(Optional.of(ExternalUserId.of(UUID.randomUUID())),
+                Optional.of(OrganizationId.of(owner.account().getOrganizationId())), "corr", ActorType.HUMAN);
+        assertThat(settings.get(asWorkeasy360).name()).isEqualTo("Acme Enterprises Pvt. Ltd.");
+        assertThat(settings.get(asWorkeasy360).canEdit()).isFalse();
     }
 }

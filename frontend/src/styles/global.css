@@ -217,7 +217,7 @@ textarea {
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: var(--color-text-faint);
+  color: var(--color-text-muted); /* --color-text-faint is under WCAG AA's 4.5:1 here */
   white-space: nowrap;
 }
 

@@ -12,9 +12,10 @@ import com.projectmodule.account.application.GoogleSignInService;
 import com.projectmodule.account.application.LegacyHandoverService;
 import com.projectmodule.account.application.PasswordApplicationService;
 import com.projectmodule.account.application.WorkspaceApplicationService;
+import com.projectmodule.common.context.BearerTokenAuthenticator;
 import com.projectmodule.common.context.RequestContext;
-import com.projectmodule.config.RequestContextFilter;
 import com.projectmodule.integration.port.EmailPort;
+import com.projectmodule.security.SignInOptions;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -22,6 +23,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -68,8 +70,12 @@ public class AuthController {
     private final EmailPort emailPort;
     private final RequestContext requestContext;
     private final LegacyHandoverService legacyHandoverService;
+    private final ObjectProvider<SignInOptions> signInOptions;
     private final com.projectmodule.account.application.AvatarService avatarService;
-    /** Where "Continue with WorkEasy360 Account" goes; empty until single sign-on is set up. */
+    /**
+     * Where "Continue with WorkEasy360 Account" goes when Workeasy360 sign-in ({@link SignInOptions}) is not
+     * configured here; empty when there is nowhere to send it.
+     */
     private final String workeasy360SignInUrl;
 
     public AuthController(AccountApplicationService accountApplicationService,
@@ -79,10 +85,12 @@ public class AuthController {
                           EmailPort emailPort,
                           RequestContext requestContext,
                           LegacyHandoverService legacyHandoverService,
+                          ObjectProvider<SignInOptions> signInOptions,
                           com.projectmodule.account.application.AvatarService avatarService,
                           @org.springframework.beans.factory.annotation.Value("${projectmodule.auth.workeasy360-sign-in-url:}") String workeasy360SignInUrl) {
-        this.workeasy360SignInUrl = workeasy360SignInUrl;
         this.legacyHandoverService = legacyHandoverService;
+        this.signInOptions = signInOptions;
+        this.workeasy360SignInUrl = workeasy360SignInUrl;
         this.avatarService = avatarService;
         this.passwordApplicationService = passwordApplicationService;
         this.googleSignInService = googleSignInService;
@@ -92,11 +100,17 @@ public class AuthController {
         this.requestContext = requestContext;
     }
 
-    /** What the sign-in page should offer. Public: it holds no secret. */
+    /**
+     * What the sign-in page should offer. Public: it holds no secret. {@code workeasy360} says whether
+     * "Continue with Workeasy360" is offered and whether it is the only way in ({@link SignInOptions});
+     * without it, {@code workeasy360SignInUrl} is where the page's WorkEasy360 button goes, if anywhere.
+     */
     @GetMapping("/config")
     public Map<String, Object> config() {
+        SignInOptions options = signInOptions.getIfAvailable(
+                () -> new SignInOptions(false, SignInOptions.SSO_OPTIONAL));
         return Map.of("googleClientId", googleSignInService.clientId(), "emailEnabled", emailPort.isEnabled(),
-                "legacyHandover", legacyHandoverService.isEnabled(),
+                "legacyHandover", legacyHandoverService.isEnabled(), "workeasy360", options.describe(),
                 "workeasy360SignInUrl", workeasy360SignInUrl);
     }
 
@@ -177,7 +191,7 @@ public class AuthController {
     @PostMapping("/logout")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout(@RequestHeader(name = HttpHeaders.AUTHORIZATION, required = false) String authorization) {
-        String token = RequestContextFilter.bearerToken(authorization);
+        String token = BearerTokenAuthenticator.tokenFrom(authorization);
         if (token != null) {
             accountApplicationService.logout(token);
         }

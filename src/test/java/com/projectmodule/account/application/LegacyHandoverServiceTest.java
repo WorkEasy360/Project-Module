@@ -18,6 +18,7 @@ import com.projectmodule.project.api.dto.CreateProjectRequest;
 import com.projectmodule.project.application.ProjectApplicationService;
 import com.projectmodule.project.domain.Project;
 import com.projectmodule.project.domain.ProjectPriority;
+import com.projectmodule.security.identity.FederatedIdentityStore;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -47,6 +48,9 @@ class LegacyHandoverServiceTest {
 
     @Autowired
     private UserAccountRepository accountRepository;
+
+    @Autowired
+    private FederatedIdentityStore workeasy360Identities;
 
     private final UUID organization = UUID.randomUUID();
     private final UUID oldUser = UUID.randomUUID();
@@ -116,5 +120,32 @@ class LegacyHandoverServiceTest {
         UserAccount account = handover.claim(colleague, organization, email(), "Ben", "battery staple", false).account();
 
         assertThat(account.getWorkspaceRole()).isEqualTo(WorkspaceRole.MEMBER);
+    }
+
+    @Test
+    @DisplayName("an id a Workeasy360 sign-in already holds is not handed over to an email account")
+    void notAnIdThatWorkeasy360Holds() {
+        earlierWork();
+        // Workeasy360's sub is its user id: the first Workeasy360 sign-in of this person adopted the old id.
+        ExternalUserId adopted = workeasy360Identities.resolve("https://accounts.workeasy360.com", oldUser.toString(),
+                null, null);
+        assertThat(adopted.value()).isEqualTo(oldUser);
+
+        assertThatThrownBy(() -> handover.claim(oldUser, organization, email(), "Mallory", "correct horse", true))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("Workeasy360");
+        assertThat(accountRepository.existsById(oldUser)).isFalse();
+    }
+
+    @Test
+    @DisplayName("and the other way round: once an email account holds the old id, a Workeasy360 sign-in gets a new one")
+    void workeasy360DoesNotAdoptAnEmailAccountsId() {
+        earlierWork();
+        handover.claim(oldUser, organization, email(), "Ada", "correct horse", true);
+
+        ExternalUserId workeasy360User = workeasy360Identities.resolve("https://accounts.workeasy360.com",
+                oldUser.toString(), null, null);
+
+        assertThat(workeasy360User.value()).as("one id, one credential holder").isNotEqualTo(oldUser);
     }
 }

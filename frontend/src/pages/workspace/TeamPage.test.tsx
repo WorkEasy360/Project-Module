@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -6,6 +6,7 @@ import { TeamPage, type TeamSection } from './TeamPage'
 import { IdentityProvider } from '../../context/IdentityContext'
 import { PeopleProvider } from '../../context/PeopleContext'
 import { setIdentity } from '../../context/identityStore'
+import { resetSessionForTest, signInAs } from '../../test/session'
 import { workspaceApi } from '../../api/workspace'
 import type { Account } from '../../api/auth'
 
@@ -52,6 +53,21 @@ describe('TeamPage', () => {
     ])
     vi.mocked(workspaceApi.revokeInvitation).mockReset().mockResolvedValue(undefined)
     vi.mocked(workspaceApi.invite).mockReset().mockResolvedValue({ id: 'i2', email: 'deepti@acme.example', expiresAt: '2026-11-21T10:00:00Z', token: 'tok-new' })
+  })
+
+  afterEach(() => {
+    setIdentity(null)
+    resetSessionForTest()
+  })
+
+  it('a Workeasy360 sign-in is told its people are managed in Workeasy360, and cannot invite', async () => {
+    setIdentity(null)
+    signInAs(ME, { name: 'Manoj Kumar' })
+    vi.mocked(workspaceApi.people).mockResolvedValue([])
+    renderTeam('members')
+    expect(await screen.findByText(/people in your organization are managed in Workeasy360/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Invite Member/ })).not.toBeInTheDocument()
+    expect(workspaceApi.invitations).not.toHaveBeenCalled()
   })
 
   it('Members lists joined people with role and status, plus invited people for admins', async () => {

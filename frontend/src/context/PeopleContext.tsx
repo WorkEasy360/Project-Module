@@ -31,8 +31,13 @@ export function PeopleProvider({ children }: { children: ReactNode }) {
     const byId = new Map(people.map((person) => [person.id, person]))
     return {
       people,
-      nameOf: (userId) => byId.get(userId)?.name ?? FALLBACK.nameOf(userId),
-      isAdmin: identity ? byId.get(identity.userId)?.workspaceRole === 'ADMIN' : false,
+      // The signed-in person's own name is known even without an email account (a Workeasy360 sign-in).
+      nameOf: (userId) =>
+        byId.get(userId)?.name ?? (identity && userId === identity.userId && identity.name ? identity.name : FALLBACK.nameOf(userId)),
+      // Inviting people and password reset links are for email accounts; a Workeasy360 sign-in's
+      // teammates come from Workeasy360, so it never administers the email workspace.
+      isAdmin:
+        identity && identity.provider !== 'workeasy360' ? byId.get(identity.userId)?.workspaceRole === 'ADMIN' : false,
       reload,
     }
   }, [data, identity, reload])

@@ -65,6 +65,19 @@ class AvatarServiceTest {
     }
 
     @Test
+    @DisplayName("a Workeasy360 sign-in (no email account here) sees the photos of its own organization only")
+    void workeasy360SignIn() {
+        UserAccount owner = newOwner();
+        avatars.upload(as(owner), PNG);
+        RequestContext sameOrganization = new ImmutableRequestContext(Optional.of(ExternalUserId.of(UUID.randomUUID())),
+                Optional.of(OrganizationId.of(owner.getOrganizationId())), "corr", ActorType.HUMAN);
+        assertThat(avatars.read(sameOrganization, owner.getId()).content()).isEqualTo(PNG);
+        RequestContext otherOrganization = new ImmutableRequestContext(Optional.of(ExternalUserId.of(UUID.randomUUID())),
+                Optional.of(OrganizationId.of(UUID.randomUUID())), "corr", ActorType.HUMAN);
+        assertThatThrownBy(() -> avatars.read(otherOrganization, owner.getId())).isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
     @DisplayName("people in another workspace cannot see a photo")
     void otherWorkspace() {
         UserAccount owner = newOwner();

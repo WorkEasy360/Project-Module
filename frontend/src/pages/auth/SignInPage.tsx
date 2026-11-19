@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useIdentity } from '../../context/IdentityContext'
 import { forgetEarlierSignIn, getEarlierSignIn } from '../../context/identityStore'
+import { useSession } from '../../context/SessionContext'
+import { useSignOutActions } from '../../hooks/useSignOutActions'
 import { authApi, type Session } from '../../api/auth'
 import { ApiError } from '../../api/client'
 import { toUserMessage } from '../../api/errorMessage'
+import { safeNextRoute, workeasy360StartUrl } from '../../api/session'
+import { ssoErrorMessage } from '../../api/sessionMessages'
+import { useSignInOptions } from '../../api/signInOptions'
 import { Icon, type IconName } from '../../components/common/Icon'
+import { LoadingState } from '../../components/common/LoadingState'
 import { BRAND_NAME, BrandMark, BrandName, OperationsBadge } from '../../components/layout/Brand'
 import '../../styles/signin.css'
 import '../../styles/ops.css'
@@ -34,9 +40,21 @@ function authErrorMessage(error: unknown): string {
 }
 
 /**
- * Sign in with email and password, or create an account. The backend checks the password and
- * returns a session token; nothing is stored unless it accepts. "Forgot password" and "Sign in with
- * Google" appear only when this deployment has email and a Google client id configured.
+ * Sign-in. Which page depends on how this deployment signs people in (`GET /api/v1/auth/config`):
+ *
+ * - **Email sign-in** (always, unless Workeasy360 is the only way in): email and password, or create an
+ *   account; "Forgot Password?" and "Sign in with Google" depend on this deployment's email and Google
+ *   client id. "Continue with WorkEasy360 Account" is always on the login card: with Workeasy360 sign-in
+ *   configured it starts it (and it is offered on the registration form too); without it, it goes to
+ *   `workeasy360SignInUrl` when that is set, or explains that it is not set up yet.
+ * - **Workeasy360 only** (`sso_only`): only "Continue with WorkEasy360 Account".
+ *
+ * With Workeasy360 sign-in configured, "Continue with WorkEasy360 Account" is a plain link (a top-level
+ * navigation to the backend, which performs the OIDC redirect) and is never followed automatically; the
+ * person always chooses. This route is outside the guard that may start sign-in by itself
+ * (`SignedOutGate`), so it never does, whatever its query. The route the person was trying to reach (set
+ * by `AppLayout`) travels as `next` and the backend returns them to it. If a Workeasy360 sign-in fails,
+ * the backend sends the browser back here with `?sso_error=<code>`, shown in plain language.
  */
 export function SignInPage({
   successDelayMs = 1100,
@@ -46,18 +64,36 @@ export function SignInPage({
   /** 'register' opens straight on account creation (the #/sign-up address). */
   initialMode?: 'sign-in' | 'register'
 }) {
+  const options = useSignInOptions()
+  // Until the options are known, the email page (the usual one) is shown, so nothing flashes for it.
+  if (options?.ssoOnly) return <Workeasy360OnlySignIn />
+  return <EmailSignIn successDelayMs={successDelayMs} initialMode={initialMode} workeasy360={options?.workeasy360 === true} />
+}
+
+function EmailSignIn({
+  successDelayMs,
+  initialMode,
+  workeasy360,
+}: {
+  successDelayMs: number
+  initialMode: 'sign-in' | 'register'
+  workeasy360: boolean
+}) {
   const { identity, setIdentity } = useIdentity()
+  const options = useSignInOptions()
   const { inviteToken, resetToken } = useParams<{ inviteToken: string; resetToken: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const [params] = useSearchParams()
   const from = (location.state as { from?: string } | null)?.from
+  const ssoError = params.get('sso_error')
   // Someone who used the app before email sign-in still has their old ids in this browser.
   const [earlier] = useState(() => (inviteToken || resetToken ? null : getEarlierSignIn()))
   const [mode, setMode] = useState<'sign-in' | 'register' | 'forgot' | 'handover'>(
     inviteToken ? 'register' : earlier ? 'handover' : initialMode,
   )
   const [notice, setNotice] = useState<string | null>(null)
-  const [config, setConfig] = useState<{ googleClientId: string; emailEnabled: boolean; legacyHandover?: boolean; workeasy360SignInUrl?: string } | null>(null)
+  const config = options?.config ?? null
   const googleButtonRef = useRef<HTMLDivElement>(null)
   const [inviteInvalid, setInviteInvalid] = useState(false)
   const [name, setName] = useState('')
@@ -90,17 +126,11 @@ export function SignInPage({
     window.setTimeout(() => navigate(from && from !== '/sign-in' ? from : '/dashboard', { replace: true }), successDelayMs)
   }
 
-  // What this deployment offers: both of these depend on its configuration.
+  // This server no longer moves earlier sign-ins: offer the ordinary sign-in instead.
+  const legacyHandover = config?.legacyHandover
   useEffect(() => {
-    authApi
-      .config()
-      .then((c) => {
-        setConfig(c)
-        // This server no longer moves earlier sign-ins: offer the ordinary sign-in instead.
-        if (c.legacyHandover === false) setMode((m) => (m === 'handover' ? 'sign-in' : m))
-      })
-      .catch(() => undefined)
-  }, [])
+    if (legacyHandover === false) setMode((m) => (m === 'handover' ? 'sign-in' : m))
+  }, [legacyHandover])
 
   const googleClientId = config?.googleClientId
   useEffect(() => {
@@ -141,9 +171,22 @@ export function SignInPage({
   }, [inviteToken])
 
   // Already signed in (and not mid-verification): go straight to the workspace. An invitation is
-  // the exception, since whoever opened it may be joining with a new account on this browser.
+  // the exception, since whoever opened it may be joining with a new account on this browser. So is a
+  // Workeasy360 sign-in that failed while another one is still open (a launcher sign-in for another
+  // organization): the person is still in their previous organization, so say what happened.
   if (identity && phase === 'idle' && !inviteToken && !resetToken) {
-    return <Navigate to={from && from !== '/sign-in' ? from : '/dashboard'} replace />
+    if (ssoError && identity.provider === 'workeasy360') {
+      return (
+        <SignInFrame>
+          <div className="si-card">
+            <CardBrand />
+            <h2 id="si-title">Welcome back</h2>
+            <StillSignedIn ssoError={ssoError} next={safeNextRoute(from)} />
+          </div>
+        </SignInFrame>
+      )
+    }
+    return <Navigate to={safeNextRoute(from)} replace />
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -282,7 +325,370 @@ export function SignInPage({
   }
 
   const plainLogin = mode === 'sign-in' && !inviteToken && !resetToken
+  // With Workeasy360 sign-in configured it is offered on the registration form too (not on the one-purpose
+  // ones: an invitation or reset link, a forgotten password, the hand-over of an earlier sign-in).
+  const offerWorkeasy360OnRegister = workeasy360 && registering && !inviteToken && !resetToken && !handingOver
 
+  return (
+    <SignInFrame>
+      <form className={`si-card${phase === 'shake' ? ' shake' : ''}`} onSubmit={handleSubmit} noValidate>
+        <CardBrand />
+        <h2 id="si-title">
+          {resetToken
+            ? 'Choose a new password'
+            : forgetting
+              ? 'Reset your password'
+              : inviteToken
+                ? "You've been invited"
+                : handingOver
+                  ? 'Welcome back! One quick step'
+                  : registering
+                    ? 'Create your account'
+                    : 'Operations Login'}
+        </h2>
+        <p className="si-form-sub">
+          {resetToken
+            ? 'This will sign you out everywhere else'
+            : forgetting
+              ? "We'll email you a link to set a new one"
+              : inviteToken
+                ? <>Set up your account to join your team on {BRAND_NAME}</>
+                : handingOver
+                  ? 'We now use email sign-in. Choose the email and password you will use from now on. All your projects and tasks stay exactly as they are.'
+                  : registering
+                    ? <>Get started with {BRAND_NAME}</>
+                    : <>Manage projects, tasks and teams<br />in one place.</>}
+        </p>
+
+        {ssoError && (
+          <div className="banner banner-error" role="alert">
+            {ssoErrorMessage(ssoError)}
+          </div>
+        )}
+
+        {error && (
+          <div className="banner banner-error" role="alert">
+            {error}
+          </div>
+        )}
+
+        {notice && (
+          <div className="banner banner-info" role="status">
+            {notice}
+          </div>
+        )}
+
+        {registering && !resetToken && (
+          <label className="si-field">
+            <span className="si-label">Full name</span>
+            <span className="si-input">
+              <Icon name="user" size={22} />
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Enter your name"
+                autoComplete="name"
+                maxLength={120}
+                required
+              />
+            </span>
+          </label>
+        )}
+        {!resetToken && (
+          <label className="si-field">
+            <span className="si-label">Email Address</span>
+            <span className="si-input">
+              <Icon name="mail" size={22} />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                autoComplete="username"
+                spellCheck={false}
+                readOnly={Boolean(inviteToken)}
+                required
+              />
+            </span>
+          </label>
+        )}
+        {!forgetting && (
+          <label className="si-field">
+            <span className="si-label">{resetToken ? 'New password' : 'Password'}</span>
+            <span className="si-input">
+              <Icon name="lock" size={22} />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={registering || resetToken ? `At least ${MIN_PASSWORD_LENGTH} characters` : 'Enter your password'}
+                autoComplete={registering || resetToken ? 'new-password' : 'current-password'}
+                required
+              />
+              <button
+                type="button"
+                className="si-eye"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                <Icon name={showPassword ? 'eyeOff' : 'eye'} size={22} />
+              </button>
+            </span>
+          </label>
+        )}
+
+        {!forgetting && !resetToken && (
+          <div className="si-row">
+            <label className="checkbox-row">
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+              Remember me
+            </label>
+            {mode === 'sign-in' ? (
+              <button type="button" className="si-switch si-forgot" onClick={forgotPassword}>
+                Forgot Password?
+              </button>
+            ) : (
+              <span className="si-hint">{remember ? 'Kept on this device' : 'This tab only'}</span>
+            )}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          className="btn btn-primary si-submit"
+          disabled={phase === 'checking' || phase === 'success' || inviteInvalid}
+        >
+          {phase === 'checking' ? (
+            <>
+              <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />{' '}
+              {resetToken || forgetting ? 'Sending…' : handingOver ? 'Saving…' : registering ? 'Creating your account…' : 'Logging in…'}
+            </>
+          ) : (
+            <>
+              {!resetToken && !forgetting && !registering && <Icon name="login" size={24} />}
+              {resetToken ? 'Set new password' : forgetting ? 'Send reset link' : inviteToken ? 'Join workspace' : handingOver ? 'Keep my workspace' : registering ? 'Create account' : 'Log In to Operations'}
+              {(resetToken || forgetting || registering) && <Icon name="arrowRight" size={16} />}
+            </>
+          )}
+        </button>
+
+        {(plainLogin || offerWorkeasy360OnRegister) && (
+          <>
+            <div className="si-or" aria-hidden="true">
+              <span>OR</span>
+            </div>
+            {workeasy360 ? (
+              <Workeasy360Choice next={safeNextRoute(from)} />
+            ) : (
+              <button type="button" className="si-sso" onClick={continueWithWorkEasy360}>
+                <BrandMark size={30} />
+                Continue with WorkEasy360 Account
+              </button>
+            )}
+          </>
+        )}
+
+        {plainLogin && (
+          <>
+            {googleClientId && (
+              <div className="si-google">
+                <div ref={googleButtonRef} />
+              </div>
+            )}
+            <ul className="si-tiles" aria-hidden="true">
+              <li>
+                <ArtIcon name="clipboard" size={44} />
+                <span>Manage<br />Projects</span>
+              </li>
+              <li>
+                <ArtIcon name="checkCircle" size={44} />
+                <span>Track<br />Tasks</span>
+              </li>
+              <li>
+                <ArtIcon name="people" size={44} />
+                <span>Collaborate<br />with Teams</span>
+              </li>
+            </ul>
+          </>
+        )}
+
+        {handingOver && (
+          <p className="si-foot">
+            Already did this?{' '}
+            <button type="button" className="si-switch" onClick={() => { setMode('sign-in'); setError(null); setPassword('') }}>
+              Sign in
+            </button>
+            {' · '}
+            <button type="button" className="si-switch" onClick={startFresh}>
+              Start a new workspace instead
+            </button>
+          </p>
+        )}
+
+        {!inviteToken && !resetToken && !handingOver && !plainLogin && (
+          <p className="si-foot">
+            {forgetting ? 'Remembered it?' : registering ? 'Already have an account?' : 'New here?'}{' '}
+            <button type="button" className="si-switch" onClick={switchMode}>
+              {registering || forgetting ? 'Log in' : 'Create an account'}
+            </button>
+          </p>
+        )}
+
+        {phase === 'success' && (
+          <div className="si-success" role="status">
+            <span className="si-check">
+              <Icon name="check" size={34} />
+            </span>
+            <strong>Welcome to {BRAND_NAME}</strong>
+            <span>Opening your workspace…</span>
+          </div>
+        )}
+      </form>
+    </SignInFrame>
+  )
+}
+
+/**
+ * "Continue with WorkEasy360 Account" when Workeasy360 sign-in is configured: a plain link to the backend,
+ * which starts it. While the Workeasy360 session is being checked there is nothing to choose yet; a
+ * session check that could not reach the server says so.
+ */
+function Workeasy360Choice({ next }: { next: string }) {
+  const { status, loadError } = useSession()
+  return (
+    <>
+      {loadError && (
+        <div className="banner banner-error" role="alert">
+          {loadError}
+        </div>
+      )}
+      {status === 'loading' ? (
+        <LoadingState label="Checking your sign-in…" />
+      ) : (
+        <a className="si-sso" href={workeasy360StartUrl(next)}>
+          <BrandMark size={30} />
+          Continue with WorkEasy360 Account
+        </a>
+      )}
+    </>
+  )
+}
+
+/**
+ * A deployment where Workeasy360 is the only way in (`sso_only`): there is no password of this app's own
+ * there, so the only choice is "Continue with WorkEasy360 Account".
+ */
+function Workeasy360OnlySignIn() {
+  const { status, loadError } = useSession()
+  const location = useLocation()
+  const [params] = useSearchParams()
+  const from = (location.state as { from?: string } | null)?.from
+  const next = safeNextRoute(from)
+  const ssoError = params.get('sso_error')
+
+  // Signed in and nothing to explain: straight into the app. Signed in *and* a failed sign-in to
+  // report (a launcher sign-in for another organization that did not complete): the person is
+  // still in their previous organization, so say what happened and let them choose.
+  const stillSignedIn = status === 'authenticated'
+  if (stillSignedIn && !ssoError) {
+    return <Navigate to={next} replace />
+  }
+
+  return (
+    <SignInFrame>
+      <div className="si-card">
+        <CardBrand />
+        <h2 id="si-title">Operations Login</h2>
+        <p className="si-form-sub">Sign in to continue to {BRAND_NAME}</p>
+
+        {stillSignedIn && ssoError ? (
+          <StillSignedIn ssoError={ssoError} next={next} />
+        ) : (
+          <>
+            {ssoError && (
+              <div className="banner banner-error" role="alert">
+                {ssoErrorMessage(ssoError)}
+              </div>
+            )}
+            {!ssoError && loadError && (
+              <div className="banner banner-error" role="alert">
+                {loadError}
+              </div>
+            )}
+            {status === 'loading' ? (
+              <LoadingState label="Checking your sign-in…" />
+            ) : (
+              <div className="si-sso-panel">
+                <h3 className="si-sso-title">Already a Workeasy360 user?</h3>
+                <p className="si-sso-text">
+                  {BRAND_NAME} uses your Workeasy360 account. There is no separate password to remember.
+                </p>
+                <a className="si-sso" href={workeasy360StartUrl(next)}>
+                  <BrandMark size={30} />
+                  Continue with WorkEasy360 Account
+                </a>
+              </div>
+            )}
+          </>
+        )}
+
+        <p className="si-foot">
+          You will go to Workeasy360 to sign in, then come straight back here.
+        </p>
+      </div>
+    </SignInFrame>
+  )
+}
+
+/** A Workeasy360 sign-in failed, but the person is still signed in (to their previous organization). */
+function StillSignedIn({ ssoError, next }: { ssoError: string; next: string }) {
+  const signOuts = useSignOutActions()
+  return (
+    <>
+      <div className="banner banner-error" role="alert">
+        {ssoErrorMessage(ssoError)}
+      </div>
+      <div className="si-sso-panel">
+        <h3 className="si-sso-title">You are still signed in</h3>
+        <p className="si-sso-text">
+          The sign-in above did not complete, so you are still in your current organization.
+        </p>
+        <Link className="btn btn-primary si-submit" to={next} replace>
+          Continue in current organization
+        </Link>
+        <button type="button" className="btn si-submit" onClick={signOuts.signOut} disabled={signOuts.busy}>
+          Sign out
+        </button>
+        {signOuts.error && (
+          <div className="banner banner-error" role="alert">
+            {signOuts.error}
+          </div>
+        )}
+        <a className="si-sso-text" href={workeasy360StartUrl(next)}>
+          Try signing in with Workeasy360 again
+        </a>
+      </div>
+    </>
+  )
+}
+
+/** The logo and the Operations badge at the top of every sign-in card. */
+function CardBrand() {
+  return (
+    <div className="si-card-brand">
+      <span className="si-brand-logo si-brand-logo-dark">
+        <BrandMark size={44} />
+        <BrandName />
+      </span>
+      <span className="si-card-brand-sep" aria-hidden="true" />
+      <OperationsBadge size="md" />
+    </div>
+  )
+}
+
+/** The brand panel (as in the brand artwork) and the form column every variant of the page shares. */
+function SignInFrame({ children }: { children: React.ReactNode }) {
   return (
     <div className="si-page si-ops">
       <section className="si-brand" aria-label={`About ${BRAND_NAME}`}>
@@ -322,212 +728,7 @@ export function SignInPage({
       </section>
 
       <section className="si-form-wrap" aria-labelledby="si-title">
-        <form className={`si-card${phase === 'shake' ? ' shake' : ''}`} onSubmit={handleSubmit} noValidate>
-          <div className="si-card-brand">
-            <span className="si-brand-logo si-brand-logo-dark">
-              <BrandMark size={44} />
-              <BrandName />
-            </span>
-            <span className="si-card-brand-sep" aria-hidden="true" />
-            <OperationsBadge size="md" />
-          </div>
-          <h2 id="si-title">
-            {resetToken
-              ? 'Choose a new password'
-              : forgetting
-                ? 'Reset your password'
-                : inviteToken
-                  ? "You've been invited"
-                  : handingOver
-                    ? 'Welcome back! One quick step'
-                    : registering
-                      ? 'Create your account'
-                      : 'Operations Login'}
-          </h2>
-          <p className="si-form-sub">
-            {resetToken
-              ? 'This will sign you out everywhere else'
-              : forgetting
-                ? "We'll email you a link to set a new one"
-                : inviteToken
-                  ? <>Set up your account to join your team on {BRAND_NAME}</>
-                  : handingOver
-                    ? 'We now use email sign-in. Choose the email and password you will use from now on. All your projects and tasks stay exactly as they are.'
-                    : registering
-                      ? <>Get started with {BRAND_NAME}</>
-                      : <>Manage projects, tasks and teams<br />in one place.</>}
-          </p>
-
-          {error && (
-            <div className="banner banner-error" role="alert">
-              {error}
-            </div>
-          )}
-
-          {notice && (
-            <div className="banner banner-info" role="status">
-              {notice}
-            </div>
-          )}
-
-          {registering && !resetToken && (
-            <label className="si-field">
-              <span className="si-label">Full name</span>
-              <span className="si-input">
-                <Icon name="user" size={22} />
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  autoComplete="name"
-                  maxLength={120}
-                  required
-                />
-              </span>
-            </label>
-          )}
-          {!resetToken && (
-            <label className="si-field">
-              <span className="si-label">Email Address</span>
-              <span className="si-input">
-                <Icon name="mail" size={22} />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  autoComplete="username"
-                  spellCheck={false}
-                  readOnly={Boolean(inviteToken)}
-                  required
-                />
-              </span>
-            </label>
-          )}
-          {!forgetting && (
-            <label className="si-field">
-              <span className="si-label">{resetToken ? 'New password' : 'Password'}</span>
-              <span className="si-input">
-                <Icon name="lock" size={22} />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder={registering || resetToken ? `At least ${MIN_PASSWORD_LENGTH} characters` : 'Enter your password'}
-                  autoComplete={registering || resetToken ? 'new-password' : 'current-password'}
-                  required
-                />
-                <button
-                  type="button"
-                  className="si-eye"
-                  onClick={() => setShowPassword((v) => !v)}
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                >
-                  <Icon name={showPassword ? 'eyeOff' : 'eye'} size={22} />
-                </button>
-              </span>
-            </label>
-          )}
-
-          {!forgetting && !resetToken && (
-            <div className="si-row">
-              <label className="checkbox-row">
-                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-                Remember me
-              </label>
-              {mode === 'sign-in' ? (
-                <button type="button" className="si-switch si-forgot" onClick={forgotPassword}>
-                  Forgot Password?
-                </button>
-              ) : (
-                <span className="si-hint">{remember ? 'Kept on this device' : 'This tab only'}</span>
-              )}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="btn btn-primary si-submit"
-            disabled={phase === 'checking' || phase === 'success' || inviteInvalid}
-          >
-            {phase === 'checking' ? (
-              <>
-                <span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} />{' '}
-                {resetToken || forgetting ? 'Sending…' : handingOver ? 'Saving…' : registering ? 'Creating your account…' : 'Logging in…'}
-              </>
-            ) : (
-              <>
-                {!resetToken && !forgetting && !registering && <Icon name="login" size={24} />}
-                {resetToken ? 'Set new password' : forgetting ? 'Send reset link' : inviteToken ? 'Join workspace' : handingOver ? 'Keep my workspace' : registering ? 'Create account' : 'Log In to Operations'}
-                {(resetToken || forgetting || registering) && <Icon name="arrowRight" size={16} />}
-              </>
-            )}
-          </button>
-
-          {plainLogin && (
-            <>
-              <div className="si-or" aria-hidden="true">
-                <span>OR</span>
-              </div>
-              <button type="button" className="si-sso" onClick={continueWithWorkEasy360}>
-                <BrandMark size={30} />
-                Continue with WorkEasy360 Account
-              </button>
-              {googleClientId && (
-                <div className="si-google">
-                  <div ref={googleButtonRef} />
-                </div>
-              )}
-              <ul className="si-tiles" aria-hidden="true">
-                <li>
-                  <ArtIcon name="clipboard" size={44} />
-                  <span>Manage<br />Projects</span>
-                </li>
-                <li>
-                  <ArtIcon name="checkCircle" size={44} />
-                  <span>Track<br />Tasks</span>
-                </li>
-                <li>
-                  <ArtIcon name="people" size={44} />
-                  <span>Collaborate<br />with Teams</span>
-                </li>
-              </ul>
-            </>
-          )}
-
-          {handingOver && (
-            <p className="si-foot">
-              Already did this?{' '}
-              <button type="button" className="si-switch" onClick={() => { setMode('sign-in'); setError(null); setPassword('') }}>
-                Sign in
-              </button>
-              {' · '}
-              <button type="button" className="si-switch" onClick={startFresh}>
-                Start a new workspace instead
-              </button>
-            </p>
-          )}
-
-          {!inviteToken && !resetToken && !handingOver && !plainLogin && (
-            <p className="si-foot">
-              {forgetting ? 'Remembered it?' : registering ? 'Already have an account?' : 'New here?'}{' '}
-              <button type="button" className="si-switch" onClick={switchMode}>
-                {registering || forgetting ? 'Log in' : 'Create an account'}
-              </button>
-            </p>
-          )}
-
-          {phase === 'success' && (
-            <div className="si-success" role="status">
-              <span className="si-check">
-                <Icon name="check" size={34} />
-              </span>
-              <strong>Welcome to {BRAND_NAME}</strong>
-              <span>Opening your workspace…</span>
-            </div>
-          )}
-        </form>
+        {children}
       </section>
     </div>
   )

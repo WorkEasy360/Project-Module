@@ -42,8 +42,8 @@ The `local` profile defaults to `jdbc:postgresql://localhost:5432/projectmodule`
 `postgres`; create that database once (`CREATE DATABASE projectmodule;`). Flyway applies all
 migrations in `src/main/resources/db/migration` on startup.
 
-Health check: `GET http://localhost:8080/actuator/health` → `{"status":"UP"}`.
-OpenAPI UI: `http://localhost:8080/swagger-ui.html`.
+Health check: `GET http://localhost:8080/actuator/health` → `{"status":"UP"}` (public).
+OpenAPI UI: `http://localhost:8080/swagger-ui.html` (needs a signed-in session in the same browser).
 
 ### Backend configuration (all environments)
 
@@ -53,6 +53,11 @@ OpenAPI UI: `http://localhost:8080/swagger-ui.html`.
 | `PROJECTMODULE_DB_USERNAME` | yes (default profile) | Database user |
 | `PROJECTMODULE_DB_PASSWORD` | yes | Database password — never commit it |
 | `PROJECTMODULE_CORS_ALLOWED_ORIGINS` | no | Comma-separated browser origins allowed to call the API. Defaults to the Vite dev/preview ports (`http://localhost:5173,http://localhost:4173`), which is what the `npm run dev` workflow needs. A packaged deployment serves the UI from the same origin as the API, so it needs no CORS and no value here. Set it only when a frontend is hosted on a different origin. |
+| `WORKEASY360_ISSUER`, `WORKEASY360_CLIENT_ID`, `WORKEASY360_REDIRECT_URI`, `WORKEASY360_KEY_ID`, `WORKEASY360_PRIVATE_KEY_FILE` (or `WORKEASY360_PRIVATE_KEY`) | all or none | Sign in with Workeasy360. With none of them, Workeasy360 sign-in is off and people use email sign-in; outside the `local`/`test` profiles the application **refuses to start** with only some of them. See [`docs/workeasy360-sso.md`](docs/workeasy360-sso.md). |
+| `WORKEASY360_PRODUCT_CODE`, `WORKEASY360_POST_LOGOUT_REDIRECT_URI` | no | The product code the ID token must carry (default `easy_project`); the registered post-logout URI that enables "sign out of Workeasy360 too" |
+| `WORKEASY360_SIGN_IN_MODE` | no | `sso_optional` (default: the sign-in page offers email and Workeasy360) or `sso_only` (Workeasy360 is the only way in: email sign-in endpoints refuse new sign-ins, and the app starts Workeasy360 sign-in by itself). `sso_only` needs the Workeasy360 settings. |
+| `PROJECTMODULE_AUTH_TRUST_IDENTITY_HEADERS` | no | `false` by default. `true` only behind a gateway that sets `X-User-Id`/`X-Org-Id` and is the only way in; see [`docs/project/33-AUTHENTICATION.md`](docs/project/33-AUTHENTICATION.md) |
+| `PROJECTMODULE_SESSION_IDLE_TIMEOUT`, `PROJECTMODULE_SESSION_COOKIE_SECURE` | no | Session idle timeout (default `8h`); `Secure` cookie flag (default `true`; the `local` profile sets `false`) |
 | `SPRING_PROFILES_ACTIVE` | no | `local` for the developer profile above |
 | `SPRING_MAIL_HOST` and related | no | Turns on email. See [`docs/project/34-DAILY-WORK-FEATURES.md`](docs/project/34-DAILY-WORK-FEATURES.md) |
 | `PROJECTMODULE_GOOGLE_CLIENT_ID` | no | Turns on "Sign in with Google" |
@@ -100,17 +105,37 @@ Then open <http://localhost:8080/> — the UI and the API are on one origin, exa
 deployed environment. Add `-DskipFrontend=true` for a faster backend-only build; the packaged
 application then has no UI and the tests that serve it are skipped rather than passing vacuously.
 
-Create an account on the sign-in page, or use `POST /api/v1/auth/register`. See
-[`frontend/README.md`](frontend/README.md) for the architecture, the feature registry (how to add a
+There are two ways to sign in, and the sign-in page offers both:
+
+- **Email and password** (and "Sign in with Google", invitations, password reset, the hand-over of an
+  earlier sign-in): create an account on the sign-in page, or use `POST /api/v1/auth/register`. The
+  browser holds a bearer token. See [`docs/project/33-AUTHENTICATION.md`](docs/project/33-AUTHENTICATION.md).
+- **Workeasy360** ("Continue with Workeasy360"), when the `WORKEASY360_*` settings are present: the
+  backend creates a server-side session (`HttpOnly`, `SameSite=Lax`, CSRF-protected), and while it lasts
+  Easy Project keeps asking Workeasy360 whether the person's organization may still use it. When a
+  Workeasy360 sign-in ends, Workeasy360 ends the Easy Project sessions it opened, on every instance
+  (back-channel logout, once its URI is registered). Without the settings, Workeasy360 sign-in is simply
+  off; a deployment with only some of them refuses to start. With `WORKEASY360_SIGN_IN_MODE=sso_only`,
+  Workeasy360 is the only way in and the app starts it by itself for a visitor with no session.
+  Everything - how sign-in works, the variables, registration with
+  `manage.py connect_product_sso --product easy_project ...`, entitlement behaviour, sign-out,
+  back-channel logout - is in [`docs/workeasy360-sso.md`](docs/workeasy360-sso.md).
+
+See [`frontend/README.md`](frontend/README.md) for the architecture, the feature registry (how to add a
 screen without touching navigation), and the full route list.
 
 ## Identity, authorization and organizations
 
-People sign in with email and password; see
-[`docs/project/33-AUTHENTICATION.md`](docs/project/33-AUTHENTICATION.md). The `account` package is
-the only code that handles credentials. Everything else sees user and organization ids
-(`ExternalUserId`, `OrganizationId`) through `RequestContext`. Authorization is per project via
-`ProjectMember` roles (`OWNER`, `MANAGER`, `MEMBER`, `VIEWER`); every request is checked
+People sign in with email and password (see
+[`docs/project/33-AUTHENTICATION.md`](docs/project/33-AUTHENTICATION.md)) or with Workeasy360 (see
+[`docs/workeasy360-sso.md`](docs/workeasy360-sso.md)). The `account` package is the only code that
+handles passwords and bearer tokens; the `security` package verifies Workeasy360's assertion and holds
+its session. Everything else sees user and organization ids (`ExternalUserId`, `OrganizationId`)
+through `RequestContext`. An email account's id is the user id; for a Workeasy360 sign-in the
+organization is the ID token's `organization_id`, and the user id is the token's `sub` when that is a
+UUID not already held by anyone (otherwise a generated one, remembered in `federated_identities`). One
+user id never belongs to both an email account and a Workeasy360 identity. Authorization is per project
+via `ProjectMember` roles (`OWNER`, `MANAGER`, `MEMBER`, `VIEWER`); every request is checked
 server-side.
 
 ## Deployment notes

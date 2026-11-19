@@ -72,6 +72,6 @@ the workspace.
 | `PROJECTMODULE_PLAN_VALID_UNTIL` | "Valid till …" line on the card; hidden when empty | empty |
 | `PROJECTMODULE_PLAN_MANAGE_URL` | Where **Manage Plan** goes | `https://workeasy360.com` |
 | `PROJECTMODULE_SUPPORT_EMAIL` | Contact shown on Helpdesk | `support@workeasy360.com` |
-| `PROJECTMODULE_AUTH_WORKEASY360_SIGN_IN_URL` | Where **Continue with WorkEasy360 Account** goes. Until set, the button explains that this sign-in is not set up yet. | empty |
+| `PROJECTMODULE_AUTH_WORKEASY360_SIGN_IN_URL` | Where **Continue with WorkEasy360 Account** goes while Sign in with Workeasy360 (`WORKEASY360_*`, [workeasy360-sso.md](../workeasy360-sso.md)) is not configured. Once it is, the button starts that sign-in and this setting is not used. Until either is set, the button explains that this sign-in is not set up yet. | empty |
 
 There is no billing system. The plan card shows what these settings say.

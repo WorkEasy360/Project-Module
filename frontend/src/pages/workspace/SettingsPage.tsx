@@ -1,8 +1,10 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import '../../styles/ops.css'
 import '../../styles/ops-sections.css'
 import { useIdentity } from '../../context/IdentityContext'
+import { useSession } from '../../context/SessionContext'
+import { useSignOutActions } from '../../hooks/useSignOutActions'
 import { useTheme } from '../../context/ThemeContext'
 import type { ThemePreference } from '../../context/themeStore'
 import { Icon, type IconName } from '../../components/common/Icon'
@@ -34,7 +36,11 @@ const THEME_OPTIONS: { value: ThemePreference; label: string; icon: IconName }[]
   { value: 'system', label: 'Same as my device', icon: 'monitor' },
 ]
 
-/** V3 Settings: Workspace & Access, Fields & Tags, Notifications, Integrations, Subscription & Usage. */
+/**
+ * V3 Settings: Workspace & Access, Fields & Tags, Notifications, Integrations, Subscription & Usage.
+ * Your profile follows how you signed in: an email account can change its photo, name and password
+ * here; a Workeasy360 sign-in is read-only, managed in Workeasy360.
+ */
 export function SettingsPage({ section }: { section: SettingsSection }) {
   const intro = INTRO[section]
   return (
@@ -202,6 +208,12 @@ function ProfilePhotoRow() {
 }
 
 function ProfileCard() {
+  const { identity } = useIdentity()
+  return identity?.provider === 'workeasy360' ? <Workeasy360ProfileCard /> : <EmailProfileCard />
+}
+
+/** An email account: its photo and name, which it can change here, its email and its password. */
+function EmailProfileCard() {
   const { identity, clearIdentity } = useIdentity()
   const [dialog, setDialog] = useState<'profile' | 'password' | null>(null)
   return (
@@ -233,6 +245,90 @@ function ProfileCard() {
       {dialog === 'profile' && <EditNameDialog onClose={() => setDialog(null)} />}
       {dialog === 'password' && <ChangePasswordDialog onClose={() => setDialog(null)} />}
     </Card>
+  )
+}
+
+/**
+ * A Workeasy360 sign-in: who Workeasy360 says the person is, read-only (the name, email, password and
+ * organization are managed in Workeasy360, and there is no email account here to hold a photo), and
+ * the two ways to sign out.
+ */
+function Workeasy360ProfileCard() {
+  const { user, organization } = useSession()
+  const { busy, error, workeasy360SignOut, signOut, signOutEverywhere } = useSignOutActions()
+  return (
+    <Card icon="user" title="Your profile">
+      <Row label="Name" hint="From your Workeasy360 account">
+        {user?.name ? <span>{user.name}</span> : <span className="ops-muted">Not shared</span>}
+      </Row>
+      <Row label="Email" hint="From your Workeasy360 account">
+        {user?.email ? <span>{user.email}</span> : <span className="ops-muted">Not shared</span>}
+      </Row>
+      <Row label="User ID" hint="Read-only">
+        <CopyValue label="user ID" value={user?.id ?? null} />
+      </Row>
+      <Row label="Organization ID" hint="Read-only">
+        <CopyValue label="organization ID" value={organization?.id ?? null} />
+      </Row>
+      <p className="ops-field-note">
+        You signed in to Easy Project with Workeasy360. Your name, email, password and organization come from
+        that sign-in and are changed in Workeasy360, not here; the server decides what you may do.
+      </p>
+      {error && (
+        <div className="banner banner-error" role="alert">
+          {error}
+        </div>
+      )}
+      <Row label="Sign out">
+        <button type="button" className="ops-link-btn danger" onClick={signOut} disabled={busy}>
+          <Icon name="logout" size={16} /> Sign out of Easy Project
+        </button>
+        {workeasy360SignOut && (
+          <button type="button" className="ops-link-btn danger" onClick={signOutEverywhere} disabled={busy}>
+            <Icon name="logout" size={16} /> Sign out of Easy Project and Workeasy360
+          </button>
+        )}
+      </Row>
+    </Card>
+  )
+}
+
+function CopyValue({ label, value }: { label: string; value: string | null }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+
+  useEffect(() => {
+    if (state === 'idle') return
+    const timer = window.setTimeout(() => setState('idle'), 2000)
+    return () => window.clearTimeout(timer)
+  }, [state])
+
+  if (!value) return <span className="ops-muted">Not set</span>
+
+  async function copy() {
+    try {
+      if (!navigator.clipboard) throw new Error('Clipboard unavailable')
+      await navigator.clipboard.writeText(value as string)
+      setState('copied')
+    } catch {
+      setState('failed')
+    }
+  }
+
+  return (
+    <span className="ops-set-copy">
+      <code className="ops-set-code">{value}</code>
+      <button type="button" className="ops-link-btn" onClick={copy} aria-label={`Copy ${label}`}>
+        {state === 'copied' ? (
+          <>
+            <Icon name="check" size={16} /> Copied
+          </>
+        ) : state === 'failed' ? (
+          'Copy failed'
+        ) : (
+          'Copy'
+        )}
+      </button>
+    </span>
   )
 }
 

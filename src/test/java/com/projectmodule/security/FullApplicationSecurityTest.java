@@ -1,0 +1,148 @@
+package com.projectmodule.security;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.projectmodule.security.backchannel.JdbcReceivedLogoutTokens;
+import com.projectmodule.security.backchannel.JdbcSignInRecords;
+import com.projectmodule.security.backchannel.ReceivedLogoutTokens;
+import com.projectmodule.security.backchannel.SignInRecords;
+import com.projectmodule.security.identity.FederatedIdentityStore;
+import com.projectmodule.security.identity.JpaFederatedIdentityStore;
+import java.util.UUID;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
+import com.jayway.jsonpath.JsonPath;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+
+/**
+ * The whole application (real controllers, real PostgreSQL): the security chain is active on
+ * {@code /api/v1/**}, the retired identity headers open nothing, the PostgreSQL identity store is the one
+ * wired, and email sign-in (main's account package) works through the same chain. The test profile sets no
+ * {@code WORKEASY360_*} settings, as main's production does not. Skipped unless {@code PROJECTMODULE_TEST_DB_URL}
+ * is set, like the other full-context tests.
+ */
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+@EnabledIfEnvironmentVariable(named = "PROJECTMODULE_TEST_DB_URL", matches = ".+")
+class FullApplicationSecurityTest {
+
+    @Autowired
+    private MockMvc mvc;
+
+    @Autowired
+    private ApplicationContext context;
+
+    @Test
+    @DisplayName("every real API route needs a session; the old identity headers open nothing")
+    void apiRequiresASession() throws Exception {
+        String user = UUID.randomUUID().toString();
+        String organization = UUID.randomUUID().toString();
+
+        for (String path : new String[] {"/api/v1/projects", "/api/v1/dashboard", "/api/v1/templates",
+                "/api/v1/projects/" + UUID.randomUUID() + "/tasks"}) {
+            mvc.perform(get(path).header("X-User-Id", user).header("X-Org-Id", organization))
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.type").value("https://errors.projectmodule/identity-missing"));
+        }
+        // A write with a "valid" CSRF-less request is refused before it can reach a controller.
+        mvc.perform(post("/api/v1/projects").contentType(MediaType.APPLICATION_JSON).content("{}")
+                        .header("X-User-Id", user).header("X-Org-Id", organization))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/auth/session")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("email sign-in end to end: register, use the bearer token for reads and writes (no CSRF), sign out")
+    void emailSignInEndToEnd() throws Exception {
+        String email = "merge-" + UUID.randomUUID() + "@example.com";
+        MvcResult registered = mvc.perform(post("/api/v1/auth/register").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"Ada\",\"email\":\"" + email
+                                + "\",\"password\":\"correct horse battery\",\"rememberMe\":false}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String token = JsonPath.read(registered.getResponse().getContentAsString(), "$.token");
+        String bearer = "Bearer " + token;
+
+        mvc.perform(get("/api/v1/auth/me").header(HttpHeaders.AUTHORIZATION, bearer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value(email));
+        mvc.perform(post("/api/v1/projects").header(HttpHeaders.AUTHORIZATION, bearer)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Merged\",\"priority\":\"MEDIUM\"}"))
+                .andExpect(status().isCreated());
+        mvc.perform(get("/api/v1/projects").header(HttpHeaders.AUTHORIZATION, bearer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].name").value("Merged"));
+        mvc.perform(post("/api/v1/auth/logout").header(HttpHeaders.AUTHORIZATION, bearer))
+                .andExpect(status().isNoContent());
+        mvc.perform(get("/api/v1/projects").header(HttpHeaders.AUTHORIZATION, bearer))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("the sign-in page's configuration is public and says Workeasy360 is off when it is not configured")
+    void signInConfiguration() throws Exception {
+        mvc.perform(get("/api/v1/auth/config"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.legacyHandover").isBoolean())
+                .andExpect(jsonPath("$.workeasy360.enabled").value(false))
+                .andExpect(jsonPath("$.workeasy360.signInMode").value("sso_optional"));
+        // Signing in with a wrong password is the account package's 401, not a CSRF refusal.
+        mvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"nobody@example.com\",\"password\":\"wrong password\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("health is public; the rest of the actuator and the API documents are not")
+    void publicSurface() throws Exception {
+        mvc.perform(get("/actuator/health")).andExpect(status().isOk());
+        mvc.perform(get("/actuator/info")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/v3/api-docs")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/swagger-ui.html")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("the PostgreSQL identity store is wired, and no default user or password exists")
+    void wiring() {
+        assertThat(context.getBean(FederatedIdentityStore.class)).isInstanceOf(JpaFederatedIdentityStore.class);
+        assertThat(context.getBeansOfType(UserDetailsService.class)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("back-channel logout is wired: the PostgreSQL ledger, and no session or CSRF token needed to be refused")
+    void backchannelLogout() throws Exception {
+        assertThat(context.getBean(ReceivedLogoutTokens.class)).isInstanceOf(JdbcReceivedLogoutTokens.class);
+        assertThat(context.getBean(SignInRecords.class)).as("the sign-in record every instance shares")
+                .isInstanceOf(JdbcSignInRecords.class);
+        mvc.perform(post("/api/auth/workeasy360/backchannel-logout")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .param("logout_token", "not-a-logout-token"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("invalid_request"));
+    }
+
+    @Test
+    @DisplayName("an unmapped path is still a 404 problem document, never the app HTML or a sign-in page")
+    void unmappedPathIsStillNotFound() throws Exception {
+        mvc.perform(get("/not-a-real-page"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.type").value("https://errors.projectmodule/not-found"));
+        mvc.perform(get("/login")).andExpect(status().isNotFound());
+        mvc.perform(get("/oauth2/authorization/workeasy360")).andExpect(status().isNotFound());
+    }
+}

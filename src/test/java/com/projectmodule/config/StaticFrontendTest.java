@@ -27,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.io.ClassPathResource;
@@ -47,6 +48,7 @@ import org.springframework.test.web.servlet.MockMvc;
  * <p>Skipped when the build ran with {@code -DskipFrontend=true}, rather than passing vacuously.
  */
 @WebMvcTest(controllers = DashboardController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @Import({ApiConfiguration.class, GlobalExceptionHandler.class})
 class StaticFrontendTest {
 

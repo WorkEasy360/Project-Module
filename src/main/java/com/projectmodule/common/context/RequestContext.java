@@ -8,8 +8,12 @@ import java.util.Optional;
 /**
  * The identity and tracing information attached to a unit of work.
  *
- * <p>By the time code sees this, the caller has been authenticated (see
- * {@code RequestContextFilter}). Nothing outside the {@code account} package handles credentials.
+ * <p>The identity is the request's verified credential, and nothing else: a Workeasy360 sign-in session
+ * (the user and organization Workeasy360 vouched for at sign-in) or an email sign-in's bearer token
+ * ({@code com.projectmodule.security}; credentials themselves are handled only by the {@code account}
+ * and {@code security} packages). Nothing else a request carries - a parameter, a body, an identity
+ * header - can change it, unless a deployment has explicitly said a trusted gateway sets the identity
+ * headers ({@link RequestContextHeaders}).
  *
  * <p>The same abstraction is used by the AI and automation paths, so every layer below sees
  * one uniform notion of "who is asking" regardless of how the work arrived.

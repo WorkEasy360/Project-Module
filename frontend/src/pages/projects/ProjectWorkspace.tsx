@@ -18,7 +18,7 @@ import { formatDate } from '../../utils/format'
 import { EditProjectDialog } from './EditProjectDialog'
 
 /**
- * Project shell. A compact header card (identity, status, dates, owner, Edit) sits above the V3
+ * Project shell. A compact header card (name, status, dates, owner, Edit) sits above the V3
  * Project Details tabs: Overview, Tasks (List / Board), Members and Activity. On phones the same
  * tabs become a bottom tab bar.
  */
