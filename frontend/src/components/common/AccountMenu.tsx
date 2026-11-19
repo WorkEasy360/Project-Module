@@ -4,20 +4,16 @@ import { displayName } from '../../context/sessionStore'
 import { useSignOutActions } from '../../hooks/useSignOutActions'
 import { Modal } from './Modal'
 import { Icon } from './Icon'
-
-function initials(name: string | null): string {
-  const text = (name ?? '').trim()
-  if (!text) return '?'
-  const parts = text.split(/\s+/)
-  const letters = parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : text.slice(0, 2)
-  return letters.toUpperCase()
-}
+import { Avatar } from './Avatar'
 
 function shortId(id: string): string {
   return id.length > 8 ? `${id.slice(0, 8)}…` : id
 }
 
-/** Header account control: avatar + name; opens a dialog with the account and the sign-out choices. */
+/**
+ * Header account control for a Workeasy360 sign-in, drawn like the email account's (IdentityWidget): avatar
+ * and name; opens a dialog with the account and the sign-out choices.
+ */
 export function AccountMenu() {
   const { user, organization } = useSession()
   const [open, setOpen] = useState(false)
@@ -32,14 +28,12 @@ export function AccountMenu() {
         title="Your account and sign out"
         aria-haspopup="dialog"
       >
-        <span className="identity-avatar" aria-hidden="true">
-          {initials(user?.name ?? user?.email ?? name)}
-        </span>
+        <Avatar userId={user?.id} name={(user?.name ?? user?.email ?? name ?? '').trim() || '?'} className="identity-avatar" />
         <span className="identity-text">
           <span className="identity-name">{name ?? 'Account'}</span>
           {organization && <span className="identity-sub">org {shortId(organization.id)}</span>}
         </span>
-        <Icon name="chevronDown" size={14} />
+        <Icon name="chevronDown" size={18} />
       </button>
       {open && <AccountDialog onClose={() => setOpen(false)} />}
     </>

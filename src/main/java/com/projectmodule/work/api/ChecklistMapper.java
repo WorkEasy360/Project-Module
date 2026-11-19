@@ -12,7 +12,6 @@ public class ChecklistMapper {
         return new ChecklistResponse(
                 checklist.getId(),
                 checklist.getTaskId(),
-                checklist.getSubtaskId().orElse(null),
                 checklist.getText(),
                 checklist.isChecked(),
                 checklist.isArchived(),

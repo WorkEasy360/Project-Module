@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The PostgreSQL-backed identity mapping: the {@code V19} migration, the entity mapping, the user-id rule
+ * The PostgreSQL-backed identity mapping: the {@code V22} migration, the entity mapping, the user-id rule
  * and the race between two first sign-ins. Runs without the usual per-test rollback because the store opens
  * its own transactions (a unique-constraint violation must not poison a surrounding one).
  *

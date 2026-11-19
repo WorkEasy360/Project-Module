@@ -64,6 +64,9 @@ class AuthControllerTest {
     @MockitoBean
     private com.projectmodule.account.application.LegacyHandoverService legacyHandoverService;
 
+    @MockitoBean
+    private com.projectmodule.account.application.AvatarService avatarService;
+
     @BeforeEach
     void setUp() {
         when(requestContext.correlationId()).thenReturn("corr-test");

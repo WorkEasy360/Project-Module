@@ -1,5 +1,5 @@
 /**
- * AI layer: AIRecommendation, AIAction and AIApproval.
+ * AI layer. The assistant (see {@code com.projectmodule.assistant}) is its only part today.
  *
  * <p><strong>Safety boundary.</strong> AI must never reach the database directly. Every AI
  * operation follows:

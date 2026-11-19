@@ -77,6 +77,6 @@ public class NotificationService {
         } else if (projectId != null) {
             link += "projects/" + projectId;
         }
-        return title + "\n\nOpen in WorkEasyProject: " + link + "\n";
+        return title + "\n\nOpen in WorkEasy360 Operations: " + link + "\n";
     }
 }

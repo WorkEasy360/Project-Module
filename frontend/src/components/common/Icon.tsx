@@ -58,8 +58,92 @@ export type IconName =
   | 'flag'
   | 'eye'
   | 'eyeOff'
+  | 'home'
+  | 'building'
+  | 'folder'
+  | 'play'
+  | 'pause'
+  | 'archive'
+  | 'checkCircle'
+  | 'headset'
+  | 'bolt'
+  | 'barChart'
+  | 'mail'
+  | 'lock'
+  | 'login'
+  | 'more'
+  | 'monitor'
+  | 'megaphone'
+  | 'crown'
+  | 'trendUp'
+  | 'userPlus'
+  | 'clipboard'
+  | 'playCircle'
 
 const PATHS: Record<IconName, React.ReactNode> = {
+  home: (
+    <><path d="M3.5 9.2L10 3.8l6.5 5.4" /><path d="M5.2 8v8.2h3.6v-4.5h2.4v4.5h3.6V8" /></>
+  ),
+  building: (
+    <><rect x="4" y="2.8" width="9" height="14.4" rx="1" /><path d="M13 7.5h3v9.7h-3M6.8 6h1.2M9.6 6h1.2M6.8 9h1.2M9.6 9h1.2M6.8 12h1.2M9.6 12h1.2M7.5 17.2v-2.6h2v2.6" /></>
+  ),
+  folder: (
+    <path d="M2.8 5.8a1.3 1.3 0 0 1 1.3-1.3h3.6l1.6 1.8h6.6a1.3 1.3 0 0 1 1.3 1.3v7.6a1.3 1.3 0 0 1-1.3 1.3H4.1a1.3 1.3 0 0 1-1.3-1.3z" />
+  ),
+  play: (
+    <path d="M6.5 4.2l9 5.8-9 5.8z" />
+  ),
+  pause: (
+    <><circle cx="10" cy="10" r="7.5" /><path d="M8.3 7v6M11.7 7v6" /></>
+  ),
+  archive: (
+    <><rect x="2.8" y="3.5" width="14.4" height="4" rx="1" /><path d="M4 7.5v7.7a1.3 1.3 0 0 0 1.3 1.3h9.4a1.3 1.3 0 0 0 1.3-1.3V7.5M8 10.5h4" /></>
+  ),
+  checkCircle: (
+    <><circle cx="10" cy="10" r="7.5" /><path d="M6.8 10.2l2.2 2.2 4.3-4.6" /></>
+  ),
+  headset: (
+    <><path d="M3.8 11.5V9.8a6.2 6.2 0 0 1 12.4 0v1.7" /><rect x="3" y="11" width="3.2" height="4.6" rx="1.2" /><rect x="13.8" y="11" width="3.2" height="4.6" rx="1.2" /><path d="M15.4 15.6c0 1.2-1.6 1.9-4 1.9" /></>
+  ),
+  bolt: (
+    <path d="M11.2 2.5L4.5 11.2h5l-1 6.3 6.8-8.8h-5z" />
+  ),
+  barChart: (
+    <path d="M4 16.5V11M8 16.5V6.5M12 16.5V9M16 16.5V3.5" />
+  ),
+  mail: (
+    <><rect x="2.8" y="4.5" width="14.4" height="11" rx="1.6" /><path d="M3.3 5.5l6.7 5.2 6.7-5.2" /></>
+  ),
+  lock: (
+    <><rect x="4" y="8.8" width="12" height="8.4" rx="1.6" /><path d="M6.8 8.8V6.4a3.2 3.2 0 0 1 6.4 0v2.4" /></>
+  ),
+  login: (
+    <><path d="M11.5 3.5h3.2a1.3 1.3 0 0 1 1.3 1.3v10.4a1.3 1.3 0 0 1-1.3 1.3h-3.2" /><path d="M3.5 10h8.5M9 6.8l3.2 3.2L9 13.2" /></>
+  ),
+  more: (
+    <><circle cx="4.5" cy="10" r="1.1" fill="currentColor" /><circle cx="10" cy="10" r="1.1" fill="currentColor" /><circle cx="15.5" cy="10" r="1.1" fill="currentColor" /></>
+  ),
+  monitor: (
+    <><rect x="2.8" y="3.5" width="14.4" height="10" rx="1.4" /><path d="M7.5 17h5M10 13.5V17" /></>
+  ),
+  megaphone: (
+    <><path d="M3.5 8.2v3.6a1 1 0 0 0 1 1h2l6.5 3.2V4L6.5 7.2h-2a1 1 0 0 0-1 1z" /><path d="M6.6 12.8l1 3.7h2l-.8-3M15.5 8.2a2.5 2.5 0 0 1 0 3.6" /></>
+  ),
+  crown: (
+    <path d="M3.5 7l3.4 2.8L10 4.8l3.1 5 3.4-2.8-1.4 8.4H4.9zM5 17h10" />
+  ),
+  trendUp: (
+    <path d="M10 16.5V4M5.5 8.5L10 4l4.5 4.5" />
+  ),
+  userPlus: (
+    <><circle cx="8" cy="7" r="3" /><path d="M2.8 16.5c.6-2.9 2.6-4.5 5.2-4.5s4.6 1.6 5.2 4.5M15 6.5v5M12.5 9h5" /></>
+  ),
+  clipboard: (
+    <><rect x="4.5" y="4" width="11" height="13.5" rx="1.6" /><path d="M7.5 4V3h5v1M7.5 9h5M7.5 12h5M7.5 15h3" /></>
+  ),
+  playCircle: (
+    <><circle cx="10" cy="10" r="7.5" /><path d="M8.5 7.2l4.4 2.8-4.4 2.8z" /></>
+  ),
   mic: (
     <>
       <rect x="7.5" y="2.5" width="5" height="9" rx="2.5" />

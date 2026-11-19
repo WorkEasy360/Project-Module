@@ -33,31 +33,6 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
     List<Object[]> searchVisibleToUser(@Param("organizationId") UUID organizationId, @Param("userId") UUID userId,
                                        @Param("term") String term, Pageable pageable);
 
-    /** For {@code docs/project/17-CALENDAR-SPEC.md} §5: active tasks with a real due date. */
-    List<Task> findByProjectIdAndDueDateIsNotNullAndArchivedAtIsNullOrderByDueDateAsc(UUID projectId);
-
-    /**
-     * For {@code docs/project/22-DELAY-DETECTION-SPEC.md} §5: active, not-yet-completed tasks
-     * whose due date has already passed.
-     */
-    List<Task> findByProjectIdAndDueDateBeforeAndStatusNotAndArchivedAtIsNullOrderByDueDateAsc(
-            UUID projectId, LocalDate today, TaskStatus excludedStatus);
-
-    /**
-     * Active tasks in the given project whose {@code name} or {@code description} contains
-     * {@code term}, case-insensitively. Written as {@code @Query} rather than a derived method
-     * name — a shared-AND/OR-across-two-fields condition would otherwise require repeating
-     * {@code projectId} and {@code term} as separate parameters on each side of the {@code Or},
-     * the same reasoning {@code ProjectRepository.countActiveByStatus} already established for
-     * this codebase's one other {@code @Query} usage. Unpaginated: per
-     * {@code docs/project/13-SEARCH-SPEC.md} §4, merging and pagination happen in the
-     * application layer across all four searched entity types, not per repository.
-     */
-    @Query("SELECT t FROM Task t WHERE t.projectId = :projectId AND t.archivedAt IS NULL "
-            + "AND (LOWER(t.name) LIKE LOWER(CONCAT('%', :term, '%')) "
-            + "OR LOWER(t.description) LIKE LOWER(CONCAT('%', :term, '%')))")
-    List<Task> search(@Param("projectId") UUID projectId, @Param("term") String term);
-
     /**
      * Tasks in the given project matching every supplied filter (AND), per
      * {@code docs/project/14-FILTERS-SPEC.md}. A {@code null} filter parameter is not applied —
@@ -77,8 +52,7 @@ public interface TaskRepository extends JpaRepository<Task, UUID> {
      * {@code could not determine data type of parameter} once Hibernate binds a non-null value —
      * the {@code CAST} gives PostgreSQL an explicit type for that placeholder. {@code status} and
      * {@code assigneeId} do not need this: their enum/UUID bindings already carry an explicit
-     * JDBC type from Hibernate, confirmed by the equivalent non-null-value tests for Risk/Issue
-     * priority and Decision's {@code decidedBy} (also a UUID) passing without it.
+     * JDBC type from Hibernate.
      *
      * <p>Takes a trailing {@link Sort} rather than a hardcoded {@code ORDER BY}, per
      * {@code docs/project/15-LIST-SPEC.md} — Spring Data JPA applies a trailing {@code Sort}

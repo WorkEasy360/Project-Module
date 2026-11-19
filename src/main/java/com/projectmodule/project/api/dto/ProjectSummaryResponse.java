@@ -3,6 +3,8 @@ package com.projectmodule.project.api.dto;
 import com.projectmodule.project.domain.ProjectPriority;
 import com.projectmodule.project.domain.ProjectStatus;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -17,5 +19,15 @@ public record ProjectSummaryResponse(
         ProjectStatus status,
         ProjectPriority priority,
         UUID ownerId,
-        Instant updatedAt) {
+        Instant updatedAt,
+        String description,
+        LocalDate startDate,
+        LocalDate targetEndDate,
+        String customerContact,
+        List<String> tags,
+        boolean archived,
+        Instant archivedAt,
+        Instant createdAt,
+        long taskCount,
+        long completedTaskCount) {
 }

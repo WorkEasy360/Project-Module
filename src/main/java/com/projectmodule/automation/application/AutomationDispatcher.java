@@ -6,7 +6,6 @@ import com.projectmodule.automation.domain.ProjectAutomation;
 import com.projectmodule.automation.infrastructure.AutomationRunRepository;
 import com.projectmodule.automation.infrastructure.ProjectAutomationRepository;
 import com.projectmodule.common.exception.ResourceNotFoundException;
-import com.projectmodule.integration.port.ChatPort;
 import com.projectmodule.integration.port.NotificationPort;
 import com.projectmodule.project.domain.Project;
 import com.projectmodule.project.infrastructure.ProjectRepository;
@@ -48,18 +47,15 @@ public class AutomationDispatcher {
     private final ProjectAutomationRepository projectAutomationRepository;
     private final AutomationRunRepository automationRunRepository;
     private final NotificationPort notificationPort;
-    private final ChatPort chatPort;
     private final ProjectRepository projectRepository;
 
     public AutomationDispatcher(ProjectAutomationRepository projectAutomationRepository,
                                 AutomationRunRepository automationRunRepository,
                                 NotificationPort notificationPort,
-                                ChatPort chatPort,
                                 ProjectRepository projectRepository) {
         this.projectAutomationRepository = projectAutomationRepository;
         this.automationRunRepository = automationRunRepository;
         this.notificationPort = notificationPort;
-        this.chatPort = chatPort;
         this.projectRepository = projectRepository;
     }
 
@@ -98,11 +94,6 @@ public class AutomationDispatcher {
                     project.getOrganizationId(),
                     automation.getActionRecipientId().orElseThrow(),
                     automation.getName(),
-                    automation.getActionMessage());
-        } else if (automation.getActionType() == AutomationActionType.CHAT_MESSAGE) {
-            chatPort.postMessage(
-                    project.getOrganizationId(),
-                    automation.getActionChannelReference().orElseThrow(),
                     automation.getActionMessage());
         }
     }

@@ -72,7 +72,7 @@ public class PasswordApplicationService {
     public void requestReset(String email) {
         accountRepository.findByEmail(UserAccount.normalizeEmail(email)).ifPresent(account -> {
             String token = createResetToken(account);
-            emailPort.send(account.getEmail(), "Reset your WorkEasyProject password",
+            emailPort.send(account.getEmail(), "Reset your WorkEasy360 Operations password",
                     "Use this link to set a new password. It works once and expires in "
                             + RESET_LIFETIME.toHours() + " hours.\n\n" + appBaseUrl + "/#/reset/" + token
                             + "\n\nIf you did not ask for this, you can ignore this email.\n");

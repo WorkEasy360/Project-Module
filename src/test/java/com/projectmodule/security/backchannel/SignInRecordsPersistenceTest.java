@@ -33,7 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The PostgreSQL sign-in record that every instance shares ({@code V21}): what a logout token ends, the memory
+ * The PostgreSQL sign-in record that every instance shares ({@code V24}): what a logout token ends, the memory
  * of ended {@code sid}s, the clean-up of abandoned rows, that ending joins the {@code jti} transaction (so a
  * failure records nothing), and that a sign-in and a logout for the same {@code sid} on two instances at once
  * are serialised. Runs without the usual per-test rollback because the record opens its own transactions.

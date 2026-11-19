@@ -7,9 +7,10 @@ import { SidebarProvider } from '../../context/SidebarContext'
 import { useIdentity } from '../../context/IdentityContext'
 import { useSession } from '../../context/SessionContext'
 import { PeopleProvider } from '../../context/PeopleContext'
-import { TimerProvider } from '../../context/TimerContext'
 import { AssistantPanel } from '../assistant/AssistantPanel'
 import { LoadingState } from '../common/LoadingState'
+import '../../styles/ops.css'
+import { WorkspaceSettingsProvider } from '../../context/WorkspaceSettingsContext'
 
 /**
  * Application shell and sign-in guard. There is nothing useful to render without a session, since every
@@ -53,29 +54,29 @@ export function AppLayout() {
   const notice = emailSession ? null : accessProblem
 
   return (
+    <WorkspaceSettingsProvider>
     <PeopleProvider>
-      <TimerProvider>
-        <SidebarProvider>
-          <div className="app-shell">
-            <Sidebar />
-            <div className="app-main">
-              <Header />
-              {notice && (
-                <div className="banner banner-warning app-access-banner" role="status">
-                  <span>{notice.message}</span>
-                  <button type="button" className="btn btn-sm" onClick={dismissAccessProblem}>
-                    Dismiss
-                  </button>
-                </div>
-              )}
-              <main className="app-content">
-                <Outlet />
-              </main>
-            </div>
+      <SidebarProvider>
+        <div className="app-shell">
+          <Sidebar />
+          <div className="app-main">
+            <Header />
+            {notice && (
+              <div className="banner banner-warning app-access-banner" role="status">
+                <span>{notice.message}</span>
+                <button type="button" className="btn btn-sm" onClick={dismissAccessProblem}>
+                  Dismiss
+                </button>
+              </div>
+            )}
+            <main className="app-content">
+              <Outlet />
+            </main>
           </div>
-          <AssistantPanel />
-        </SidebarProvider>
-      </TimerProvider>
+        </div>
+        <AssistantPanel />
+      </SidebarProvider>
     </PeopleProvider>
+    </WorkspaceSettingsProvider>
   )
 }

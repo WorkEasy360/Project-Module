@@ -11,7 +11,6 @@ import com.projectmodule.work.domain.event.TaskBlocked;
 import com.projectmodule.work.domain.event.TaskCompleted;
 import com.projectmodule.work.domain.event.TaskCreated;
 import com.projectmodule.work.domain.event.TaskDomainEvent;
-import com.projectmodule.work.domain.event.TaskOverdue;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
@@ -155,20 +154,6 @@ class TaskTest {
         }
 
         @Test
-        @DisplayName("marking overdue raises exactly one TaskOverdue event")
-        void markOverdueRaisesEvent() {
-            Task task = newTask();
-            task.pullDomainEvents();
-
-            task.markOverdue();
-
-            assertThat(task.getStatus()).isEqualTo(TaskStatus.OVERDUE);
-            List<TaskDomainEvent> events = task.pullDomainEvents();
-            assertThat(events).hasSize(1);
-            assertThat(events.get(0)).isInstanceOf(TaskOverdue.class);
-        }
-
-        @Test
         @DisplayName("refuses to complete twice")
         void refusesDoubleComplete() {
             Task task = newTask();
@@ -184,15 +169,6 @@ class TaskTest {
             task.complete();
 
             assertThatThrownBy(task::markBlocked).isInstanceOf(BusinessRuleViolationException.class);
-        }
-
-        @Test
-        @DisplayName("refuses to mark a completed task overdue")
-        void refusesOverdueAfterCompleted() {
-            Task task = newTask();
-            task.complete();
-
-            assertThatThrownBy(task::markOverdue).isInstanceOf(BusinessRuleViolationException.class);
         }
 
         @Test

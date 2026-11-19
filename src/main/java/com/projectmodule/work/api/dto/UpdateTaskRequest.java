@@ -1,7 +1,6 @@
 package com.projectmodule.work.api.dto;
 
 import com.projectmodule.project.domain.ProjectPriority;
-import com.projectmodule.work.domain.TaskRecurrence;
 import com.projectmodule.work.domain.TaskStatus;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -39,12 +38,10 @@ public record UpdateTaskRequest(
 
         Integer estimateMinutes,
 
-        TaskRecurrence recurrence,
-
         List<String> tags) {
 
     public UpdateTaskRequest(String name, String description, LocalDate dueDate, UUID assigneeId,
                              TaskStatus status, Long version) {
-        this(name, description, dueDate, assigneeId, status, version, null, null, null, null, null);
+        this(name, description, dueDate, assigneeId, status, version, null, null, null, null);
     }
 }

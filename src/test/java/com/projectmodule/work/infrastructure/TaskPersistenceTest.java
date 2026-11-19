@@ -9,7 +9,6 @@ import com.projectmodule.project.domain.Project;
 import com.projectmodule.project.domain.ProjectPriority;
 import com.projectmodule.project.infrastructure.ProjectRepository;
 import com.projectmodule.work.domain.Checklist;
-import com.projectmodule.work.domain.Subtask;
 import com.projectmodule.work.domain.Task;
 import com.projectmodule.work.domain.TaskStatus;
 import java.time.LocalDate;
@@ -28,7 +27,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Repository tests for Task, Subtask and Checklist, run against a real PostgreSQL 17 instance —
+ * Repository tests for Task and Checklist, run against a real PostgreSQL 17 instance —
  * the same conventions {@code ProjectPersistenceTest} and {@code WorkPersistenceTest} already
  * establish. Starting this context proves the entity mappings match the {@code V3} migration.
  *
@@ -48,9 +47,6 @@ class TaskPersistenceTest {
 
     @Autowired
     private TaskRepository taskRepository;
-
-    @Autowired
-    private SubtaskRepository subtaskRepository;
 
     @Autowired
     private ChecklistRepository checklistRepository;
@@ -140,62 +136,14 @@ class TaskPersistenceTest {
     }
 
     @Nested
-    class SubtaskPersistence {
-
-        @Test
-        @DisplayName("round-trips a subtask, including its completed flag")
-        void roundTripsSubtask() {
-            Project project = persistedProject("Apollo");
-            Task task = taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            Subtask subtask = Subtask.create(task.getId(), "Write unit tests");
-            subtask.complete();
-            UUID id = subtask.getId();
-
-            subtaskRepository.saveAndFlush(subtask);
-            entityManager.clear();
-
-            Subtask loaded = subtaskRepository.findById(id).orElseThrow();
-            assertThat(loaded.getName()).isEqualTo("Write unit tests");
-            assertThat(loaded.getTaskId()).isEqualTo(task.getId());
-            assertThat(loaded.isCompleted()).isTrue();
-        }
-
-        @Test
-        @DisplayName("cannot reference a task that does not exist")
-        void enforcesTaskForeignKey() {
-            Subtask subtask = Subtask.create(UUID.randomUUID(), "Orphan");
-
-            assertThatThrownBy(() -> subtaskRepository.saveAndFlush(subtask))
-                    .isInstanceOf(DataIntegrityViolationException.class);
-        }
-
-        @Test
-        @DisplayName("lists a task's active subtasks, excluding archived ones")
-        void listsActiveSubtasks() {
-            Project project = persistedProject("Apollo");
-            Task task = taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            subtaskRepository.saveAndFlush(Subtask.create(task.getId(), "Write unit tests"));
-            Subtask archived = subtaskRepository.saveAndFlush(Subtask.create(task.getId(), "Legacy"));
-            archived.archive(owner);
-            subtaskRepository.saveAndFlush(archived);
-            entityManager.clear();
-
-            assertThat(subtaskRepository.findByTaskIdAndArchivedAtIsNullOrderByCreatedAtAsc(task.getId()))
-                    .extracting(Subtask::getName)
-                    .containsExactly("Write unit tests");
-        }
-    }
-
-    @Nested
     class ChecklistPersistence {
 
         @Test
-        @DisplayName("round-trips a checklist line, optionally scoped to a subtask")
+        @DisplayName("round-trips a checklist line")
         void roundTripsChecklist() {
             Project project = persistedProject("Apollo");
             Task task = taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            Subtask subtask = subtaskRepository.saveAndFlush(Subtask.create(task.getId(), "Write unit tests"));
-            Checklist checklist = Checklist.create(task.getId(), subtask.getId(), "Add password validation");
+            Checklist checklist = Checklist.create(task.getId(), "Add password validation");
             UUID id = checklist.getId();
 
             checklistRepository.saveAndFlush(checklist);
@@ -203,127 +151,16 @@ class TaskPersistenceTest {
 
             Checklist loaded = checklistRepository.findById(id).orElseThrow();
             assertThat(loaded.getText()).isEqualTo("Add password validation");
-            assertThat(loaded.getSubtaskId()).contains(subtask.getId());
-        }
-
-        @Test
-        @DisplayName("a checklist line may be persisted with no subtask at all")
-        void persistsWithoutSubtask() {
-            Project project = persistedProject("Apollo");
-            Task task = taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            Checklist checklist = Checklist.create(task.getId(), null, "No subtask");
-
-            checklistRepository.saveAndFlush(checklist);
-            entityManager.clear();
-
-            assertThat(checklistRepository.findById(checklist.getId()).orElseThrow().getSubtaskId())
-                    .isEmpty();
-        }
-
-        @Test
-        @DisplayName("removing a subtask clears subtask_id on its checklist lines rather than blocking or cascading")
-        void subtaskRemovalSetsNullOnChecklists() {
-            Project project = persistedProject("Apollo");
-            Task task = taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            Subtask subtask = subtaskRepository.saveAndFlush(Subtask.create(task.getId(), "Write unit tests"));
-            Checklist checklist = checklistRepository.saveAndFlush(
-                    Checklist.create(task.getId(), subtask.getId(), "Add password validation"));
-
-            entityManager.getEntityManager()
-                    .createNativeQuery("DELETE FROM subtasks WHERE id = :id")
-                    .setParameter("id", subtask.getId())
-                    .executeUpdate();
-            entityManager.flush();
-            entityManager.clear();
-
-            assertThat(checklistRepository.findById(checklist.getId()).orElseThrow().getSubtaskId())
-                    .isEmpty();
+            assertThat(loaded.getTaskId()).isEqualTo(task.getId());
         }
 
         @Test
         @DisplayName("cannot reference a task that does not exist")
         void enforcesTaskForeignKey() {
-            Checklist checklist = Checklist.create(UUID.randomUUID(), null, "Orphan");
+            Checklist checklist = Checklist.create(UUID.randomUUID(), "Orphan");
 
             assertThatThrownBy(() -> checklistRepository.saveAndFlush(checklist))
                     .isInstanceOf(DataIntegrityViolationException.class);
-        }
-    }
-
-    /**
-     * Coverage for {@code TaskRepository.search}, per {@code docs/project/13-SEARCH-SPEC.md}.
-     * The cross-entity-type merge/sort/pagination behavior is covered by
-     * {@code SearchApplicationServiceTest} (Mockito); this only proves the query itself against
-     * real PostgreSQL.
-     */
-    @Nested
-    class Search {
-
-        @Test
-        @DisplayName("matches case-insensitively")
-        void matchesCaseInsensitively() {
-            Project project = persistedProject("Apollo");
-            taskRepository.saveAndFlush(Task.create(project.getId(), "Implement Login", null, null));
-            entityManager.clear();
-
-            assertThat(taskRepository.search(project.getId(), "LOGIN"))
-                    .extracting(Task::getName)
-                    .containsExactly("Implement Login");
-        }
-
-        @Test
-        @DisplayName("matches a partial substring, not only a whole-word match")
-        void matchesPartialSubstring() {
-            Project project = persistedProject("Apollo");
-            taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            entityManager.clear();
-
-            assertThat(taskRepository.search(project.getId(), "ogi")).hasSize(1);
-        }
-
-        @Test
-        @DisplayName("matches on name")
-        void matchesOnName() {
-            Project project = persistedProject("Apollo");
-            taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            entityManager.clear();
-
-            assertThat(taskRepository.search(project.getId(), "login")).hasSize(1);
-        }
-
-        @Test
-        @DisplayName("matches on description")
-        void matchesOnDescription() {
-            Project project = persistedProject("Apollo");
-            Task task = Task.create(project.getId(), "Unrelated name", null, null);
-            task.describe("Add support for the OAuth login flow");
-            taskRepository.saveAndFlush(task);
-            entityManager.clear();
-
-            assertThat(taskRepository.search(project.getId(), "login")).hasSize(1);
-        }
-
-        @Test
-        @DisplayName("excludes archived tasks")
-        void excludesArchivedTasks() {
-            Project project = persistedProject("Apollo");
-            Task task = taskRepository.saveAndFlush(Task.create(project.getId(), "Implement login", null, null));
-            task.archive(owner);
-            taskRepository.saveAndFlush(task);
-            entityManager.clear();
-
-            assertThat(taskRepository.search(project.getId(), "login")).isEmpty();
-        }
-
-        @Test
-        @DisplayName("excludes matches belonging to a different project")
-        void excludesOtherProjects() {
-            Project projectA = persistedProject("Apollo");
-            Project projectB = persistedProject("Artemis");
-            taskRepository.saveAndFlush(Task.create(projectB.getId(), "Implement login", null, null));
-            entityManager.clear();
-
-            assertThat(taskRepository.search(projectA.getId(), "login")).isEmpty();
         }
     }
 
@@ -414,44 +251,9 @@ class TaskPersistenceTest {
         }
     }
 
-    /**
-     * Repository-level coverage for the new query methods
-     * {@code docs/project/17-CALENDAR-SPEC.md} and {@code docs/project/22-DELAY-DETECTION-SPEC.md}
-     * add, against real PostgreSQL.
-     */
+    /** Repository-level coverage for the status counts reports use, against real PostgreSQL. */
     @Nested
-    class CalendarAndDelayQueries {
-
-        @Test
-        @DisplayName("calendar query excludes tasks with no dueDate, orders by dueDate")
-        void calendarQueryExcludesUndatedTasks() {
-            Project project = persistedProject("Apollo");
-            taskRepository.saveAndFlush(Task.create(project.getId(), "Dated", LocalDate.of(2026, 3, 1), null));
-            taskRepository.saveAndFlush(Task.create(project.getId(), "Undated", null, null));
-            entityManager.clear();
-
-            assertThat(taskRepository.findByProjectIdAndDueDateIsNotNullAndArchivedAtIsNullOrderByDueDateAsc(
-                            project.getId()))
-                    .extracting(Task::getName)
-                    .containsExactly("Dated");
-        }
-
-        @Test
-        @DisplayName("delay query excludes completed tasks")
-        void delayQueryExcludesCompleted() {
-            Project project = persistedProject("Apollo");
-            Task overdue = taskRepository.saveAndFlush(
-                    Task.create(project.getId(), "Overdue", LocalDate.of(2020, 1, 1), null));
-            Task completed = Task.create(project.getId(), "Completed but overdue", LocalDate.of(2020, 1, 1), null);
-            completed.complete();
-            taskRepository.saveAndFlush(completed);
-            entityManager.clear();
-
-            assertThat(taskRepository.findByProjectIdAndDueDateBeforeAndStatusNotAndArchivedAtIsNullOrderByDueDateAsc(
-                            project.getId(), LocalDate.now(), TaskStatus.COMPLETED))
-                    .extracting(Task::getName)
-                    .containsExactly("Overdue");
-        }
+    class StatusCounts {
 
         @Test
         @DisplayName("countActiveByStatus groups active tasks by status, excluding archived")

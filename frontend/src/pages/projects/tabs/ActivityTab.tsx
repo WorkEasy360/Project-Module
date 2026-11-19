@@ -7,7 +7,8 @@ import { Pagination } from '../../../components/common/Pagination'
 import { usePeople } from '../../../context/PeopleContext'
 import { useProjectWorkspace } from '../../../context/ProjectWorkspaceContext'
 import { useAsyncData } from '../../../hooks/useAsyncData'
-import { formatDateTime, initials } from '../../../utils/format'
+import { formatDateTime } from '../../../utils/format'
+import { Avatar } from '../../../components/common/Avatar'
 
 /** Who did what on this project, newest first. */
 export function ActivityTab() {
@@ -29,9 +30,7 @@ export function ActivityTab() {
           const who = entry.actorId ? nameOf(entry.actorId) : 'System'
           return (
             <li key={entry.id} className="activity-row">
-              <span className="task-avatar" aria-hidden="true">
-                {initials(who)}
-              </span>
+              <Avatar userId={entry.actorId} name={who} className="task-avatar" />
               <div>
                 <p>
                   <strong>{who}</strong> <span className="activity-summary">{entry.summary}</span>

@@ -188,7 +188,7 @@ describe('SignInPage with Workeasy360 next to the email sign-in (sso_optional)',
   it('offers both: the email form and "Continue with Workeasy360" as a plain link carrying next', () => {
     setUnauthenticated()
     renderPage({ pathname: '/sign-in', state: { from: '/projects/123/tasks' } })
-    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email Address')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password')
     expect(screen.getByRole('link', { name: /continue with workeasy360/i })).toHaveAttribute(
       'href',
@@ -209,13 +209,13 @@ describe('SignInPage with Workeasy360 next to the email sign-in (sso_optional)',
     setUnauthenticated()
     renderPage('/sign-in?sso_error=no_seat')
     expect(screen.getByRole('alert')).toHaveTextContent(SSO_ERROR_MESSAGES.no_seat)
-    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email Address')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /continue with workeasy360/i })).toBeInTheDocument()
   })
 
   it('shows a loading state instead of the link while the Workeasy360 session is being checked', () => {
     renderPage()
-    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email Address')).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent(/checking your sign-in/i)
     expect(screen.queryByRole('link', { name: /continue with workeasy360/i })).not.toBeInTheDocument()
   })
@@ -234,6 +234,24 @@ describe('SignInPage with Workeasy360 next to the email sign-in (sso_optional)',
     expect(screen.getByLabelText('New password')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /continue with workeasy360/i })).not.toBeInTheDocument()
     unmount()
+  })
+
+  it('offers Workeasy360 on the registration form (#/sign-up) too', () => {
+    setUnauthenticated()
+    render(
+      <MemoryRouter initialEntries={['/sign-up']}>
+        <SessionProvider autoLoad={false}>
+          <Routes>
+            <Route path="/sign-up" element={<SignInPage initialMode="register" />} />
+          </Routes>
+        </SessionProvider>
+      </MemoryRouter>,
+    )
+    expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /continue with workeasy360/i })).toHaveAttribute(
+      'href',
+      '/api/auth/workeasy360/start?next=%2F',
+    )
   })
 
   it('a Workeasy360 session goes straight into the app; with a failed launcher sign-in it explains instead', () => {
@@ -257,7 +275,7 @@ describe('SignInPage without Workeasy360 sign-in', () => {
     setSignInModeForTest('off')
     setUnauthenticated()
     renderPage()
-    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email Address')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /workeasy360/i })).not.toBeInTheDocument()
   })
 
@@ -267,7 +285,7 @@ describe('SignInPage without Workeasy360 sign-in', () => {
     ) as unknown as typeof fetch
     setUnauthenticated()
     renderPage()
-    expect(await screen.findByLabelText('Email')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Email Address')).toBeInTheDocument()
     await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalled())
     expect(screen.queryByRole('link', { name: /workeasy360/i })).not.toBeInTheDocument()
     globalThis.fetch = originalFetch

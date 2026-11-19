@@ -31,7 +31,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * The PostgreSQL-backed ledger of accepted logout tokens: the {@code V20} migration, once-only acceptance,
+ * The PostgreSQL-backed ledger of accepted logout tokens: the {@code V23} migration, once-only acceptance,
  * nothing recorded when ending the sessions fails, expiry, and two deliveries of one token at once. Runs
  * without the usual per-test rollback because the ledger opens its own transactions.
  *

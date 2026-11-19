@@ -46,7 +46,7 @@ public class ProjectAutomationController {
             @PathVariable UUID projectId, @Valid @RequestBody CreateAutomationRequest request) {
         ProjectAutomation created = projectAutomationApplicationService.createAutomation(requestContext, projectId,
                 request.name(), request.description(), request.triggerEvent(), request.actionType(),
-                request.actionRecipientId(), request.actionChannelReference(), request.actionMessage());
+                request.actionRecipientId(), request.actionMessage());
         AutomationResponse response = projectAutomationMapper.toResponse(created);
 
         URI location = ServletUriComponentsBuilder.fromCurrentContextPath()

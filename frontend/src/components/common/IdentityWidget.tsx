@@ -1,8 +1,8 @@
 import { useIdentity } from '../../context/IdentityContext'
 import { Modal } from './Modal'
 import { Icon } from './Icon'
-import { initials } from '../../utils/format'
 import { usePeople } from '../../context/PeopleContext'
+import { Avatar } from './Avatar'
 
 /** Header account control: avatar, name and email; opens a dialog with the account and Sign out. */
 export function IdentityWidget() {
@@ -15,14 +15,12 @@ export function IdentityWidget() {
   return (
     <>
       <button type="button" className="identity-trigger configured" onClick={openPrompt} title="Your account">
-        <span className="identity-avatar" aria-hidden="true">
-          {initials(name)}
-        </span>
+        <Avatar userId={identity.userId} name={name} className="identity-avatar" />
         <span className="identity-text">
           <span className="identity-name">{name}</span>
           <span className="identity-sub">{isAdmin ? 'Admin' : 'Member'}</span>
         </span>
-        <Icon name="chevronDown" size={14} />
+        <Icon name="chevronDown" size={18} />
       </button>
       {isPromptOpen && (
         <Modal title="Your account" onClose={closePrompt}>

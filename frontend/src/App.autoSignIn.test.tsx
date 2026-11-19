@@ -65,7 +65,7 @@ describe('App: opening a route with no Easy Project session, where Workeasy360 i
     expect(replaceTo).toHaveBeenCalledTimes(1)
     expect(replaceTo).toHaveBeenCalledWith(START + encodeURIComponent(next))
     expect(navigateTo).not.toHaveBeenCalled()
-    expect(screen.queryByText('Welcome back')).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Operations Login' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /continue with workeasy360/i })).not.toBeInTheDocument()
     expect(document.querySelectorAll('h1')).toHaveLength(1)
   })
@@ -112,7 +112,7 @@ describe('App: opening a route with no Easy Project session, where Workeasy360 i
     document.cookie = 'ep_signed_out=1; path=/'
     openAt('')
 
-    expect(await screen.findByText('Welcome back')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Operations Login' })).toBeInTheDocument()
     expect(replaceTo).not.toHaveBeenCalled()
     expect(navigateTo).not.toHaveBeenCalled()
   })
@@ -163,7 +163,7 @@ describe('App: opening a route with no session, where the email sign-in is on (s
       'href',
       '/api/auth/workeasy360/start?next=' + encodeURIComponent('/projects/42/tasks'),
     )
-    expect(screen.getByLabelText('Email')).toBeInTheDocument()
+    expect(screen.getByLabelText('Email Address')).toBeInTheDocument()
     expect(replaceTo).not.toHaveBeenCalled()
     expect(navigateTo).not.toHaveBeenCalled()
   })
@@ -172,7 +172,7 @@ describe('App: opening a route with no session, where the email sign-in is on (s
     server({ googleClientId: '', emailEnabled: true, workeasy360: { enabled: false, signInMode: 'sso_optional' } })
     openAt('#/dashboard')
 
-    expect(await screen.findByLabelText('Email')).toBeInTheDocument()
+    expect(await screen.findByLabelText('Email Address')).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /workeasy360/i })).not.toBeInTheDocument()
     expect(replaceTo).not.toHaveBeenCalled()
   })
@@ -183,7 +183,7 @@ describe('App: opening a route with no session, where the email sign-in is on (s
     openAt('#/settings')
 
     // At once: no loading state, no sign-in page (this fake server then refuses the token, which is another test's matter).
-    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Workspace & Access' })).toBeInTheDocument()
     expect(screen.queryByText('Checking your sign-in…')).not.toBeInTheDocument()
     expect(replaceTo).not.toHaveBeenCalled()
     setIdentity(null)

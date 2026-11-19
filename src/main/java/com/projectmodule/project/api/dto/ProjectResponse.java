@@ -4,6 +4,7 @@ import com.projectmodule.project.domain.ProjectPriority;
 import com.projectmodule.project.domain.ProjectStatus;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -27,5 +28,7 @@ public record ProjectResponse(
         UUID archivedBy,
         Instant createdAt,
         Instant updatedAt,
-        long version) {
+        long version,
+        String customerContact,
+        List<String> tags) {
 }

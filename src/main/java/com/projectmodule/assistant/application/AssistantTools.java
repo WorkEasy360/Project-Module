@@ -20,21 +20,17 @@ import com.projectmodule.project.api.dto.AddMemberRequest;
 import com.projectmodule.project.api.dto.CreateProjectRequest;
 import com.projectmodule.project.domain.ProjectPriority;
 import com.projectmodule.project.domain.ProjectRole;
-import com.projectmodule.timetracking.application.TimeTrackingApplicationService;
-import com.projectmodule.timetracking.domain.TimeEntry;
 import com.projectmodule.work.api.dto.CreateCommentRequest;
 import com.projectmodule.work.api.dto.CreateTaskRequest;
 import com.projectmodule.work.api.dto.UpdateTaskRequest;
 import com.projectmodule.work.application.GlobalSearchApplicationService;
 import com.projectmodule.work.application.ProjectCommentApplicationService;
-import com.projectmodule.work.application.ProjectHealthApplicationService;
 import com.projectmodule.work.application.ReportsApplicationService;
 import com.projectmodule.work.application.TaskApplicationService;
 import com.projectmodule.work.domain.ProjectComment;
 import com.projectmodule.work.domain.Task;
 import com.projectmodule.work.domain.TaskSortField;
 import com.projectmodule.work.domain.TaskStatus;
-import com.projectmodule.work.domain.TaskRecurrence;
 import com.projectmodule.common.api.SortDirection;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -64,11 +60,10 @@ import org.springframework.stereotype.Component;
 public class AssistantTools {
 
     static final Set<String> WRITE_TOOLS =
-            Set.of("create_task", "update_task", "add_comment", "log_time", "create_project", "add_project_member");
+            Set.of("create_task", "update_task", "add_comment", "create_project", "add_project_member");
 
     private static final int LIST_LIMIT = 50;
     private static final List<String> STATUSES = Arrays.stream(TaskStatus.values()).map(Enum::name).toList();
-    private static final List<String> RECURRENCES = Arrays.stream(TaskRecurrence.values()).map(Enum::name).toList();
     private static final List<String> PRIORITIES = Arrays.stream(ProjectPriority.values()).map(Enum::name).toList();
     /** OWNER is set when a project is created and cannot be given to anyone else here. */
     private static final List<String> ADDABLE_ROLES = List.of("MANAGER", "MEMBER", "VIEWER");
@@ -79,36 +74,34 @@ public class AssistantTools {
     static {
         PAGES.put("home", "/dashboard");
         PAGES.put("projects", "/projects");
+        PAGES.put("archived_projects", "/projects/archived");
         PAGES.put("my_tasks", "/tasks");
-        PAGES.put("calendar", "/calendar");
-        PAGES.put("team", "/team");
-        PAGES.put("timesheet", "/timesheet");
-        PAGES.put("reports", "/reports");
-        PAGES.put("templates", "/templates");
-        PAGES.put("automations", "/automations");
+        PAGES.put("my_tasks_today", "/tasks?view=today");
+        PAGES.put("my_tasks_upcoming", "/tasks?view=upcoming");
+        PAGES.put("my_tasks_overdue", "/tasks?view=overdue");
+        PAGES.put("my_tasks_completed", "/tasks?view=completed");
+        PAGES.put("all_tasks", "/tasks/all");
+        PAGES.put("team_members", "/team");
+        PAGES.put("teams", "/team/teams");
+        PAGES.put("invitations", "/team/invitations");
+        PAGES.put("automation_rules", "/automations");
+        PAGES.put("automation_run_history", "/automations/runs");
+        PAGES.put("report_task_progress", "/reports");
+        PAGES.put("report_project_progress", "/reports/projects");
+        PAGES.put("report_team_workload", "/reports/workload");
+        PAGES.put("helpdesk_raise_ticket", "/helpdesk");
+        PAGES.put("helpdesk_my_tickets", "/helpdesk/tickets");
+        PAGES.put("helpdesk_articles", "/helpdesk/articles");
         PAGES.put("settings", "/settings");
+        PAGES.put("settings_fields_and_tags", "/settings/fields");
+        PAGES.put("settings_notifications", "/settings/notifications");
+        PAGES.put("settings_integrations", "/settings/integrations");
+        PAGES.put("settings_subscription", "/settings/subscription");
         PAGES.put("project_overview", "/projects/{project}/overview");
         PAGES.put("project_tasks", "/projects/{project}/tasks");
         PAGES.put("project_board", "/projects/{project}/kanban");
-        PAGES.put("project_calendar", "/projects/{project}/calendar");
-        PAGES.put("project_team", "/projects/{project}/members");
-        PAGES.put("project_timeline", "/projects/{project}/timeline");
-        PAGES.put("project_gantt", "/projects/{project}/gantt");
+        PAGES.put("project_members", "/projects/{project}/members");
         PAGES.put("project_activity", "/projects/{project}/activity");
-        PAGES.put("project_reports", "/projects/{project}/reports");
-        PAGES.put("project_risks", "/projects/{project}/risks");
-        PAGES.put("project_issues", "/projects/{project}/issues");
-        PAGES.put("project_decisions", "/projects/{project}/decisions");
-        PAGES.put("project_phases", "/projects/{project}/phases");
-        PAGES.put("project_milestones", "/projects/{project}/milestones");
-        PAGES.put("project_task_lists", "/projects/{project}/task-lists");
-        PAGES.put("project_task_relationships", "/projects/{project}/dependencies");
-        PAGES.put("project_health", "/projects/{project}/health");
-        PAGES.put("project_delays", "/projects/{project}/delayed");
-        PAGES.put("project_discussion", "/projects/{project}/comments");
-        PAGES.put("project_custom_fields", "/projects/{project}/custom-fields");
-        PAGES.put("project_automation", "/projects/{project}/automations");
-        PAGES.put("project_ai_suggestions", "/projects/{project}/ai");
         PAGES.put("task", "/projects/{project}/tasks/{task}");
     }
 
@@ -116,10 +109,8 @@ public class AssistantTools {
     private final ProjectMemberApplicationService members;
     private final ProjectAuthorizationService authorization;
     private final TaskApplicationService tasks;
-    private final ProjectHealthApplicationService health;
     private final ReportsApplicationService reports;
     private final ProjectCommentApplicationService comments;
-    private final TimeTrackingApplicationService time;
     private final GlobalSearchApplicationService search;
     private final WorkspaceApplicationService workspace;
     private final NotificationService notifications;
@@ -132,10 +123,8 @@ public class AssistantTools {
                           ProjectMemberApplicationService members,
                           ProjectAuthorizationService authorization,
                           TaskApplicationService tasks,
-                          ProjectHealthApplicationService health,
                           ReportsApplicationService reports,
                           ProjectCommentApplicationService comments,
-                          TimeTrackingApplicationService time,
                           GlobalSearchApplicationService search,
                           WorkspaceApplicationService workspace,
                           NotificationService notifications,
@@ -147,10 +136,8 @@ public class AssistantTools {
         this.members = members;
         this.authorization = authorization;
         this.tasks = tasks;
-        this.health = health;
         this.reports = reports;
         this.comments = comments;
-        this.time = time;
         this.search = search;
         this.workspace = workspace;
         this.notifications = notifications;
@@ -173,14 +160,14 @@ public class AssistantTools {
         return List.of(
                 tool("list_projects", "List the projects the person belongs to, most recently updated first.",
                         Map.of(), List.of()),
-                tool("get_project", "Details of one project: status, dates, health and task counts by status.",
+                tool("get_project", "Details of one project: status, dates and task counts by status.",
                         Map.of("project_id", id("The project's id")), List.of("project_id")),
                 tool("list_tasks", "List a project's tasks, optionally filtered by status or assignee.",
                         Map.of("project_id", id("The project's id"),
                                 "status", choice("Only tasks with this status", STATUSES),
                                 "assignee_id", id("Only tasks assigned to this person")),
                         List.of("project_id")),
-                tool("get_task", "Everything about one task: details, subtasks, checklist, what it waits for, recent comments and time logged.",
+                tool("get_task", "Everything about one task: details, checklist and recent comments.",
                         Map.of("task_id", id("The task's id")), List.of("task_id")),
                 tool("my_tasks", "Open tasks assigned to the person, across all their projects.",
                         Map.of("include_completed", Map.of("type", "boolean",
@@ -193,55 +180,41 @@ public class AssistantTools {
                         Map.of("project_id", id("The project's id")), List.of("project_id")),
                 tool("project_activity", "Recent changes on a project: who did what, newest first.",
                         Map.of("project_id", id("The project's id")), List.of("project_id")),
-                tool("my_timesheet", "Time the person logged between two dates (at most 62 days apart).",
-                        Map.of("from", date("First day"), "to", date("Last day")), List.of("from", "to")),
                 tool("my_notifications", "The person's latest notifications.", Map.of(), List.of()),
                 tool("navigate", "Open a page of the app for the person. Pages starting project_ need project_id; task needs project_id and task_id.",
                         Map.of("page", choice("The page to open", List.copyOf(PAGES.keySet())),
                                 "project_id", id("For project pages and task"),
                                 "task_id", id("For the task page")),
                         List.of("page")),
-                tool("create_task", "Create one task in a project. For several tasks, or tasks with subtasks or checklists, use set_up_project. Needs the person's approval before it happens.",
+                tool("create_task", "Create one task in a project. For several tasks, or tasks with checklists, use set_up_project. Needs the person's approval before it happens.",
                         ProjectSetupTools.props("project_id", id("The project's id"),
                                 "name", text("What needs to be done"),
                                 "description", text("More detail"),
                                 "assignee_id", id("Who it is assigned to; must be on the project"),
-                                "priority", choice("Defaults to MEDIUM", PRIORITIES),
-                                "start_date", date("When work should start"),
+                                "priority", choice("LOW, MEDIUM (shown as Normal) or HIGH; defaults to MEDIUM", PRIORITIES),
                                 "due_date", date("When it is due"),
-                                "estimate_minutes", Map.of("type", "integer", "description", "Expected effort in minutes"),
-                                "tags", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Short labels"),
-                                "recurrence", choice("Repeat the task; defaults to NONE", RECURRENCES)),
+                                "tags", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Short labels")),
                         List.of("project_id", "name")),
-                tool("update_task", "Change a task: status, priority, assignee, dates, name, description, estimate, tags or repeat. Needs the person's approval.",
+                tool("update_task", "Change a task: status, priority, assignee, due date, name, description or tags. Needs the person's approval.",
                         ProjectSetupTools.props("task_id", id("The task's id"),
                                 "name", text("New name"),
                                 "description", text("New description"),
-                                "status", choice("New status", STATUSES),
-                                "priority", choice("New priority", PRIORITIES),
+                                "status", choice("New status; COMPLETED is shown as Done", STATUSES),
+                                "priority", choice("New priority: LOW, MEDIUM (shown as Normal) or HIGH", PRIORITIES),
                                 "assignee_id", id("New assignee; must be on the project"),
-                                "start_date", date("New start date"),
                                 "due_date", date("New due date"),
-                                "estimate_minutes", Map.of("type", "integer", "description", "Expected effort in minutes"),
-                                "tags", Map.of("type", "array", "items", Map.of("type", "string"), "description", "The full new set of labels"),
-                                "recurrence", choice("Repeat the task", RECURRENCES)),
+                                "tags", Map.of("type", "array", "items", Map.of("type", "string"), "description", "The full new set of labels")),
                         List.of("task_id")),
                 tool("add_comment", "Comment on a task, as the person. Needs the person's approval.",
                         Map.of("task_id", id("The task's id"), "body", text("The comment")),
                         List.of("task_id", "body")),
-                tool("log_time", "Log time the person spent on a task. Needs the person's approval.",
-                        Map.of("task_id", id("The task's id"),
-                                "minutes", Map.of("type", "integer", "description", "Time spent, in minutes (1 to 1440)"),
-                                "work_date", date("The day the work was done"),
-                                "note", text("What was done"),
-                                "billable", Map.of("type", "boolean", "description", "Whether the time is billable")),
-                        List.of("task_id", "minutes", "work_date")),
                 tool("create_project", "Create a project; the person becomes its owner. Needs the person's approval.",
-                        Map.of("name", text("The project's name"),
+                        ProjectSetupTools.props("name", text("The project's name"),
                                 "description", text("What the project is for"),
-                                "priority", choice("Defaults to MEDIUM", PRIORITIES),
                                 "start_date", date("When it starts"),
-                                "target_end_date", date("When it should finish")),
+                                "target_end_date", date("When it is due"),
+                                "customer_contact", text("Who the project is for: a customer, client or contact"),
+                                "tags", Map.of("type", "array", "items", Map.of("type", "string"), "description", "Short labels, such as Website or Marketing")),
                         List.of("name")),
                 tool("add_project_member", "Add someone from the workspace to a project. Needs the person's approval.",
                         Map.of("project_id", id("The project's id"),
@@ -269,11 +242,7 @@ public class AssistantTools {
                 StringBuilder s = new StringBuilder("Create task \"" + required(input, "name") + "\" in " + project.getName());
                 optionalUuid(input, "assignee_id").ifPresent(id -> s.append(", assigned to ").append(nameOf(id)));
                 optional(input, "priority").ifPresent(p -> s.append(", ").append(word(p)).append(" priority"));
-                optionalDate(input, "start_date").ifPresent(d -> s.append(", starting ").append(d));
                 optionalDate(input, "due_date").ifPresent(d -> s.append(", due ").append(d));
-                ProjectSetupTools.optionalInt(input, "estimate_minutes").ifPresent(m -> s.append(", estimate ").append(m).append(" min"));
-                optional(input, "recurrence").map(ProjectSetupTools::recurrence).filter(r -> r != TaskRecurrence.NONE)
-                        .ifPresent(r -> s.append(", repeats ").append(word(r.name())));
                 List<String> tags = ProjectSetupTools.strings(input, "tags");
                 if (!tags.isEmpty()) {
                     s.append(", tags ").append(String.join(", ", tags));
@@ -287,16 +256,12 @@ public class AssistantTools {
                 optional(input, "status").ifPresent(v -> changes.add("set status to " + word(v)));
                 optional(input, "priority").ifPresent(v -> changes.add("set priority to " + word(v)));
                 optionalUuid(input, "assignee_id").ifPresent(v -> changes.add("assign it to " + nameOf(v)));
-                optionalDate(input, "start_date").ifPresent(v -> changes.add("set start date to " + v));
                 optionalDate(input, "due_date").ifPresent(v -> changes.add("set due date to " + v));
                 optional(input, "description").ifPresent(v -> changes.add("update the description"));
-                ProjectSetupTools.optionalInt(input, "estimate_minutes").ifPresent(v -> changes.add("set estimate to " + v + " min"));
                 if (input.get("tags") != null) {
                     List<String> tags = ProjectSetupTools.strings(input, "tags");
                     changes.add(tags.isEmpty() ? "clear its tags" : "set tags to " + String.join(", ", tags));
                 }
-                optional(input, "recurrence").map(ProjectSetupTools::recurrence).ifPresent(r ->
-                        changes.add(r == TaskRecurrence.NONE ? "stop it repeating" : "repeat it " + word(r.name())));
                 if (changes.isEmpty()) {
                     throw new ValidationException("Nothing to change was given");
                 }
@@ -306,18 +271,11 @@ public class AssistantTools {
                 Task task = tasks.getTask(context, uuid(input, "task_id"));
                 return "Comment on \"" + task.getName() + "\": \"" + required(input, "body") + "\"";
             }
-            case "log_time" -> {
-                Task task = tasks.getTask(context, uuid(input, "task_id"));
-                int minutes = minutes(input);
-                return "Log " + (minutes / 60 > 0 ? minutes / 60 + "h " : "") + minutes % 60 + "m on \"" + task.getName()
-                        + "\" for " + date(input, "work_date")
-                        + (Boolean.TRUE.equals(input.get("billable")) ? " (billable)" : "");
-            }
             case "create_project" -> {
                 StringBuilder s = new StringBuilder("Create project \"" + required(input, "name") + "\"");
-                optional(input, "priority").ifPresent(p -> s.append(", ").append(word(p)).append(" priority"));
+                optional(input, "customer_contact").ifPresent(c -> s.append(" for ").append(c));
                 optionalDate(input, "start_date").ifPresent(d -> s.append(", starting ").append(d));
-                optionalDate(input, "target_end_date").ifPresent(d -> s.append(", finishing by ").append(d));
+                optionalDate(input, "target_end_date").ifPresent(d -> s.append(", due ").append(d));
                 return s.toString();
             }
             case "add_project_member" -> {
@@ -352,7 +310,6 @@ public class AssistantTools {
             case "get_project" -> {
                 UUID id = uuid(input, "project_id");
                 Map<String, Object> out = projectSummary(projects.getProject(context, id));
-                out.put("health", health.getHealth(context, id));
                 out.put("report", reports.getSummary(context, id));
                 yield json(out);
             }
@@ -365,11 +322,7 @@ public class AssistantTools {
                 Map<String, Object> out = taskSummary(task);
                 out.put("description", task.getDescription().orElse(null));
                 out.put("tags", task.getTags());
-                out.put("estimate_minutes", task.getEstimateMinutes().orElse(null));
-                out.put("recurrence", task.getRecurrence());
                 out.putAll(setup.taskBreakdown(context, task.getId()));
-                out.put("logged_minutes", time.listForTask(context, task.getId()).stream()
-                        .mapToInt(TimeEntry::getMinutes).sum());
                 List<ProjectComment> all = comments.listTaskComments(context, task.getId());
                 out.put("recent_comments", all.subList(Math.max(0, all.size() - 10), all.size()).stream()
                         .map(c -> Map.of("by", nameOf(c.getAuthorId().value()), "at", c.getCreatedAt().toString(),
@@ -409,10 +362,6 @@ public class AssistantTools {
                 yield json(activity.findByProjectIdOrderByOccurredAtDesc(id, PageRequest.of(0, 25)).getContent()
                         .stream().map(this::activitySummary).toList());
             }
-            case "my_timesheet" -> json(time.listMine(context, date(input, "from"), date(input, "to")).stream()
-                    .map(e -> Map.of("date", e.getWorkDate().toString(), "minutes", e.getMinutes(),
-                            "task_id", e.getTaskId(), "note", e.getNote().orElse(""), "billable", e.isBillable()))
-                    .toList());
             case "my_notifications" -> json(notifications.list(context, PageRequest.of(0, 15)).getContent().stream()
                     .map(n -> Map.of("title", n.getTitle(), "read", n.isRead(), "at", n.getCreatedAt().toString()))
                     .toList());
@@ -421,10 +370,9 @@ public class AssistantTools {
                 Task created = tasks.createTask(context, uuid(input, "project_id"), new CreateTaskRequest(
                         required(input, "name"), optional(input, "description").orElse(null),
                         optionalDate(input, "due_date").orElse(null), optionalUuid(input, "assignee_id").orElse(null),
-                        optionalDate(input, "start_date").orElse(null),
+                        null,
                         optional(input, "priority").map(AssistantTools::priority).orElse(null),
-                        ProjectSetupTools.optionalInt(input, "estimate_minutes").orElse(null),
-                        optional(input, "recurrence").map(ProjectSetupTools::recurrence).orElse(null),
+                        null,
                         ProjectSetupTools.strings(input, "tags").isEmpty() ? null : ProjectSetupTools.strings(input, "tags")));
                 yield json(Map.of("created", taskSummary(created)));
             }
@@ -434,10 +382,9 @@ public class AssistantTools {
                         optional(input, "name").orElse(null), optional(input, "description").orElse(null),
                         optionalDate(input, "due_date").orElse(null), optionalUuid(input, "assignee_id").orElse(null),
                         optional(input, "status").map(AssistantTools::status).orElse(null), current.getVersion(),
-                        optionalDate(input, "start_date").orElse(null),
+                        null,
                         optional(input, "priority").map(AssistantTools::priority).orElse(null),
-                        ProjectSetupTools.optionalInt(input, "estimate_minutes").orElse(null),
-                        optional(input, "recurrence").map(ProjectSetupTools::recurrence).orElse(null),
+                        null,
                         input.get("tags") == null ? null : ProjectSetupTools.strings(input, "tags")));
                 yield json(Map.of("updated", taskSummary(updated)));
             }
@@ -446,17 +393,13 @@ public class AssistantTools {
                         new CreateCommentRequest(required(input, "body")));
                 yield json(Map.of("commented", true, "comment_id", comment.getId()));
             }
-            case "log_time" -> {
-                TimeEntry entry = time.logTime(context, uuid(input, "task_id"), date(input, "work_date"),
-                        minutes(input), optional(input, "note").orElse(null),
-                        Boolean.TRUE.equals(input.get("billable")));
-                yield json(Map.of("logged_minutes", entry.getMinutes(), "date", entry.getWorkDate().toString()));
-            }
             case "create_project" -> {
                 Project created = projects.createProject(context, new CreateProjectRequest(required(input, "name"),
                         optional(input, "description").orElse(null),
-                        optional(input, "priority").map(AssistantTools::priority).orElse(ProjectPriority.MEDIUM),
-                        optionalDate(input, "start_date").orElse(null), optionalDate(input, "target_end_date").orElse(null)));
+                        ProjectPriority.MEDIUM,
+                        optionalDate(input, "start_date").orElse(null), optionalDate(input, "target_end_date").orElse(null),
+                        optional(input, "customer_contact").orElse(null),
+                        ProjectSetupTools.strings(input, "tags").isEmpty() ? null : ProjectSetupTools.strings(input, "tags")));
                 yield json(Map.of("created", projectSummary(created)));
             }
             case "add_project_member" -> {
@@ -512,7 +455,6 @@ public class AssistantTools {
         out.put("priority", task.getPriority());
         out.put("assignee", task.getAssigneeId().map(a -> nameOf(a.value())).orElse("Unassigned"));
         task.getAssigneeId().ifPresent(a -> out.put("assignee_id", a.value()));
-        task.getStartDate().ifPresent(d -> out.put("start_date", d.toString()));
         task.getDueDate().ifPresent(d -> out.put("due_date", d.toString()));
         return out;
     }
@@ -581,14 +523,6 @@ public class AssistantTools {
         }
     }
 
-    private static int minutes(Map<String, Object> input) {
-        try {
-            return Integer.parseInt(required(input, "minutes").replaceAll("\\.0+$", ""));
-        } catch (NumberFormatException e) {
-            throw new ValidationException("minutes must be a whole number");
-        }
-    }
-
     static TaskStatus status(String value) {
         try {
             return TaskStatus.valueOf(value.toUpperCase(Locale.ROOT));
@@ -613,9 +547,15 @@ public class AssistantTools {
         }
     }
 
+    /** A status, priority or role as the screens show it: TODO is "To Do", COMPLETED "Done", MEDIUM "Normal". */
     static String word(String token) {
         String lower = token.toLowerCase(Locale.ROOT).replace('_', ' ');
-        return "todo".equals(lower) ? "To Do" : Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+        return switch (lower) {
+            case "todo" -> "To Do";
+            case "completed" -> "Done";
+            case "medium" -> "Normal";
+            default -> Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
+        };
     }
 
     // ------------------------------------------------------------------ schema helpers

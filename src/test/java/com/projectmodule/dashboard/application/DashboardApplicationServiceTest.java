@@ -64,7 +64,7 @@ class DashboardApplicationServiceTest {
         when(projectRepository.countByOrganizationIdAndArchivedAtIsNotNull(ORG.value())).thenReturn(0L);
         when(projectRepository.countActiveByStatus(ORG.value())).thenReturn(List.of(
                 statusRow(ProjectStatus.ACTIVE, 2L),
-                statusRow(ProjectStatus.PLANNING, 1L)));
+                statusRow(ProjectStatus.ON_HOLD, 1L)));
         when(projectRepository.countActiveByPriority(ORG.value())).thenReturn(List.of());
 
         DashboardResponse dashboard = service.getDashboard(context);
@@ -72,10 +72,8 @@ class DashboardApplicationServiceTest {
         assertThat(dashboard.byStatus())
                 .hasSize(ProjectStatus.values().length)
                 .containsEntry(ProjectStatus.ACTIVE, 2L)
-                .containsEntry(ProjectStatus.PLANNING, 1L)
-                .containsEntry(ProjectStatus.ON_HOLD, 0L)
-                .containsEntry(ProjectStatus.COMPLETED, 0L)
-                .containsEntry(ProjectStatus.CANCELLED, 0L);
+                .containsEntry(ProjectStatus.ON_HOLD, 1L)
+                .containsEntry(ProjectStatus.COMPLETED, 0L);
     }
 
     @Test
@@ -85,16 +83,15 @@ class DashboardApplicationServiceTest {
         when(projectRepository.countByOrganizationIdAndArchivedAtIsNotNull(ORG.value())).thenReturn(0L);
         when(projectRepository.countActiveByStatus(ORG.value())).thenReturn(List.of());
         when(projectRepository.countActiveByPriority(ORG.value())).thenReturn(List.of(
-                priorityRow(ProjectPriority.CRITICAL, 1L)));
+                priorityRow(ProjectPriority.HIGH, 1L)));
 
         DashboardResponse dashboard = service.getDashboard(context);
 
         assertThat(dashboard.byPriority())
                 .hasSize(ProjectPriority.values().length)
-                .containsEntry(ProjectPriority.CRITICAL, 1L)
+                .containsEntry(ProjectPriority.HIGH, 1L)
                 .containsEntry(ProjectPriority.LOW, 0L)
-                .containsEntry(ProjectPriority.MEDIUM, 0L)
-                .containsEntry(ProjectPriority.HIGH, 0L);
+                .containsEntry(ProjectPriority.MEDIUM, 0L);
     }
 
     @Test

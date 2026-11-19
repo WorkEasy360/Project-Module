@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, uploadFile } from './client'
 
 export type WorkspaceRole = 'ADMIN' | 'MEMBER'
 
@@ -8,6 +8,8 @@ export interface Account {
   email: string
   name: string
   workspaceRole: WorkspaceRole
+  /** Changes when the profile photo does; null when there is none. */
+  avatarVersion?: string | null
 }
 
 /**
@@ -21,6 +23,11 @@ export interface AuthConfig {
   emailEnabled: boolean
   legacyHandover?: boolean
   workeasy360?: { enabled: boolean; signInMode: 'sso_optional' | 'sso_only' }
+  /**
+   * Where "Continue with WorkEasy360 Account" goes when `workeasy360` sign-in is not configured on this
+   * server (`PROJECTMODULE_AUTH_WORKEASY360_SIGN_IN_URL`); empty when there is nowhere to send it.
+   */
+  workeasy360SignInUrl?: string
 }
 
 export interface Session {
@@ -30,6 +37,8 @@ export interface Session {
 }
 
 export const authApi = {
+  uploadAvatar: (file: File) => uploadFile<Account>('/auth/me/avatar', file),
+  removeAvatar: () => api.del('/auth/me/avatar'),
   login: (body: { email: string; password: string; rememberMe: boolean }) =>
     api.post<Session>('/auth/login', body),
   register: (body: { name: string; email: string; password: string; rememberMe: boolean }) =>

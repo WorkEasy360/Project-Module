@@ -24,7 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
  * existing {@link ProjectAuthorizationService} — no second authorization system.
  *
  * <p>Raises no domain event: {@code docs/project/05-EVENTS.md} defines no Checklist events, the
- * same deliberate absence as {@code TaskList} and {@code Subtask}.
+ * same deliberate absence as other task details.
  */
 @Service
 public class ChecklistApplicationService {
@@ -47,7 +47,7 @@ public class ChecklistApplicationService {
         projectAuthorizationService.requirePermission(
                 context.requireUserId(), task.getProjectId(), ProjectPermission.EDIT_TASKS);
 
-        Checklist checklist = Checklist.create(taskId, request.subtaskId(), request.text());
+        Checklist checklist = Checklist.create(taskId, request.text());
 
         return checklistRepository.save(checklist);
     }
@@ -82,9 +82,6 @@ public class ChecklistApplicationService {
             } else {
                 checklist.uncheck();
             }
-        }
-        if (request.subtaskId() != null) {
-            checklist.reassignSubtask(request.subtaskId());
         }
 
         return checklistRepository.save(checklist);

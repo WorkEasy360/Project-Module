@@ -14,7 +14,7 @@ import org.springframework.data.domain.Persistable;
 /**
  * Which external identity (issuer + subject) is which internal user.
  *
- * <p>See {@code V19__create_federated_identities.sql}. E-mail and display name are profile data as last
+ * <p>See {@code V22__create_federated_identities.sql}. E-mail and display name are profile data as last
  * reported by the issuer; they are refreshed at every sign-in and never used to match or link anything.
  */
 @Entity

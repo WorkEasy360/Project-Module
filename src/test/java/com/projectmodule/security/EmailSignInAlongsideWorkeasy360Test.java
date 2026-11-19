@@ -3,6 +3,7 @@ package com.projectmodule.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -175,8 +176,21 @@ class EmailSignInAlongsideWorkeasy360Test extends SsoFlowTestBase {
         mvc.perform(post("/api/v1/workspace/people/" + UUID.randomUUID() + "/reset-link").session(session)
                         .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue()))
                 .andExpect(jsonPath("$.code").value("managed_in_workeasy360"));
-        // The people list is not account-only (it answers with the organization's email accounts, if any).
+        // The profile photo is the email account's, and renaming the workspace is its administration.
+        mvc.perform(post("/api/v1/auth/me/avatar").session(session).cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("managed_in_workeasy360"));
+        mvc.perform(delete("/api/v1/auth/me/avatar").session(session).cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue()))
+                .andExpect(jsonPath("$.code").value("managed_in_workeasy360"));
+        mvc.perform(patch("/api/v1/workspace/settings").session(session).cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("managed_in_workeasy360"));
+        // The people list is not account-only (it answers with the organization's email accounts, if any), nor are
+        // the workspace's name and plan, which the app shell reads on every page, nor a teammate's photo.
         mvc.perform(get("/api/v1/workspace/people").session(session)).andExpect(passedTheChain());
+        mvc.perform(get("/api/v1/workspace/settings").session(session)).andExpect(passedTheChain());
+        mvc.perform(get("/api/v1/workspace/people/" + UUID.randomUUID() + "/avatar").session(session))
+                .andExpect(passedTheChain());
         // An email sign-in's own account endpoints are its controllers' business.
         mvc.perform(get("/api/v1/auth/me").header(HttpHeaders.AUTHORIZATION, "Bearer good-token"))
                 .andExpect(passedTheChain());

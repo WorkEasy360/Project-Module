@@ -174,7 +174,7 @@ restart) leaves the session and starts a sign-in for the page the person is on.
 | What identifies a person? | The pair (issuer, `sub`). **Never the e-mail address.** E-mail and name are profile data, refreshed at each sign-in, shown in Settings, and never used to find or link anyone. |
 | What is the internal user id (`ExternalUserId`) of a new (issuer, `sub`)? | `UUID(sub)` when `sub` is a UUID that is not already bound to **any** identity (of any issuer: the same `sub` under another issuer is another person) **and is not an email account's id** (`user_accounts.id`). Otherwise a new random UUID. Workeasy360's `sub` is its own user id - exactly what `X-User-Id` was always meant to carry - so every row written before sign-in existed keeps its owner, unless an email account already took that id (then the email account keeps it). |
 | Can an email account and a Workeasy360 account be the same person here? | Not automatically: **one user id, one credential holder.** A first Workeasy360 sign-in never adopts an email account's id, and the email hand-over of an earlier sign-in (`docs/project/33-AUTHENTICATION.md`) refuses an id a Workeasy360 identity holds. Both take the same transaction-scoped advisory lock on the id first (`UserIdOwnership`), so two first sign-ins on two instances cannot both win. Linking the two is a deliberate operator step, never something e-mail addresses decide. |
-| Does the same person always get the same user id? | Yes, for as long as the `federated_identities` row exists (`V19` migration; unique on (issuer, subject) and, globally, on user id). |
+| Does the same person always get the same user id? | Yes, for as long as the `federated_identities` row exists (`V22` migration; unique on (issuer, subject) and, globally, on user id). |
 | What is the organization? | The token's `organization_id` (Workeasy360's organization id is already the external organization id the schema stores). |
 | Are users or organizations created in a table here? | No. A Workeasy360 sign-in creates no `user_accounts` row and no organization: only the mapping above (email sign-in has its own `user_accounts`). Workspace administration (invitations, reset links) and the account endpoints (`/api/v1/auth/me`, change password) are email-account features: a Workeasy360 session gets `403 managed_in_workeasy360` from them. |
 | Who may do what inside a project? | Unchanged: project membership roles (`OWNER`, `MANAGER`, `MEMBER`, `VIEWER`). Signing in grants no project access. |
@@ -245,8 +245,9 @@ All settings are environment variables.
 | `PROJECTMODULE_SESSION_COOKIE_SECURE` | no | `true` by default. The `local` profile sets it to `false` (plain http). |
 
 \* All of them, or none. With **none** of the settings marked \*, Workeasy360 sign-in is off: the app runs on
-email sign-in alone, "Continue with Workeasy360" is not offered, the launcher's `?organization=` is ignored, and
-the start endpoint answers `unavailable`. **The application refuses to start** under any profile other than
+email sign-in alone, "Continue with Workeasy360" does not start Workeasy360 sign-in (the login card's "Continue
+with WorkEasy360 Account" button goes to `PROJECTMODULE_AUTH_WORKEASY360_SIGN_IN_URL` if set, or says the sign-in is
+not set up yet), the launcher's `?organization=` is ignored, and the start endpoint answers `unavailable`. **The application refuses to start** under any profile other than
 `local` or `test` when only **some** of them are present (a post-logout URI counts as an attempt too), when
 `WORKEASY360_SIGN_IN_MODE=sso_only` is set without them, when the issuer or redirect URI is not an https URL,
 or when the private key cannot be used. The message names the variables, never their values.
@@ -381,7 +382,7 @@ attack, as for the ID token:
 8. `events` is an object holding `http://schemas.openid.net/event/backchannel-logout`, itself an object.
 9. There is **no** `nonce`. A `typ` claim, when present, is `logout_token`.
 10. `sub` and/or `sid` are present (strings of at most 255 characters), and `jti` is present.
-11. A `jti` is acted on once. Accepted ones are recorded in `received_logout_tokens` (migration `V20`)
+11. A `jti` is acted on once. Accepted ones are recorded in `received_logout_tokens` (migration `V23`)
     **in the same database transaction** that ends the sessions. The same token arriving again (a duplicate, a
     retry whose first answer was lost, two instances receiving it at once) is answered with the same `200` and
     ends nothing: it cannot end sessions opened since, so a captured token is useless. If ending the sessions
@@ -409,7 +410,7 @@ attack, as for the ID token:
 **How sessions are recorded.** At sign-in, the new session is recorded twice, with the person's issuer and
 `sub` and the ID token's `sid` (absent when the token carried none):
 
-- in PostgreSQL, in `signed_in_sessions` (migration `V21`), shared by every instance: one row per signed-in
+- in PostgreSQL, in `signed_in_sessions` (migration `V24`), shared by every instance: one row per signed-in
   session, keyed by a random record id that the session keeps as an attribute. **The session id itself is never
   stored**: it is a bearer credential. If the row cannot be written, the sign-in fails with `unavailable` and
   leaves no session, so no session exists that a logout token could not reach;
@@ -484,8 +485,8 @@ restarts.
 
 ### Rollout
 
-1. Deploy this version. It adds the migrations `V20__create_received_logout_tokens.sql` and
-   `V21__create_signed_in_sessions.sql`, which Flyway applies at start-up. There is no new setting. The endpoint is
+1. Deploy this version. It adds the migrations `V23__create_received_logout_tokens.sql` and
+   `V24__create_signed_in_sessions.sql`, which Flyway applies at start-up. There is no new setting. The endpoint is
    live, but nothing calls it yet and ID tokens carry no `sid`. Everyone signs in again after the deploy (as after
    any deploy), and every new session has its shared record.
 2. Check the endpoint from outside: `curl -i -X POST https://ops.workeasy360.com/api/auth/workeasy360/backchannel-logout -d logout_token=x`
@@ -637,13 +638,15 @@ stays on one origin (`localhost:5173`) and the cookies and redirects work. The `
 
 ## Migrations
 
-The Workeasy360 tables are `V19__create_federated_identities.sql`, `V20__create_received_logout_tokens.sql` and
-`V21__create_signed_in_sessions.sql`. On the `workeasy360-sso` branch they were numbered V14-V16; they were
-renumbered when the branch was merged with `main`, whose own V14-V18 (email sign-in, invitations, daily work,
-collaboration and time tracking, the assistant) are already applied in production. The SSO-line numbers were
-never applied to any persistent database, so nothing needs repairing. A database that a development copy of the
-`workeasy360-sso` branch migrated (V14 = `federated_identities`) cannot be upgraded: Flyway refuses it, as it
-should. Recreate it.
+The Workeasy360 tables are `V22__create_federated_identities.sql`, `V23__create_received_logout_tokens.sql` and
+`V24__create_signed_in_sessions.sql`. On the `workeasy360-sso` branch they were numbered V14-V16; they were
+renumbered V19-V21 when the branch was first merged with `main`, whose own V14-V18 (email sign-in, invitations,
+daily work, collaboration and time tracking, the assistant) are already applied in production, and V22-V24 when
+`main` then gained its own V19-V21 (project customer tags and workspace settings, profile photos, and the
+removal of the features outside V3), which production has also applied. The earlier numbers of these three were
+never applied to any persistent database, so nothing needs repairing. A database that a development copy of
+this branch migrated with the earlier numbers (V14 or V19 = `federated_identities`) cannot be upgraded: Flyway
+refuses it, as it should. Recreate it.
 
 ## Security properties
 

@@ -89,7 +89,7 @@ class ProjectPersistenceTest {
             assertThat(loaded.getName()).isEqualTo("Apollo");
             assertThat(loaded.getDescription()).contains("Lunar programme");
             assertThat(loaded.getPriority()).isEqualTo(ProjectPriority.HIGH);
-            assertThat(loaded.getStatus()).isEqualTo(ProjectStatus.PLANNING);
+            assertThat(loaded.getStatus()).isEqualTo(ProjectStatus.ACTIVE);
             assertThat(loaded.getOrganizationId()).isEqualTo(organization);
             assertThat(loaded.getOwnerId()).isEqualTo(owner);
             assertThat(loaded.getStartDate()).contains(LocalDate.of(2026, 1, 1));

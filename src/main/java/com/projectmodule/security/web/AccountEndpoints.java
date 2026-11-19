@@ -12,15 +12,17 @@ import java.util.Set;
  *       sign-in's bearer token. Reachable without a session; none of them reads or changes the session cookie's
  *       identity, so they are exempt from CSRF (a token is returned in the body, never set as a cookie) and from
  *       the Workeasy360 entitlement check (they are sign-in endpoints, like {@code /api/auth/**}).
- *   <li><strong>Account only</strong>: endpoints about the caller's own email account or its workspace
- *       administration. A Workeasy360 sign-in has no email account here, so for it they answer 403
- *       {@code managed_in_workeasy360} instead of a misleading 401 (which the app would take for "signed out").
+ *   <li><strong>Account only</strong>: endpoints about the caller's own email account (its profile, photo and
+ *       password) or its workspace administration (invitations, reset links, renaming the workspace). A Workeasy360
+ *       sign-in has no email account here, so for it they answer 403 {@code managed_in_workeasy360} instead of a
+ *       misleading 401 (which the app would take for "signed out").
  *   <li><strong>Email sign-in</strong>: the endpoints refused in {@code sso_only} mode.
  * </ul>
  */
 public final class AccountEndpoints {
 
     static final String AUTH = "/api/v1/auth/";
+    static final String WORKSPACE_SETTINGS = "/api/v1/workspace/settings";
 
     private static final Set<String> PUBLIC_POSTS = Set.of(
             AUTH + "register", AUTH + "login", AUTH + "logout", AUTH + "google", AUTH + "legacy/claim",
@@ -46,7 +48,12 @@ public final class AccountEndpoints {
     /** About the caller's own email account or the administration of its workspace. */
     public static boolean isAccountOnly(HttpServletRequest request) {
         String path = path(request);
-        if ((AUTH + "me").equals(path) || (AUTH + "change-password").equals(path)) {
+        // The account itself, its profile photo (me/avatar) and its password.
+        if ((AUTH + "me").equals(path) || path.startsWith(AUTH + "me/") || (AUTH + "change-password").equals(path)) {
+            return true;
+        }
+        // Renaming the workspace is administration; reading its name and plan is for everyone in it.
+        if (WORKSPACE_SETTINGS.equals(path) && !isRead(request)) {
             return true;
         }
         if (path.equals("/api/v1/workspace/invitations") || path.startsWith("/api/v1/workspace/invitations/")) {
@@ -58,6 +65,10 @@ public final class AccountEndpoints {
     /** Starts an email sign-in (or creates the account for one): refused when Workeasy360 is the only way in. */
     public static boolean isEmailSignIn(HttpServletRequest request) {
         return "POST".equals(request.getMethod()) && EMAIL_SIGN_IN.contains(path(request));
+    }
+
+    private static boolean isRead(HttpServletRequest request) {
+        return "GET".equals(request.getMethod()) || "HEAD".equals(request.getMethod());
     }
 
     static String path(HttpServletRequest request) {

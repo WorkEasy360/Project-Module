@@ -65,9 +65,6 @@ class TaskApplicationServiceTest {
     @Mock
     private TaskNotifier taskNotifier;
 
-    @Mock
-    private com.projectmodule.work.infrastructure.TaskFollowerRepository followerRepository;
-
     private TaskApplicationService service;
     private RequestContext context;
     private Project project;
@@ -76,7 +73,7 @@ class TaskApplicationServiceTest {
     void setUp() {
         service = new TaskApplicationService(
                 taskRepository, projectApplicationService, projectAuthorizationService, workEventRecorder,
-                taskNotifier, followerRepository);
+                taskNotifier);
         context = new ImmutableRequestContext(
                 Optional.of(USER), Optional.of(ORG), "corr-1", ActorType.HUMAN);
         project = Project.create(ORG, "Apollo", USER, ProjectPriority.MEDIUM);
@@ -276,7 +273,7 @@ class TaskApplicationServiceTest {
             assertThat(board.keySet()).containsExactlyInAnyOrder(TaskStatus.values());
             assertThat(board.get(TaskStatus.TODO)).containsExactly(todo);
             assertThat(board.get(TaskStatus.BLOCKED)).containsExactly(blocked);
-            assertThat(board.get(TaskStatus.OVERDUE)).isEmpty();
+            assertThat(board.get(TaskStatus.IN_PROGRESS)).isEmpty();
             assertThat(board.get(TaskStatus.COMPLETED)).isEmpty();
         }
 
@@ -348,30 +345,6 @@ class TaskApplicationServiceTest {
         }
 
         @Test
-        @DisplayName("completing a repeating task creates its next occurrence, once")
-        void completingARepeatingTaskCreatesTheNextOne() {
-            Task task = Task.create(project.getId(), "Weekly report", java.time.LocalDate.of(2026, 3, 2), USER);
-            task.repeat(com.projectmodule.work.domain.TaskRecurrence.WEEKLY);
-            task.tag(java.util.List.of("reports"));
-            when(taskRepository.findByIdAndArchivedAtIsNull(task.getId())).thenReturn(Optional.of(task));
-            when(projectApplicationService.findActiveProjectInCallerOrganization(context, project.getId()))
-                    .thenReturn(project);
-            when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
-            org.mockito.ArgumentCaptor<Task> saved = org.mockito.ArgumentCaptor.forClass(Task.class);
-
-            service.updateTask(context, task.getId(), new UpdateTaskRequest(
-                    null, null, null, null, TaskStatus.COMPLETED, task.getVersion()));
-            verify(taskRepository, org.mockito.Mockito.times(2)).save(saved.capture());
-
-            Task next = saved.getAllValues().get(1);
-            assertThat(next.getId()).isNotEqualTo(task.getId());
-            assertThat(next.getStatus()).isEqualTo(TaskStatus.TODO);
-            assertThat(next.getDueDate()).contains(java.time.LocalDate.of(2026, 3, 9));
-            assertThat(next.getTags()).containsExactly("reports");
-            assertThat(task.spawnNextOccurrence()).isEmpty();
-        }
-
-        @Test
         @DisplayName("a due date before the start date is refused")
         void refusesDatesOutOfOrder() {
             Task task = Task.create(project.getId(), "Implement login", java.time.LocalDate.of(2026, 3, 2), null);
@@ -381,7 +354,7 @@ class TaskApplicationServiceTest {
 
             assertThatThrownBy(() -> service.updateTask(context, task.getId(), new UpdateTaskRequest(
                     null, null, null, null, null, task.getVersion(), java.time.LocalDate.of(2026, 3, 5),
-                    null, null, null, null)))
+                    null, null, null)))
                     .isInstanceOf(com.projectmodule.common.exception.ValidationException.class);
         }
 

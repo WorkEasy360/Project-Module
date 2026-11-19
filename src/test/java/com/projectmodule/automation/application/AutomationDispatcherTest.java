@@ -17,7 +17,6 @@ import com.projectmodule.automation.infrastructure.AutomationRunRepository;
 import com.projectmodule.automation.infrastructure.ProjectAutomationRepository;
 import com.projectmodule.common.identity.ExternalUserId;
 import com.projectmodule.common.identity.OrganizationId;
-import com.projectmodule.integration.port.ChatPort;
 import com.projectmodule.integration.port.NotificationPort;
 import com.projectmodule.project.domain.Project;
 import com.projectmodule.project.domain.ProjectPriority;
@@ -49,9 +48,6 @@ class AutomationDispatcherTest {
     private NotificationPort notificationPort;
 
     @Mock
-    private ChatPort chatPort;
-
-    @Mock
     private ProjectRepository projectRepository;
 
     private AutomationDispatcher dispatcher;
@@ -60,7 +56,7 @@ class AutomationDispatcherTest {
     @BeforeEach
     void setUp() {
         dispatcher = new AutomationDispatcher(
-                projectAutomationRepository, automationRunRepository, notificationPort, chatPort, projectRepository);
+                projectAutomationRepository, automationRunRepository, notificationPort, projectRepository);
         project = Project.create(ORG, "Apollo", OWNER, ProjectPriority.MEDIUM);
     }
 
@@ -68,10 +64,10 @@ class AutomationDispatcherTest {
     @DisplayName("does nothing when no automation matches the trigger")
     void doesNothingWhenNoMatch() {
         when(projectAutomationRepository
-                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.overdue"))
+                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.blocked"))
                 .thenReturn(List.of());
 
-        dispatcher.dispatch(project.getId(), "task.overdue");
+        dispatcher.dispatch(project.getId(), "task.blocked");
 
         verify(projectRepository, never()).findByIdAndArchivedAtIsNull(any());
         verify(automationRunRepository, never()).save(any());
@@ -82,13 +78,13 @@ class AutomationDispatcherTest {
     void notifyCallsNotificationPort() {
         UUID recipientId = UUID.randomUUID();
         ProjectAutomation automation = ProjectAutomation.create(project.getId(), "Notify on overdue",
-                "task.overdue", AutomationActionType.NOTIFY, recipientId, null, "A task is overdue");
+                "task.blocked", AutomationActionType.NOTIFY, recipientId, "A task is overdue");
         when(projectAutomationRepository
-                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.overdue"))
+                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.blocked"))
                 .thenReturn(List.of(automation));
         when(projectRepository.findByIdAndArchivedAtIsNull(project.getId())).thenReturn(Optional.of(project));
 
-        dispatcher.dispatch(project.getId(), "task.overdue");
+        dispatcher.dispatch(project.getId(), "task.blocked");
 
         verify(notificationPort).notify(ORG, ExternalUserId.of(recipientId), "Notify on overdue", "A task is overdue");
 
@@ -98,34 +94,19 @@ class AutomationDispatcherTest {
     }
 
     @Test
-    @DisplayName("CHAT_MESSAGE calls ChatPort with the rule's channel and message")
-    void chatMessageCallsChatPort() {
-        ProjectAutomation automation = ProjectAutomation.create(project.getId(), "Notify chat",
-                "risk.created", AutomationActionType.CHAT_MESSAGE, null, "#risks", "A new risk was created");
-        when(projectAutomationRepository
-                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "risk.created"))
-                .thenReturn(List.of(automation));
-        when(projectRepository.findByIdAndArchivedAtIsNull(project.getId())).thenReturn(Optional.of(project));
-
-        dispatcher.dispatch(project.getId(), "risk.created");
-
-        verify(chatPort).postMessage(ORG, "#risks", "A new risk was created");
-    }
-
-    @Test
     @DisplayName("an action failure is caught, recorded as FAILED, and does not propagate")
     void actionFailureIsCaughtAndRecorded() {
         UUID recipientId = UUID.randomUUID();
         ProjectAutomation automation = ProjectAutomation.create(project.getId(), "Notify on overdue",
-                "task.overdue", AutomationActionType.NOTIFY, recipientId, null, "A task is overdue");
+                "task.blocked", AutomationActionType.NOTIFY, recipientId, "A task is overdue");
         when(projectAutomationRepository
-                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.overdue"))
+                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.blocked"))
                 .thenReturn(List.of(automation));
         when(projectRepository.findByIdAndArchivedAtIsNull(project.getId())).thenReturn(Optional.of(project));
         doThrow(new RuntimeException("Notification port unavailable"))
                 .when(notificationPort).notify(any(), any(), any(), any());
 
-        assertThatCode(() -> dispatcher.dispatch(project.getId(), "task.overdue")).doesNotThrowAnyException();
+        assertThatCode(() -> dispatcher.dispatch(project.getId(), "task.blocked")).doesNotThrowAnyException();
 
         ArgumentCaptor<AutomationRun> runCaptor = ArgumentCaptor.forClass(AutomationRun.class);
         verify(automationRunRepository).save(runCaptor.capture());
@@ -136,19 +117,18 @@ class AutomationDispatcherTest {
     @Test
     @DisplayName("multiple matching rules each execute and each get their own run record")
     void multipleMatchingRulesEachExecute() {
-        ProjectAutomation first = ProjectAutomation.create(project.getId(), "First", "task.overdue",
-                AutomationActionType.NOTIFY, UUID.randomUUID(), null, "m1");
-        ProjectAutomation second = ProjectAutomation.create(project.getId(), "Second", "task.overdue",
-                AutomationActionType.CHAT_MESSAGE, null, "#ch", "m2");
+        ProjectAutomation first = ProjectAutomation.create(project.getId(), "First", "task.blocked",
+                AutomationActionType.NOTIFY, UUID.randomUUID(), "m1");
+        ProjectAutomation second = ProjectAutomation.create(project.getId(), "Second", "task.blocked",
+                AutomationActionType.NOTIFY, UUID.randomUUID(), "m2");
         when(projectAutomationRepository
-                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.overdue"))
+                .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(project.getId(), "task.blocked"))
                 .thenReturn(List.of(first, second));
         when(projectRepository.findByIdAndArchivedAtIsNull(project.getId())).thenReturn(Optional.of(project));
 
-        dispatcher.dispatch(project.getId(), "task.overdue");
+        dispatcher.dispatch(project.getId(), "task.blocked");
 
-        verify(notificationPort).notify(any(), any(), any(), any());
-        verify(chatPort).postMessage(any(), any(), any());
+        verify(notificationPort, times(2)).notify(any(), any(), any(), any());
         verify(automationRunRepository, times(2)).save(any());
     }
 }

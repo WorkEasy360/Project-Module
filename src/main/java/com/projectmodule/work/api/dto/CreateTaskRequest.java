@@ -1,7 +1,6 @@
 package com.projectmodule.work.api.dto;
 
 import com.projectmodule.project.domain.ProjectPriority;
-import com.projectmodule.work.domain.TaskRecurrence;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
@@ -33,11 +32,9 @@ public record CreateTaskRequest(
 
         Integer estimateMinutes,
 
-        TaskRecurrence recurrence,
-
         List<String> tags) {
 
     public CreateTaskRequest(String name, String description, LocalDate dueDate, UUID assigneeId) {
-        this(name, description, dueDate, assigneeId, null, null, null, null, null);
+        this(name, description, dueDate, assigneeId, null, null, null, null);
     }
 }

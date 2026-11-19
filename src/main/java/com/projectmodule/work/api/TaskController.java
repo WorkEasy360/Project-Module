@@ -34,7 +34,7 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 /**
  * REST endpoints for tasks, exactly as {@code docs/project/04-API.md} defines them — including
- * the one single-item {@code GET /tasks/{id}}, unlike Phase/Milestone/Task List, which have
+ * the one single-item {@code GET /tasks/{id}}, unlike most other resources here, which have
  * none. Status transitions and assignment go through {@code PATCH} — see
  * {@link com.projectmodule.work.api.dto.UpdateTaskRequest}. Holds no business logic or
  * authorization decision; both are delegated to {@link TaskApplicationService}.
@@ -101,23 +101,6 @@ public class TaskController {
             columns.add(new KanbanColumnResponse(status, tasks));
         }
         return new KanbanBoardResponse(columns);
-    }
-
-    @GetMapping("/tasks/{id}/followers")
-    public List<UUID> listFollowers(@PathVariable UUID id) {
-        return taskApplicationService.listFollowers(requestContext, id);
-    }
-
-    @PostMapping("/tasks/{id}/followers/me")
-    public ResponseEntity<Void> follow(@PathVariable UUID id) {
-        taskApplicationService.setFollowing(requestContext, id, true);
-        return ResponseEntity.noContent().build();
-    }
-
-    @DeleteMapping("/tasks/{id}/followers/me")
-    public ResponseEntity<Void> unfollow(@PathVariable UUID id) {
-        taskApplicationService.setFollowing(requestContext, id, false);
-        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/tasks/{id}")

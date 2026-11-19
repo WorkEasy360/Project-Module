@@ -46,9 +46,6 @@ public class ProjectAutomation extends BaseEntity {
     @Column(name = "action_recipient_id")
     private UUID actionRecipientId;
 
-    @Column(name = "action_channel_reference")
-    private String actionChannelReference;
-
     @Column(name = "action_message", nullable = false)
     private String actionMessage;
 
@@ -67,14 +64,14 @@ public class ProjectAutomation extends BaseEntity {
 
     private ProjectAutomation(UUID id, UUID projectId, String name, String triggerEvent,
                               AutomationActionType actionType, UUID actionRecipientId,
-                              String actionChannelReference, String actionMessage) {
+                              String actionMessage) {
         super(id);
         this.projectId = Objects.requireNonNull(projectId, "projectId is required");
         this.name = validateName(name);
         this.triggerEvent = validateTriggerEvent(triggerEvent);
         this.actionType = Objects.requireNonNull(actionType, "actionType is required");
         this.actionMessage = validateNotBlank(actionMessage, "actionMessage");
-        validateAndAssignActionTarget(actionType, actionRecipientId, actionChannelReference);
+        validateAndAssignActionTarget(actionType, actionRecipientId);
         this.enabled = true;
     }
 
@@ -88,9 +85,9 @@ public class ProjectAutomation extends BaseEntity {
      */
     public static ProjectAutomation create(UUID projectId, String name, String triggerEvent,
                                            AutomationActionType actionType, UUID actionRecipientId,
-                                           String actionChannelReference, String actionMessage) {
+                                           String actionMessage) {
         return new ProjectAutomation(UuidV7.generate(), projectId, name, triggerEvent, actionType,
-                actionRecipientId, actionChannelReference, actionMessage);
+                actionRecipientId, actionMessage);
     }
 
     public void rename(String newName) {
@@ -147,20 +144,13 @@ public class ProjectAutomation extends BaseEntity {
         }
     }
 
-    private void validateAndAssignActionTarget(AutomationActionType actionType, UUID actionRecipientId,
-                                               String actionChannelReference) {
+    private void validateAndAssignActionTarget(AutomationActionType actionType, UUID actionRecipientId) {
         switch (actionType) {
             case NOTIFY -> {
                 if (actionRecipientId == null) {
                     throw new ValidationException("actionRecipientId is required for NOTIFY");
                 }
                 this.actionRecipientId = actionRecipientId;
-            }
-            case CHAT_MESSAGE -> {
-                if (actionChannelReference == null || actionChannelReference.isBlank()) {
-                    throw new ValidationException("actionChannelReference is required for CHAT_MESSAGE");
-                }
-                this.actionChannelReference = actionChannelReference;
             }
         }
     }
@@ -221,10 +211,6 @@ public class ProjectAutomation extends BaseEntity {
 
     public Optional<ExternalUserId> getActionRecipientId() {
         return Optional.ofNullable(actionRecipientId).map(ExternalUserId::of);
-    }
-
-    public Optional<String> getActionChannelReference() {
-        return Optional.ofNullable(actionChannelReference);
     }
 
     public String getActionMessage() {

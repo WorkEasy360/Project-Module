@@ -5,6 +5,7 @@ import com.projectmodule.project.domain.ProjectStatus;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
+import java.util.List;
 
 /**
  * Request body for {@code PATCH /api/v1/projects/{id}}.
@@ -35,5 +36,15 @@ public record UpdateProjectRequest(
         LocalDate targetEndDate,
 
         @NotNull(message = "must not be null")
-        Long version) {
+        Long version,
+
+        @Size(max = 200, message = "must be at most 200 characters")
+        String customerContact,
+
+        List<String> tags) {
+
+    public UpdateProjectRequest(String name, String description, ProjectStatus status, ProjectPriority priority,
+                                LocalDate startDate, LocalDate targetEndDate, Long version) {
+        this(name, description, status, priority, startDate, targetEndDate, version, null, null);
+    }
 }

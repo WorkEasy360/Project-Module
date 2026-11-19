@@ -14,7 +14,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The PostgreSQL-backed {@link SignInRecords} ({@code V21__create_signed_in_sessions.sql}): one row per signed-in
+ * The PostgreSQL-backed {@link SignInRecords} ({@code V24__create_signed_in_sessions.sql}): one row per signed-in
  * session in {@code signed_in_sessions}, and the recently ended {@code sid}s in {@code ended_sign_ins}. Shared
  * by every instance and kept across restarts.
  *

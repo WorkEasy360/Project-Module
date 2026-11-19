@@ -7,7 +7,6 @@ import java.util.UUID;
 public record ChecklistResponse(
         UUID id,
         UUID taskId,
-        UUID subtaskId,
         String text,
         boolean checked,
         boolean archived,

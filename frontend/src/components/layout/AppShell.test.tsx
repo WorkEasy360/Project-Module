@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { SidebarProvider } from '../../context/SidebarContext'
@@ -8,8 +8,24 @@ import { SessionProvider } from '../../context/SessionContext'
 import { IdentityProvider } from '../../context/IdentityContext'
 import { setIdentity } from '../../context/identityStore'
 import { resetSessionForTest, signInAs } from '../../test/session'
+import { WorkspaceSettingsProvider } from '../../context/WorkspaceSettingsContext'
+import { OPEN_ASSISTANT_EVENT } from '../assistant/AssistantPanel'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+
+vi.mock('../../api/workspace', () => ({
+  workspaceApi: {
+    settings: vi.fn(() =>
+      Promise.resolve({
+        name: 'Acme Enterprises Pvt. Ltd.',
+        canEdit: true,
+        plan: { name: 'Advanced', validUntil: '31 Dec 2026', manageUrl: 'https://workeasy360.com/plans' },
+        supportEmail: 'support@workeasy360.com',
+      }),
+    ),
+    rename: vi.fn(),
+  },
+}))
 
 /** Stubs window.matchMedia so `useMediaQuery('(max-width: 768px)')` resolves as desired. */
 function mockViewport(isMobile: boolean) {
@@ -25,24 +41,31 @@ function mockViewport(isMobile: boolean) {
   })) as typeof window.matchMedia
 }
 
-function renderShell() {
+function renderShell(path = '/dashboard') {
   return render(
-    <MemoryRouter initialEntries={['/dashboard']}>
+    <MemoryRouter initialEntries={[path]}>
       <SessionProvider autoLoad={false}>
         <IdentityProvider>
-          <SidebarProvider>
-            <Header />
-            <Sidebar />
-          </SidebarProvider>
+          <WorkspaceSettingsProvider>
+            <SidebarProvider>
+              <Header />
+              <Sidebar />
+            </SidebarProvider>
+          </WorkspaceSettingsProvider>
         </IdentityProvider>
       </SessionProvider>
     </MemoryRouter>,
   )
 }
 
-describe('AppShell — hamburger / sidebar navigation', () => {
+function sidebar(container: HTMLElement) {
+  return within(container.querySelector('aside.sidebar') as HTMLElement)
+}
+
+describe('App shell — WorkEasy360 Operations sidebar and header', () => {
   beforeEach(() => {
     setCollapsed(false)
+    mockViewport(false)
     signInAs('11111111-2222-4333-8444-555555555555', { name: 'Ada Lovelace' })
   })
 
@@ -69,134 +92,116 @@ describe('AppShell — hamburger / sidebar navigation', () => {
     expect(screen.queryByRole('button', { name: 'Sign out of Easy Project' })).not.toBeInTheDocument()
   })
 
-  it('desktop: clicking the hamburger collapses the sidebar and persists the preference', () => {
-    mockViewport(false)
+  it('lists the sections in the design order, with Settings below a divider', () => {
     const { container } = renderShell()
-
-    const sidebar = container.querySelector('.sidebar')
-    expect(sidebar).not.toHaveClass('collapsed')
-
-    const hamburger = screen.getByRole('button', { name: /collapse sidebar/i })
-    fireEvent.click(hamburger)
-
-    expect(sidebar).toHaveClass('collapsed')
-    expect(window.localStorage.getItem('projectmodule.sidebarCollapsed')).toBe('1')
-
-    // Clicking again expands it back, and the label flips to match.
-    const expandButton = screen.getByRole('button', { name: /expand sidebar/i })
-    fireEvent.click(expandButton)
-    expect(sidebar).not.toHaveClass('collapsed')
-    expect(window.localStorage.getItem('projectmodule.sidebarCollapsed')).toBe('0')
+    const labels = [...container.querySelectorAll('aside.sidebar .sidebar-link-label')].map((el) => el.textContent)
+    expect(labels).toEqual(['Home', 'Projects', 'Tasks', 'Team', 'Automation', 'Reports', 'Helpdesk', 'Settings'])
+    expect(container.querySelector('aside.sidebar .sidebar-divider')).toBeInTheDocument()
+    expect(sidebar(container).getByText('Operations')).toBeInTheDocument()
   })
 
-  it('mobile: clicking the hamburger opens the off-canvas drawer with a backdrop', () => {
-    mockViewport(true)
-    const { container } = renderShell()
-
-    const sidebar = container.querySelector('.sidebar')
-    expect(sidebar).not.toHaveClass('open')
-    expect(container.querySelector('.sidebar-backdrop')).not.toBeInTheDocument()
-
-    const hamburger = screen.getByRole('button', { name: /open navigation/i })
-    fireEvent.click(hamburger)
-
-    expect(sidebar).toHaveClass('open')
-    expect(container.querySelector('.sidebar-backdrop')).toBeInTheDocument()
+  it('highlights Home on the home page', () => {
+    const { container } = renderShell('/dashboard')
+    expect(sidebar(container).getByRole('link', { name: 'Home' })).toHaveClass('active')
+    expect(sidebar(container).getByRole('button', { name: /tasks/i })).toHaveAttribute('aria-expanded', 'false')
   })
 
-  it('mobile: clicking the backdrop closes the drawer', () => {
-    mockViewport(true)
-    const { container } = renderShell()
-
-    fireEvent.click(screen.getByRole('button', { name: /open navigation/i }))
-    expect(container.querySelector('.sidebar')).toHaveClass('open')
-
-    fireEvent.click(container.querySelector('.sidebar-backdrop')!)
-    expect(container.querySelector('.sidebar')).not.toHaveClass('open')
-    expect(container.querySelector('.sidebar-backdrop')).not.toBeInTheDocument()
+  it('opens Projects on a project page, with Active Projects highlighted', () => {
+    const { container } = renderShell('/projects/abc/tasks')
+    const s = sidebar(container)
+    expect(s.getByRole('button', { name: /projects/i })).toHaveAttribute('aria-expanded', 'true')
+    expect(s.getByRole('link', { name: 'Active Projects' })).toHaveClass('active')
+    expect(s.getByRole('link', { name: 'Archived Projects' })).not.toHaveClass('active')
   })
 
-  it('mobile: pressing Escape closes the drawer', () => {
-    mockViewport(true)
-    const { container } = renderShell()
-
-    fireEvent.click(screen.getByRole('button', { name: /open navigation/i }))
-    expect(container.querySelector('.sidebar')).toHaveClass('open')
-
-    fireEvent.keyDown(document, { key: 'Escape' })
-    expect(container.querySelector('.sidebar')).not.toHaveClass('open')
+  it('highlights Archived Projects on its page', () => {
+    const { container } = renderShell('/projects/archived')
+    expect(sidebar(container).getByRole('link', { name: 'Archived Projects' })).toHaveClass('active')
+    expect(sidebar(container).getByRole('link', { name: 'Active Projects' })).not.toHaveClass('active')
   })
 
-  it('mobile: clicking a navigation link closes the drawer', async () => {
-    mockViewport(true)
-    const { container } = renderShell()
-    const user = userEvent.setup()
-
-    fireEvent.click(screen.getByRole('button', { name: /open navigation/i }))
-    expect(container.querySelector('.sidebar')).toHaveClass('open')
-
-    await user.click(screen.getByRole('link', { name: /projects/i }))
-    expect(container.querySelector('.sidebar')).not.toHaveClass('open')
+  it('a closed group opens to show its pages', async () => {
+    const { container } = renderShell('/dashboard')
+    const s = sidebar(container)
+    expect(s.queryByRole('link', { name: 'Team Workload' })).not.toBeInTheDocument()
+    await userEvent.click(s.getByRole('button', { name: /reports/i }))
+    expect(s.getByRole('link', { name: 'Task Progress' })).toHaveAttribute('href', '/reports')
+    expect(s.getByRole('link', { name: 'Project Progress' })).toHaveAttribute('href', '/reports/projects')
+    expect(s.getByRole('link', { name: 'Team Workload' })).toHaveAttribute('href', '/reports/workload')
   })
 
-  it('highlights the active route in the sidebar', () => {
-    mockViewport(false)
+  it('has the V3 pages under each section, and nothing removed', async () => {
+    const { container } = renderShell('/dashboard')
+    const s = sidebar(container)
+    const open = async (name: RegExp) => userEvent.click(s.getByRole('button', { name }))
+    await open(/^tasks/i)
+    expect(s.getByRole('link', { name: 'My Tasks' })).toHaveAttribute('href', '/tasks')
+    expect(s.getByRole('link', { name: 'All Tasks' })).toHaveAttribute('href', '/tasks/all')
+    await open(/^team/i)
+    for (const name of ['Members', 'Teams', 'Invitations']) expect(s.getByRole('link', { name })).toBeInTheDocument()
+    await open(/^automation/i)
+    expect(s.getByRole('link', { name: 'Rules' })).toHaveAttribute('href', '/automations')
+    expect(s.getByRole('link', { name: 'Run History' })).toHaveAttribute('href', '/automations/runs')
+    await open(/^helpdesk/i)
+    for (const name of ['Raise Ticket', 'My Tickets', 'Help Articles']) expect(s.getByRole('link', { name })).toBeInTheDocument()
+    await open(/^settings/i)
+    for (const name of ['Workspace & Access', 'Fields & Tags', 'Notifications', 'Integrations', 'Subscription & Usage']) {
+      expect(s.getByRole('link', { name })).toBeInTheDocument()
+    }
+    for (const gone of ['Templates', 'Timesheet', 'Calendar']) expect(s.queryByText(gone)).not.toBeInTheDocument()
+  })
+
+  it('shows the workspace name in the header and the plan in the sidebar', async () => {
+    const { container } = renderShell()
+    expect(await screen.findByRole('button', { name: /acme enterprises pvt\. ltd\./i })).toBeInTheDocument()
+    expect(sidebar(container).getByText('Advanced')).toBeInTheDocument()
+    expect(sidebar(container).getByText('Valid till 31 Dec 2026')).toBeInTheDocument()
+    expect(sidebar(container).getByRole('link', { name: /manage plan/i })).toHaveAttribute('href', 'https://workeasy360.com/plans')
+  })
+
+  it('the AI Assistant button opens the assistant, and help goes to the Helpdesk', async () => {
+    const opened = vi.fn()
+    window.addEventListener(OPEN_ASSISTANT_EVENT, opened)
     renderShell()
-    expect(screen.getByRole('link', { name: /^home$/i })).toHaveClass('active')
-    expect(screen.getByRole('link', { name: /projects/i })).not.toHaveClass('active')
+    await userEvent.click(screen.getByRole('button', { name: /ai assistant/i }))
+    expect(opened).toHaveBeenCalled()
+    window.removeEventListener(OPEN_ASSISTANT_EVENT, opened)
+    expect(screen.getByRole('link', { name: /help and support/i })).toHaveAttribute('href', '/helpdesk')
   })
 
-  it('links Templates directly from the workspace sidebar with the correct active state', () => {
-    mockViewport(false)
-    render(
-      <MemoryRouter initialEntries={['/templates']}>
-        <IdentityProvider><SidebarProvider>
-          <Sidebar />
-        </SidebarProvider></IdentityProvider>
-      </MemoryRouter>,
-    )
-    const templates = screen.getByRole('link', { name: /^templates$/i })
-    expect(templates).toHaveAttribute('href', '/templates')
-    expect(templates).toHaveClass('active')
-    // No workspace-level "More" page exists any more.
-    expect(screen.queryByRole('link', { name: /^more$/i })).not.toBeInTheDocument()
+  it('search opens from the header icon', async () => {
+    renderShell()
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }))
+    expect(screen.getByRole('searchbox', { name: /search projects and tasks/i })).toBeInTheDocument()
   })
 
-  it('groups the workspace into short sections', () => {
-    mockViewport(false)
-    render(
-      <MemoryRouter initialEntries={['/dashboard']}>
-        <IdentityProvider><SidebarProvider>
-          <Sidebar />
-        </SidebarProvider></IdentityProvider>
-      </MemoryRouter>,
-    )
-    expect(screen.getByText('Work')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Timesheet' })).toHaveAttribute('href', '/timesheet')
+  it('when collapsed, shows icons only', () => {
+    setCollapsed(true)
+    const { container } = renderShell()
+    expect(container.querySelector('aside.sidebar')).toHaveClass('collapsed')
+    expect(container.querySelectorAll('aside.sidebar .sidebar-link-label')).toHaveLength(0)
   })
 
-  it('never repeats the project tabs in the sidebar', () => {
-    mockViewport(false)
-    render(
-      <MemoryRouter initialEntries={['/dashboard']}>
-        <IdentityProvider><SidebarProvider>
-          <Sidebar />
-        </SidebarProvider></IdentityProvider>
-      </MemoryRouter>,
-    )
-    expect(screen.queryByRole('link', { name: /^tasks$/i })).not.toBeInTheDocument()
+  it('the < button shrinks the navigation to icons, and > expands it again', () => {
+    setCollapsed(false)
+    const { container } = renderShell()
+    const aside = container.querySelector('aside.sidebar')
+    fireEvent.click(screen.getByRole('button', { name: 'Shrink navigation' }))
+    expect(aside).toHaveClass('collapsed')
+    fireEvent.click(screen.getByRole('button', { name: 'Expand navigation' }))
+    expect(aside).not.toHaveClass('collapsed')
   })
 
-  it('keeps project tabs off the sidebar even inside a project', () => {
-    mockViewport(false)
-    render(
-      <MemoryRouter initialEntries={['/projects/proj-123/overview']}>
-        <IdentityProvider><SidebarProvider>
-          <Sidebar />
-        </SidebarProvider></IdentityProvider>
-      </MemoryRouter>,
-    )
-    expect(screen.queryByRole('link', { name: /^tasks$/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Projects' })).toBeInTheDocument()
+  it('mobile: the menu button opens the drawer, and choosing a page closes it', () => {
+    mockViewport(true)
+    const { container } = renderShell()
+    const aside = container.querySelector('aside.sidebar')
+    expect(aside).not.toHaveClass('open')
+    fireEvent.click(screen.getByRole('button', { name: /open navigation/i }))
+    expect(aside).toHaveClass('open')
+    expect(container.querySelector('.sidebar-backdrop')).toBeInTheDocument()
+    fireEvent.click(sidebar(container).getByRole('link', { name: 'Home' }))
+    expect(aside).not.toHaveClass('open')
   })
 })

@@ -64,7 +64,7 @@ class ProjectAutomationPersistenceTest {
             Project project = persistedProject("Apollo");
             UUID recipientId = UUID.randomUUID();
             ProjectAutomation automation = ProjectAutomation.create(project.getId(), "Notify on overdue",
-                    "task.overdue", AutomationActionType.NOTIFY, recipientId, null, "A task is overdue");
+                    "task.blocked", AutomationActionType.NOTIFY, recipientId, "A task is overdue");
             UUID id = automation.getId();
 
             projectAutomationRepository.saveAndFlush(automation);
@@ -72,24 +72,10 @@ class ProjectAutomationPersistenceTest {
 
             ProjectAutomation loaded = projectAutomationRepository.findById(id).orElseThrow();
             assertThat(loaded.getName()).isEqualTo("Notify on overdue");
-            assertThat(loaded.getTriggerEvent()).isEqualTo("task.overdue");
+            assertThat(loaded.getTriggerEvent()).isEqualTo("task.blocked");
             assertThat(loaded.getActionType()).isEqualTo(AutomationActionType.NOTIFY);
             assertThat(loaded.getActionRecipientId()).contains(ExternalUserId.of(recipientId));
             assertThat(loaded.isEnabled()).isTrue();
-        }
-
-        @Test
-        @DisplayName("round-trips a CHAT_MESSAGE automation")
-        void roundTripsChatMessageAutomation() {
-            Project project = persistedProject("Apollo");
-            ProjectAutomation automation = ProjectAutomation.create(project.getId(), "Notify chat",
-                    "risk.created", AutomationActionType.CHAT_MESSAGE, null, "#risks", "A new risk was created");
-
-            projectAutomationRepository.saveAndFlush(automation);
-            entityManager.clear();
-
-            ProjectAutomation loaded = projectAutomationRepository.findById(automation.getId()).orElseThrow();
-            assertThat(loaded.getActionChannelReference()).contains("#risks");
         }
 
         @Test
@@ -97,8 +83,8 @@ class ProjectAutomationPersistenceTest {
         void softArchiveRetainsRow() {
             Project project = persistedProject("Apollo");
             ProjectAutomation automation = projectAutomationRepository.saveAndFlush(
-                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.overdue",
-                            AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message"));
+                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.blocked",
+                            AutomationActionType.NOTIFY, UUID.randomUUID(), "message"));
 
             automation.archive(owner);
             projectAutomationRepository.saveAndFlush(automation);
@@ -112,8 +98,8 @@ class ProjectAutomationPersistenceTest {
         @Test
         @DisplayName("cannot reference a project that does not exist")
         void enforcesProjectForeignKey() {
-            ProjectAutomation orphan = ProjectAutomation.create(UUID.randomUUID(), "Orphan", "task.overdue",
-                    AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message");
+            ProjectAutomation orphan = ProjectAutomation.create(UUID.randomUUID(), "Orphan", "task.blocked",
+                    AutomationActionType.NOTIFY, UUID.randomUUID(), "message");
 
             assertThatThrownBy(() -> projectAutomationRepository.saveAndFlush(orphan))
                     .isInstanceOf(DataIntegrityViolationException.class);
@@ -124,20 +110,20 @@ class ProjectAutomationPersistenceTest {
         void dispatcherLookupMatchesEnabledActiveRules() {
             Project project = persistedProject("Apollo");
             ProjectAutomation matching = projectAutomationRepository.saveAndFlush(
-                    ProjectAutomation.create(project.getId(), "Match", "task.overdue",
-                            AutomationActionType.NOTIFY, UUID.randomUUID(), null, "m"));
-            ProjectAutomation disabled = ProjectAutomation.create(project.getId(), "Disabled", "task.overdue",
-                    AutomationActionType.NOTIFY, UUID.randomUUID(), null, "m");
+                    ProjectAutomation.create(project.getId(), "Match", "task.blocked",
+                            AutomationActionType.NOTIFY, UUID.randomUUID(), "m"));
+            ProjectAutomation disabled = ProjectAutomation.create(project.getId(), "Disabled", "task.blocked",
+                    AutomationActionType.NOTIFY, UUID.randomUUID(), "m");
             disabled.disable();
             projectAutomationRepository.saveAndFlush(disabled);
             ProjectAutomation differentTrigger = projectAutomationRepository.saveAndFlush(
-                    ProjectAutomation.create(project.getId(), "Different trigger", "task.blocked",
-                            AutomationActionType.NOTIFY, UUID.randomUUID(), null, "m"));
+                    ProjectAutomation.create(project.getId(), "Different trigger", "task.completed",
+                            AutomationActionType.NOTIFY, UUID.randomUUID(), "m"));
             entityManager.clear();
 
             assertThat(projectAutomationRepository
                             .findByProjectIdAndTriggerEventAndEnabledIsTrueAndArchivedAtIsNull(
-                                    project.getId(), "task.overdue"))
+                                    project.getId(), "task.blocked"))
                     .extracting(ProjectAutomation::getName)
                     .containsExactly("Match");
         }
@@ -151,11 +137,11 @@ class ProjectAutomationPersistenceTest {
         void roundTripsSucceededRun() {
             Project project = persistedProject("Apollo");
             ProjectAutomation automation = projectAutomationRepository.saveAndFlush(
-                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.overdue",
-                            AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message"));
+                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.blocked",
+                            AutomationActionType.NOTIFY, UUID.randomUUID(), "message"));
 
             AutomationRun run = automationRunRepository.saveAndFlush(
-                    AutomationRun.succeeded(automation.getId(), project.getId(), "task.overdue"));
+                    AutomationRun.succeeded(automation.getId(), project.getId(), "task.blocked"));
             entityManager.clear();
 
             AutomationRun loaded = automationRunRepository.findById(run.getId()).orElseThrow();
@@ -168,11 +154,11 @@ class ProjectAutomationPersistenceTest {
         void roundTripsFailedRun() {
             Project project = persistedProject("Apollo");
             ProjectAutomation automation = projectAutomationRepository.saveAndFlush(
-                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.overdue",
-                            AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message"));
+                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.blocked",
+                            AutomationActionType.NOTIFY, UUID.randomUUID(), "message"));
 
             AutomationRun run = automationRunRepository.saveAndFlush(
-                    AutomationRun.failed(automation.getId(), project.getId(), "task.overdue", "boom"));
+                    AutomationRun.failed(automation.getId(), project.getId(), "task.blocked", "boom"));
             entityManager.clear();
 
             AutomationRun loaded = automationRunRepository.findById(run.getId()).orElseThrow();
@@ -182,7 +168,7 @@ class ProjectAutomationPersistenceTest {
         @Test
         @DisplayName("cannot reference an automation that does not exist")
         void enforcesAutomationForeignKey() {
-            AutomationRun orphan = AutomationRun.succeeded(UUID.randomUUID(), UUID.randomUUID(), "task.overdue");
+            AutomationRun orphan = AutomationRun.succeeded(UUID.randomUUID(), UUID.randomUUID(), "task.blocked");
 
             assertThatThrownBy(() -> automationRunRepository.saveAndFlush(orphan))
                     .isInstanceOf(DataIntegrityViolationException.class);
@@ -193,14 +179,14 @@ class ProjectAutomationPersistenceTest {
         void listsRunsMostRecentFirst() throws InterruptedException {
             Project project = persistedProject("Apollo");
             ProjectAutomation automation = projectAutomationRepository.saveAndFlush(
-                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.overdue",
-                            AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message"));
+                    ProjectAutomation.create(project.getId(), "Notify on overdue", "task.blocked",
+                            AutomationActionType.NOTIFY, UUID.randomUUID(), "message"));
 
             automationRunRepository.saveAndFlush(
-                    AutomationRun.succeeded(automation.getId(), project.getId(), "task.overdue"));
+                    AutomationRun.succeeded(automation.getId(), project.getId(), "task.blocked"));
             Thread.sleep(5);
             AutomationRun second = automationRunRepository.saveAndFlush(
-                    AutomationRun.failed(automation.getId(), project.getId(), "task.overdue", "boom"));
+                    AutomationRun.failed(automation.getId(), project.getId(), "task.blocked", "boom"));
             entityManager.clear();
 
             assertThat(automationRunRepository.findByAutomationIdOrderByExecutedAtDesc(automation.getId()))

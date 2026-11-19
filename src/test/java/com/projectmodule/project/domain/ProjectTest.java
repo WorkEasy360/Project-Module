@@ -37,7 +37,7 @@ class ProjectTest {
         void startsInPlanning() {
             Project project = newProject();
 
-            assertThat(project.getStatus()).isEqualTo(ProjectStatus.PLANNING);
+            assertThat(project.getStatus()).isEqualTo(ProjectStatus.ACTIVE);
             assertThat(project.isArchived()).isFalse();
             assertThat(project.getId()).isNotNull();
             assertThat(project.getOwnerId()).isEqualTo(OWNER);
@@ -194,11 +194,9 @@ class ProjectTest {
         @Test
         @DisplayName("open states are the ones where work can still change")
         void openStates() {
-            assertThat(ProjectStatus.PLANNING.isOpen()).isTrue();
             assertThat(ProjectStatus.ACTIVE.isOpen()).isTrue();
             assertThat(ProjectStatus.ON_HOLD.isOpen()).isTrue();
             assertThat(ProjectStatus.COMPLETED.isOpen()).isFalse();
-            assertThat(ProjectStatus.CANCELLED.isOpen()).isFalse();
         }
     }
 
@@ -234,7 +232,7 @@ class ProjectTest {
             project.pullDomainEvents(); // discard the creation event
 
             project.rename("Renamed");
-            project.changePriority(ProjectPriority.CRITICAL);
+            project.changePriority(ProjectPriority.HIGH);
             project.changeStatus(ProjectStatus.ACTIVE);
             project.recordUpdated();
 

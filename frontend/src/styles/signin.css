@@ -411,11 +411,17 @@
 
 /* ---------- Sign in with Workeasy360 ---------- */
 
-.si-sso {
+/* A card section about Workeasy360 sign-in (the sso_only card, "you are still signed in"). The
+   "Continue with WorkEasy360 Account" button itself is .si-sso (signin-ops.css). */
+.si-sso-panel {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 6px;
+}
+/* With Workeasy360 sign-in configured the button is a link to the backend: no underline. */
+a.si-sso {
+  text-decoration: none;
 }
 .si-sso-title {
   font-size: 15px;
@@ -426,14 +432,6 @@
   font-size: 13px;
   color: var(--color-text-muted);
   margin: 0 0 4px;
-}
-/* Next to the email sign-in: a secondary button under the "or" divider. */
-.si-sso-alongside {
-  margin-top: 14px;
-  align-items: stretch;
-}
-.si-sso-alongside .si-sso-text {
-  text-align: center;
 }
 a.si-submit {
   display: flex;

@@ -10,7 +10,7 @@ vi.mock('../../api/tasks', () => ({ tasksApi: { update: vi.fn() } }))
 
 const task: Task = {
   id: 't1', projectId: 'p1', name: 'Repro task', description: null, dueDate: null, assigneeId: null,
-  status: 'TODO', archived: false, startDate: null, priority: 'MEDIUM' as const, estimateMinutes: null, recurrence: 'NONE' as const, tags: [] as string[], createdAt: '', updatedAt: '', version: 3,
+  status: 'TODO', archived: false, priority: 'MEDIUM' as const, createdAt: '', updatedAt: '', version: 3,
 }
 
 describe('TaskStatusControl', () => {
@@ -19,7 +19,7 @@ describe('TaskStatusControl', () => {
   it('offers every other status', () => {
     render(<TaskStatusControl task={task} onChanged={vi.fn()} />)
     const options = Array.from((screen.getByRole('combobox') as HTMLSelectElement).options).map((o) => o.value)
-    expect(options).toEqual(['', 'IN_PROGRESS', 'BLOCKED', 'OVERDUE', 'COMPLETED'])
+    expect(options).toEqual(['', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED'])
   })
 
   it('lets a completed task be reopened', () => {

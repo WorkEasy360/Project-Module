@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { AUTOMATION_TRIGGER_EVENTS } from './automation'
 
 describe('AUTOMATION_TRIGGER_EVENTS', () => {
-  it('has exactly 19 values, matching the backend AutomationTriggerEvent catalogue', () => {
-    expect(AUTOMATION_TRIGGER_EVENTS).toHaveLength(19)
+  it('matches the 8 V3 events the backend raises', () => {
+    expect([...AUTOMATION_TRIGGER_EVENTS].sort()).toEqual([
+      'project.archived', 'project.created', 'project.updated',
+      'task.assigned', 'task.blocked', 'task.completed', 'task.created', 'task.updated',
+    ])
   })
 
   it('has no duplicate values', () => {

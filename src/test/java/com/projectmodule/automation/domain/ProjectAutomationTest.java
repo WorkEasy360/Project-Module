@@ -16,8 +16,8 @@ class ProjectAutomationTest {
     private static final UUID PROJECT_ID = UUID.randomUUID();
 
     private static ProjectAutomation notifyRule() {
-        return ProjectAutomation.create(PROJECT_ID, "Notify on overdue", "task.overdue",
-                AutomationActionType.NOTIFY, UUID.randomUUID(), null, "A task is overdue");
+        return ProjectAutomation.create(PROJECT_ID, "Notify on overdue", "task.blocked",
+                AutomationActionType.NOTIFY, UUID.randomUUID(), "A task is overdue");
     }
 
     @Nested
@@ -30,7 +30,7 @@ class ProjectAutomationTest {
 
             assertThat(automation.getProjectId()).isEqualTo(PROJECT_ID);
             assertThat(automation.getName()).isEqualTo("Notify on overdue");
-            assertThat(automation.getTriggerEvent()).isEqualTo("task.overdue");
+            assertThat(automation.getTriggerEvent()).isEqualTo("task.blocked");
             assertThat(automation.getActionType()).isEqualTo(AutomationActionType.NOTIFY);
             assertThat(automation.getActionRecipientId()).isPresent();
             assertThat(automation.isEnabled()).isTrue();
@@ -40,24 +40,16 @@ class ProjectAutomationTest {
         @Test
         @DisplayName("NOTIFY requires an actionRecipientId")
         void notifyRequiresRecipient() {
-            assertThatThrownBy(() -> ProjectAutomation.create(PROJECT_ID, "n", "task.overdue",
-                    AutomationActionType.NOTIFY, null, null, "message"))
-                    .isInstanceOf(ValidationException.class);
-        }
-
-        @Test
-        @DisplayName("CHAT_MESSAGE requires an actionChannelReference")
-        void chatMessageRequiresChannel() {
-            assertThatThrownBy(() -> ProjectAutomation.create(PROJECT_ID, "n", "task.overdue",
-                    AutomationActionType.CHAT_MESSAGE, null, null, "message"))
+            assertThatThrownBy(() -> ProjectAutomation.create(PROJECT_ID, "n", "task.blocked",
+                    AutomationActionType.NOTIFY, null, "message"))
                     .isInstanceOf(ValidationException.class);
         }
 
         @Test
         @DisplayName("rejects a blank name")
         void rejectsBlankName() {
-            assertThatThrownBy(() -> ProjectAutomation.create(PROJECT_ID, "   ", "task.overdue",
-                    AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message"))
+            assertThatThrownBy(() -> ProjectAutomation.create(PROJECT_ID, "   ", "task.blocked",
+                    AutomationActionType.NOTIFY, UUID.randomUUID(), "message"))
                     .isInstanceOf(ValidationException.class);
         }
 
@@ -65,7 +57,7 @@ class ProjectAutomationTest {
         @DisplayName("rejects a triggerEvent outside the catalogue, per docs/project/28-AUTOMATION-SPEC.md §2")
         void rejectsUncatalogedTriggerEvent() {
             assertThatThrownBy(() -> ProjectAutomation.create(PROJECT_ID, "n", "task.deleted",
-                    AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message"))
+                    AutomationActionType.NOTIFY, UUID.randomUUID(), "message"))
                     .isInstanceOf(ValidationException.class);
         }
 
@@ -73,7 +65,7 @@ class ProjectAutomationTest {
         @DisplayName("rejects an AI/Automation catalogue event as a triggerEvent (deliberately excluded)")
         void rejectsAiOrAutomationEventAsTrigger() {
             assertThatThrownBy(() -> ProjectAutomation.create(PROJECT_ID, "n", "automation.executed",
-                    AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message"))
+                    AutomationActionType.NOTIFY, UUID.randomUUID(), "message"))
                     .isInstanceOf(ValidationException.class);
         }
 
@@ -82,7 +74,7 @@ class ProjectAutomationTest {
         void acceptsEveryCataloguedEventType() {
             for (AutomationTriggerEvent value : AutomationTriggerEvent.values()) {
                 ProjectAutomation automation = ProjectAutomation.create(PROJECT_ID, "n", value.eventType(),
-                        AutomationActionType.NOTIFY, UUID.randomUUID(), null, "message");
+                        AutomationActionType.NOTIFY, UUID.randomUUID(), "message");
                 assertThat(automation.getTriggerEvent()).isEqualTo(value.eventType());
             }
         }
@@ -112,11 +104,11 @@ class ProjectAutomationTest {
         void matchesOnlyWhenEnabledActiveAndEqual() {
             ProjectAutomation automation = notifyRule();
 
-            assertThat(automation.matches("task.overdue")).isTrue();
-            assertThat(automation.matches("task.blocked")).isFalse();
+            assertThat(automation.matches("task.blocked")).isTrue();
+            assertThat(automation.matches("task.completed")).isFalse();
 
             automation.disable();
-            assertThat(automation.matches("task.overdue")).isFalse();
+            assertThat(automation.matches("task.blocked")).isFalse();
         }
 
         @Test
@@ -125,7 +117,7 @@ class ProjectAutomationTest {
             ProjectAutomation automation = notifyRule();
             automation.archive(ExternalUserId.of(UUID.randomUUID()));
 
-            assertThat(automation.matches("task.overdue")).isFalse();
+            assertThat(automation.matches("task.blocked")).isFalse();
         }
     }
 

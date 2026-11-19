@@ -3,34 +3,49 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { navigateTo } from '../../api/session'
-import { SettingsPage } from './SettingsPage'
+import { SettingsPage, tagCounts, type SettingsSection } from './SettingsPage'
 import { IdentityProvider } from '../../context/IdentityContext'
 import { SessionProvider } from '../../context/SessionContext'
 import { getSessionState } from '../../context/sessionStore'
 import { resetSessionForTest, signInAs } from '../../test/session'
-import { SidebarProvider } from '../../context/SidebarContext'
+import { WorkspaceSettingsProvider } from '../../context/WorkspaceSettingsContext'
 import { getIdentity, setIdentity } from '../../context/identityStore'
 import { getThemePreference, setThemePreference } from '../../context/themeStore'
-import { getCollapsed, setCollapsed } from '../../context/sidebarStore'
+import { projectsApi } from '../../api/projects'
+
+const ME = '11111111-2222-4333-8444-555555555555'
+const ORG = '99999999-2222-4333-8444-555555555555'
 
 vi.mock('../../api/session', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api/session')>()),
   navigateTo: vi.fn(),
 }))
-
 vi.mock('../../api/auth', () => ({ authApi: { logout: vi.fn(() => Promise.resolve()) } }))
+vi.mock('../../api/projects', () => ({ projectsApi: { list: vi.fn() } }))
+vi.mock('../../api/workspace', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../api/workspace')>()),
+  workspaceApi: {
+    people: vi.fn(() => Promise.resolve([])),
+    settings: vi.fn(() =>
+      Promise.resolve({
+        name: 'Acme Enterprises Pvt. Ltd.',
+        canEdit: true,
+        plan: { name: 'Advanced', validUntil: '31 Dec 2026', manageUrl: 'https://workeasy360.com/plans' },
+        supportEmail: 'support@workeasy360.com',
+      }),
+    ),
+    rename: vi.fn(),
+  },
+}))
 
-const ME = '11111111-2222-4333-8444-555555555555'
-const ORG = '99999999-2222-4333-8444-555555555555'
-
-function renderSettings() {
+function renderSettings(section: SettingsSection) {
   return render(
     <MemoryRouter>
       <SessionProvider autoLoad={false}>
         <IdentityProvider>
-          <SidebarProvider>
-            <SettingsPage />
-          </SidebarProvider>
+          <WorkspaceSettingsProvider>
+            <SettingsPage section={section} />
+          </WorkspaceSettingsProvider>
         </IdentityProvider>
       </SessionProvider>
     </MemoryRouter>,
@@ -45,83 +60,95 @@ function mockLogoutFetch() {
   return fetchMock
 }
 
-describe('SettingsPage with an email account', () => {
+describe('SettingsPage', () => {
   beforeEach(() => {
     setIdentity({ userId: ME, orgId: ORG, token: 'tok', name: 'Ada', email: 'ada@example.com' })
-    setThemePreference('system')
-    setCollapsed(false)
+    setThemePreference('light')
+    vi.mocked(projectsApi.list).mockReset().mockResolvedValue({
+      content: [
+        { id: 'p1', name: 'A', status: 'ACTIVE', priority: 'MEDIUM', ownerId: ME, updatedAt: '2026-11-01T00:00:00Z', tags: ['Sales', 'Ops'] },
+        { id: 'p2', name: 'B', status: 'ACTIVE', priority: 'MEDIUM', ownerId: ME, updatedAt: '2026-11-01T00:00:00Z', tags: ['Sales'] },
+      ],
+      page: 0,
+      size: 100,
+      totalElements: 2,
+      totalPages: 1,
+    })
   })
   afterEach(() => {
     setIdentity(null)
     setThemePreference('system')
-    setCollapsed(false)
     resetSessionForTest()
   })
 
-  it('Account shows the signed-in name and email, not internal ids', () => {
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
-    expect(within(section).getByText('Ada')).toBeInTheDocument()
-    expect(within(section).getByText('ada@example.com')).toBeInTheDocument()
-    expect(within(section).queryByText(ME)).not.toBeInTheDocument()
-    expect(within(section).getByRole('button', { name: 'Edit name' })).toBeInTheDocument()
-    expect(within(section).getByRole('button', { name: 'Change password' })).toBeInTheDocument()
-    expect(screen.queryByRole('checkbox', { name: /notification/i })).not.toBeInTheDocument()
-  })
-
-  it('Sign out ends the session, and the ids can no longer be edited by hand', async () => {
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
-    expect(within(section).queryByRole('button', { name: /change identity/i })).not.toBeInTheDocument()
-    expect(within(section).queryByRole('button', { name: /Workeasy360/ })).not.toBeInTheDocument()
-    await userEvent.click(within(section).getByRole('button', { name: /Sign out/ }))
+  it('Workspace & Access shows the workspace, your profile without internal ids, and signs out', async () => {
+    renderSettings('workspace')
+    expect(screen.getByRole('heading', { name: 'Workspace & Access' })).toBeInTheDocument()
+    expect(await screen.findByText('Acme Enterprises Pvt. Ltd.')).toBeInTheDocument()
+    const profile = screen.getByRole('region', { name: 'Your profile' })
+    expect(within(profile).getByText('Ada')).toBeInTheDocument()
+    expect(within(profile).getByText('ada@example.com')).toBeInTheDocument()
+    expect(within(profile).queryByText(ME)).not.toBeInTheDocument()
+    expect(within(profile).getByRole('button', { name: 'Edit name' })).toBeInTheDocument()
+    expect(within(profile).getByRole('button', { name: 'Change password' })).toBeInTheDocument()
+    expect(within(profile).queryByRole('button', { name: /Workeasy360/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Team → Members' })).toHaveAttribute('href', '/team')
+    await userEvent.click(within(profile).getByRole('button', { name: /Sign out/ }))
     expect(getIdentity()).toBeNull()
   })
 
-  it('Appearance is a System / Light / Dark radio group wired to the theme store', async () => {
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Appearance' })
-    expect(within(section).getByRole('radio', { name: 'System' })).toBeChecked()
-    await userEvent.click(within(section).getByRole('radio', { name: 'Dark' }))
+  it('Appearance switches the theme', async () => {
+    renderSettings('workspace')
+    const appearance = screen.getByRole('region', { name: 'Appearance' })
+    expect(within(appearance).getByRole('radio', { name: /Light/ })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(within(appearance).getByRole('radio', { name: /Dark/ }))
     expect(getThemePreference()).toBe('dark')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(within(section).getByRole('radio', { name: 'Dark' })).toBeChecked()
-    expect(section).toHaveTextContent('Currently showing the dark theme')
-    await userEvent.click(within(section).getByRole('radio', { name: 'Light' }))
-    expect(getThemePreference()).toBe('light')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 
-  it('Navigation toggles the persisted sidebar collapse', async () => {
-    renderSettings()
-    const box = within(screen.getByRole('region', { name: 'Navigation' })).getByRole('checkbox')
-    expect(box).not.toBeChecked()
-    await userEvent.click(box)
-    expect(getCollapsed()).toBe(true)
-    expect(box).toBeChecked()
-    await userEvent.click(box)
-    expect(getCollapsed()).toBe(false)
+  it('Fields & Tags lists the V3 statuses and priorities and the project tags in use', async () => {
+    renderSettings('fields')
+    const defs = screen.getByRole('region', { name: 'Statuses and priorities' })
+    for (const label of ['To Do', 'In Progress', 'Blocked', 'Done', 'Low', 'Normal', 'High', 'On Hold', 'Archived']) {
+      expect(within(defs).getByText(label)).toBeInTheDocument()
+    }
+    expect(within(defs).queryByText('Overdue')).not.toBeInTheDocument()
+    const tags = screen.getByRole('region', { name: 'Project tags in use' })
+    expect(await within(tags).findByText('Sales')).toBeInTheDocument()
+    expect(within(tags).getByText('Ops')).toBeInTheDocument()
   })
 
-  it('Features lists the registry read-only with release badges; About shows the API base URL', () => {
-    renderSettings()
-    const features = screen.getByRole('region', { name: 'Features' })
-    expect(within(features).getByRole('link', { name: 'My Team' })).toHaveAttribute('href', '/team')
-    expect(within(features).getByRole('link', { name: 'Reports' })).toHaveAttribute('href', '/reports')
-    expect(within(features).getByRole('heading', { name: 'Workspace · Daily work' })).toBeInTheDocument()
-    expect(within(features).getByRole('heading', { name: 'In each project · Project control' })).toBeInTheDocument()
-    // Project-scoped features need a project id, so they are not links here.
-    expect(within(features).queryByRole('link', { name: 'Activity' })).not.toBeInTheDocument()
-    const activity = within(features).getByText('Activity').closest('li')!
-    expect(activity).toHaveTextContent('Available')
-    const ai = within(features).getByText('AI Suggestions').closest('li')!
-    expect(ai).toHaveTextContent('Beta')
-    expect(within(features).getAllByText('Available').length).toBeGreaterThan(10)
+  it('counts tags, most used first', () => {
+    expect(tagCounts([['b', 'a'], ['a'], undefined])).toEqual([
+      { tag: 'a', count: 2 },
+      { tag: 'b', count: 1 },
+    ])
+  })
 
-    // The UI and the API share one origin (the Workeasy360 session cookie needs it; the Vite dev server
-    // proxies /api), so the default base is the page's own origin.
-    const about = screen.getByRole('region', { name: 'About' })
-    expect(about).toHaveTextContent('Same origin as this page')
+  it('Notifications lists what is sent and has no fake toggles', () => {
+    renderSettings('notifications')
+    expect(screen.getByText('A task is assigned to you')).toBeInTheDocument()
+    expect(screen.getByText('Someone mentions you')).toBeInTheDocument()
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument()
+  })
+
+  it('Integrations shows the unreleased connectors as Coming Soon, not as working', () => {
+    renderSettings('integrations')
+    for (const name of ['Google Sheets', 'Pabbly', 'Zoom', 'Zapier']) {
+      const tile = screen.getByText(name).closest('li')!
+      expect(tile).toHaveAttribute('aria-disabled', 'true')
+      expect(within(tile).getByText('Coming Soon')).toBeInTheDocument()
+      expect(within(tile).queryByRole('button')).not.toBeInTheDocument()
+    }
+  })
+
+  it('Subscription & Usage shows the plan and opens the platform wallets', async () => {
+    renderSettings('subscription')
+    expect(await screen.findByText('Advanced')).toBeInTheDocument()
+    expect(screen.getByText('31 Dec 2026')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Manage Plan/ })).toHaveAttribute('href', 'https://workeasy360.com/plans')
+    expect(screen.getAllByRole('link', { name: /Open on WorkEasy360/ })).toHaveLength(3)
+    expect(screen.getByText('AI Credits')).toBeInTheDocument()
   })
 })
 
@@ -130,31 +157,30 @@ describe('SettingsPage with a Workeasy360 sign-in', () => {
     setIdentity(null)
     signInAs(ME, { orgId: ORG, email: 'ada@example.com', name: 'Ada Lovelace', workeasy360SignOut: true })
     setThemePreference('system')
-    setCollapsed(false)
     document.cookie = 'XSRF-TOKEN=tok%2F1; path=/'
   })
   afterEach(() => {
     setThemePreference('system')
-    setCollapsed(false)
     globalThis.fetch = originalFetch
     vi.mocked(navigateTo).mockClear()
     document.cookie = 'XSRF-TOKEN=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/'
     resetSessionForTest()
   })
 
-  it('Account shows the signed-in person and read-only ids with copy buttons; nothing is editable', async () => {
+  it('Your profile shows the signed-in person and read-only ids with copy buttons; nothing is editable', async () => {
     const writeText = vi.fn(() => Promise.resolve())
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
+    renderSettings('workspace')
+    const section = screen.getByRole('region', { name: 'Your profile' })
     expect(within(section).getByText('Ada Lovelace')).toBeInTheDocument()
     expect(within(section).getByText('ada@example.com')).toBeInTheDocument()
     expect(within(section).getByText(ME)).toBeInTheDocument()
     expect(within(section).getByText(ORG)).toBeInTheDocument()
     expect(within(section).queryByRole('textbox')).not.toBeInTheDocument()
-    // The name and password belong to the Workeasy360 account: nothing here calls the email-account endpoints.
+    // The name, password and photo belong to the Workeasy360 account: nothing here calls the email-account endpoints.
     expect(within(section).queryByRole('button', { name: 'Edit name' })).not.toBeInTheDocument()
     expect(within(section).queryByRole('button', { name: 'Change password' })).not.toBeInTheDocument()
+    expect(within(section).queryByRole('button', { name: /photo/i })).not.toBeInTheDocument()
     expect(section).not.toHaveTextContent('X-User-Id')
     await userEvent.click(within(section).getByRole('button', { name: 'Copy user ID' }))
     expect(writeText).toHaveBeenCalledWith(ME)
@@ -164,8 +190,8 @@ describe('SettingsPage with a Workeasy360 sign-in', () => {
 
   it('"Sign out of Easy Project" posts the logout with the CSRF token and ends the session locally', async () => {
     const fetchMock = mockLogoutFetch()
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
+    renderSettings('workspace')
+    const section = screen.getByRole('region', { name: 'Your profile' })
     await userEvent.click(within(section).getByRole('button', { name: 'Sign out of Easy Project' }))
     await waitFor(() => expect(getSessionState().status).toBe('unauthenticated'))
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit]
@@ -177,8 +203,8 @@ describe('SettingsPage with a Workeasy360 sign-in', () => {
 
   it('"Sign out of Easy Project and Workeasy360" logs out, then navigates to the Workeasy360 sign-out', async () => {
     const fetchMock = mockLogoutFetch()
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
+    renderSettings('workspace')
+    const section = screen.getByRole('region', { name: 'Your profile' })
     await userEvent.click(within(section).getByRole('button', { name: 'Sign out of Easy Project and Workeasy360' }))
     await waitFor(() => expect(navigateTo).toHaveBeenCalledWith('/api/auth/workeasy360/logout'))
     expect((fetchMock.mock.calls[0] as [string, RequestInit])[1].method).toBe('POST')
@@ -187,16 +213,16 @@ describe('SettingsPage with a Workeasy360 sign-in', () => {
 
   it('offers only the Easy Project sign-out when Workeasy360 sign-out is not available', () => {
     signInAs(ME, { orgId: ORG, workeasy360SignOut: false })
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
+    renderSettings('workspace')
+    const section = screen.getByRole('region', { name: 'Your profile' })
     expect(within(section).getByRole('button', { name: 'Sign out of Easy Project' })).toBeInTheDocument()
     expect(within(section).queryByRole('button', { name: /and Workeasy360/ })).not.toBeInTheDocument()
   })
 
   it('stays signed in and shows the problem when the logout request fails', async () => {
     globalThis.fetch = vi.fn().mockRejectedValue(new TypeError('offline')) as unknown as typeof fetch
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
+    renderSettings('workspace')
+    const section = screen.getByRole('region', { name: 'Your profile' })
     await userEvent.click(within(section).getByRole('button', { name: 'Sign out of Easy Project' }))
     expect(await within(section).findByRole('alert')).toHaveTextContent(/could not reach the server/i)
     expect(getSessionState().status).toBe('authenticated')
@@ -204,8 +230,8 @@ describe('SettingsPage with a Workeasy360 sign-in', () => {
 
   it('an email session in the same browser takes precedence over the Workeasy360 one', () => {
     setIdentity({ userId: 'email-user', orgId: ORG, token: 'tok', name: 'Ben', email: 'ben@example.com' })
-    renderSettings()
-    const section = screen.getByRole('region', { name: 'Account' })
+    renderSettings('workspace')
+    const section = screen.getByRole('region', { name: 'Your profile' })
     expect(within(section).getByText('Ben')).toBeInTheDocument()
     expect(within(section).getByRole('button', { name: 'Change password' })).toBeInTheDocument()
     setIdentity(null)

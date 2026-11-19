@@ -1,7 +1,6 @@
 package com.projectmodule.work.api.dto;
 
 import com.projectmodule.project.domain.ProjectPriority;
-import com.projectmodule.work.domain.TaskRecurrence;
 import com.projectmodule.work.domain.TaskStatus;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -24,6 +23,5 @@ public record TaskResponse(
         LocalDate startDate,
         ProjectPriority priority,
         Integer estimateMinutes,
-        TaskRecurrence recurrence,
         List<String> tags) {
 }

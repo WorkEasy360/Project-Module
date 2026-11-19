@@ -10,7 +10,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * The PostgreSQL-backed {@link ReceivedLogoutTokens} ({@code V20__create_received_logout_tokens.sql}). Shared by
+ * The PostgreSQL-backed {@link ReceivedLogoutTokens} ({@code V23__create_received_logout_tokens.sql}). Shared by
  * every instance and kept across restarts, so a captured token cannot be replayed against sessions opened after
  * a deploy.
  *

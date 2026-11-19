@@ -13,7 +13,6 @@ public record AutomationResponse(
         String triggerEvent,
         AutomationActionType actionType,
         UUID actionRecipientId,
-        String actionChannelReference,
         String actionMessage,
         boolean enabled,
         boolean archived,

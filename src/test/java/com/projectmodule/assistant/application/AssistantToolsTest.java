@@ -23,10 +23,8 @@ import com.projectmodule.project.application.ProjectMemberApplicationService;
 import com.projectmodule.project.application.authorization.ProjectAuthorizationService;
 import com.projectmodule.project.domain.Project;
 import com.projectmodule.project.domain.ProjectPriority;
-import com.projectmodule.timetracking.application.TimeTrackingApplicationService;
 import com.projectmodule.work.application.GlobalSearchApplicationService;
 import com.projectmodule.work.application.ProjectCommentApplicationService;
-import com.projectmodule.work.application.ProjectHealthApplicationService;
 import com.projectmodule.work.application.ReportsApplicationService;
 import com.projectmodule.work.application.TaskApplicationService;
 import java.util.Map;
@@ -48,22 +46,14 @@ class AssistantToolsTest {
     @BeforeEach
     void setUp() {
         tools = new AssistantTools(projects, mock(ProjectMemberApplicationService.class),
-                mock(ProjectAuthorizationService.class), tasks, mock(ProjectHealthApplicationService.class),
+                mock(ProjectAuthorizationService.class), tasks,
                 mock(ReportsApplicationService.class), mock(ProjectCommentApplicationService.class),
-                mock(TimeTrackingApplicationService.class), mock(GlobalSearchApplicationService.class),
+                mock(GlobalSearchApplicationService.class),
                 mock(WorkspaceApplicationService.class), mock(NotificationService.class),
-                mock(ProjectActivityRepository.class), accounts, new ObjectMapper(), new ProjectSetupTools(projects, mock(ProjectMemberApplicationService.class), tasks,
-                        mock(com.projectmodule.work.application.SubtaskApplicationService.class),
+                mock(ProjectActivityRepository.class), accounts, new ObjectMapper(),
+                new ProjectSetupTools(projects, mock(ProjectMemberApplicationService.class), tasks,
                         mock(com.projectmodule.work.application.ChecklistApplicationService.class),
-                        mock(com.projectmodule.work.application.PhaseApplicationService.class),
-                        mock(com.projectmodule.work.application.MilestoneApplicationService.class),
-                        mock(com.projectmodule.work.application.TaskListApplicationService.class),
-                        mock(com.projectmodule.work.application.DependencyApplicationService.class),
-                        mock(com.projectmodule.work.application.RiskApplicationService.class),
-                        mock(com.projectmodule.work.application.IssueApplicationService.class),
-                        mock(com.projectmodule.work.application.DecisionApplicationService.class),
-                        mock(com.projectmodule.customization.application.ProjectTemplateApplicationService.class),
-                        mock(WorkspaceApplicationService.class), accounts, new ObjectMapper()));
+                        mock(WorkspaceApplicationService.class), new ObjectMapper()));
         OrganizationId org = OrganizationId.of(UUID.randomUUID());
         ExternalUserId me = ExternalUserId.of(UUID.randomUUID());
         context = new ImmutableRequestContext(Optional.of(me), Optional.of(org), "corr", ActorType.HUMAN);
@@ -76,10 +66,9 @@ class AssistantToolsTest {
     void writeToolsAreKnown() {
         assertThat(tools.definitions()).extracting(t -> t.name())
                 .filteredOn(tools::isWrite)
-                .containsExactlyInAnyOrder("create_task", "update_task", "add_comment", "log_time", "create_project",
-                        "add_project_member", "set_up_project", "add_to_task", "update_subtask", "update_checklist_item",
-                        "add_dependency", "update_milestone", "create_risk", "update_risk", "create_issue", "record_decision",
-                        "invite_to_workspace", "create_project_from_template", "follow_task");
+                .containsExactlyInAnyOrder("create_task", "update_task", "add_comment", "create_project",
+                        "add_project_member", "set_up_project", "add_to_task", "update_checklist_item",
+                        "invite_to_workspace");
         assertThat(tools.isWrite("list_projects")).isFalse();
         assertThat(tools.isWrite("navigate")).isFalse();
     }
@@ -87,7 +76,10 @@ class AssistantToolsTest {
     @Test
     @DisplayName("navigation opens only known pages, and only projects the person can see")
     void navigationIsLimited() {
-        assertThat(tools.execute(context, "navigate", Map.of("page", "timesheet")).navigateTo()).isEqualTo("/timesheet");
+        assertThat(tools.execute(context, "navigate", Map.of("page", "all_tasks")).navigateTo()).isEqualTo("/tasks/all");
+        assertThat(tools.execute(context, "navigate", Map.of("page", "report_team_workload")).navigateTo())
+                .isEqualTo("/reports/workload");
+        assertThat(tools.execute(context, "navigate", Map.of("page", "timesheet")).error()).isTrue();
         assertThat(tools.execute(context, "navigate", Map.of("page", "admin_console")).error()).isTrue();
 
         UUID hidden = UUID.randomUUID();
@@ -121,6 +113,20 @@ class AssistantToolsTest {
         assertThatThrownBy(() -> tools.describe(context, "create_task", Map.of("project_id", project.getId().toString(),
                 "name", "x", "due_date", "next friday")))
                 .isInstanceOf(ValidationException.class).hasMessageContaining("2026-11-20");
+    }
+
+    @Test
+    @DisplayName("the approval text uses the labels the screens show: Normal priority, Done status")
+    void describesWithScreenLabels() {
+        when(projects.getProject(context, project.getId())).thenReturn(project);
+        com.projectmodule.work.domain.Task task =
+                com.projectmodule.work.domain.Task.create(project.getId(), "Write post", null, null);
+        when(tasks.getTask(context, task.getId())).thenReturn(task);
+
+        assertThat(tools.describe(context, "create_task", Map.of("project_id", project.getId().toString(),
+                "name", "Write post", "priority", "MEDIUM"))).isEqualTo("Create task \"Write post\" in Apollo, Normal priority");
+        assertThat(tools.describe(context, "update_task", Map.of("task_id", task.getId().toString(), "status", "COMPLETED")))
+                .isEqualTo("Update \"Write post\": set status to Done");
     }
 
     @Test

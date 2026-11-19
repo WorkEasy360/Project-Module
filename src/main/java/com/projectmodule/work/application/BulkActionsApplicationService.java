@@ -10,7 +10,7 @@ import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
 /**
- * Bulk-archive orchestration for Task/Risk/Issue/Decision, per the approved
+ * Bulk-archive orchestration for tasks, per the approved
  * {@code docs/project/20-BULK-ACTIONS-SPEC.md}.
  *
  * <p>Each id is archived by calling the existing, unmodified single-item
@@ -30,34 +30,13 @@ import org.springframework.stereotype.Service;
 public class BulkActionsApplicationService {
 
     private final TaskApplicationService taskApplicationService;
-    private final RiskApplicationService riskApplicationService;
-    private final IssueApplicationService issueApplicationService;
-    private final DecisionApplicationService decisionApplicationService;
 
-    public BulkActionsApplicationService(TaskApplicationService taskApplicationService,
-                                         RiskApplicationService riskApplicationService,
-                                         IssueApplicationService issueApplicationService,
-                                         DecisionApplicationService decisionApplicationService) {
+    public BulkActionsApplicationService(TaskApplicationService taskApplicationService) {
         this.taskApplicationService = taskApplicationService;
-        this.riskApplicationService = riskApplicationService;
-        this.issueApplicationService = issueApplicationService;
-        this.decisionApplicationService = decisionApplicationService;
     }
 
     public List<BulkArchiveResultResponse> bulkArchiveTasks(RequestContext context, List<UUID> ids) {
         return archiveEach(ids, id -> taskApplicationService.archiveTask(context, id));
-    }
-
-    public List<BulkArchiveResultResponse> bulkArchiveRisks(RequestContext context, List<UUID> ids) {
-        return archiveEach(ids, id -> riskApplicationService.archiveRisk(context, id));
-    }
-
-    public List<BulkArchiveResultResponse> bulkArchiveIssues(RequestContext context, List<UUID> ids) {
-        return archiveEach(ids, id -> issueApplicationService.archiveIssue(context, id));
-    }
-
-    public List<BulkArchiveResultResponse> bulkArchiveDecisions(RequestContext context, List<UUID> ids) {
-        return archiveEach(ids, id -> decisionApplicationService.archiveDecision(context, id));
     }
 
     private static List<BulkArchiveResultResponse> archiveEach(List<UUID> ids, Consumer<UUID> archiveOne) {

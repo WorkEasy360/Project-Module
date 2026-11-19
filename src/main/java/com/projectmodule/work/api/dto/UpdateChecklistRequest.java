@@ -17,8 +17,6 @@ public record UpdateChecklistRequest(
 
         Boolean checked,
 
-        UUID subtaskId,
-
         @NotNull(message = "must not be null")
         Long version) {
 }

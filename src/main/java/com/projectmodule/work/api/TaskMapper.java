@@ -24,7 +24,6 @@ public class TaskMapper {
                 task.getStartDate().orElse(null),
                 task.getPriority(),
                 task.getEstimateMinutes().orElse(null),
-                task.getRecurrence(),
                 task.getTags());
     }
 }

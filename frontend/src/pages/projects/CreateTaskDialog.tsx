@@ -9,9 +9,9 @@ import { tasksApi } from '../../api/tasks'
 import type { Task } from '../../types/work'
 
 /**
- * Task creation kept deliberately small: a name is all that's required. Priority, dates, tags and
- * the rest sit behind "More options" so nobody is confronted with a long form. Subtasks, files and
- * dependencies are added from the task's own page once it exists.
+ * V3 task form: only the Task Title is required. Assignee and due date come next; priority (default
+ * Normal) and description sit behind More Details. New tasks start as To Do. The checklist,
+ * comments and attachments are added from the task's own page once it exists.
  */
 export function CreateTaskDialog({
   projectId,
@@ -22,7 +22,7 @@ export function CreateTaskDialog({
   projectId: string
   onClose: () => void
   onCreated: (task: Task) => void
-  /** Pre-fills the due date (used by the calendar when adding a task on a selected day). */
+  /** Pre-fills the due date. */
   initialDueDate?: string
 }) {
   const [name, setName] = useState('')
@@ -60,7 +60,7 @@ export function CreateTaskDialog({
         {error && <InlineError message={error} />}
         <TextField
           id="task-name"
-          label="What needs to be done?"
+          label="Task Title"
           value={name}
           onChange={setName}
           required
@@ -80,7 +80,7 @@ export function CreateTaskDialog({
 
         {!showMore ? (
           <button type="button" className="btn btn-ghost btn-sm disclosure" onClick={() => setShowMore(true)}>
-            More options
+            More Details
           </button>
         ) : (
           <>
@@ -90,7 +90,7 @@ export function CreateTaskDialog({
               label="Description"
               value={description}
               onChange={setDescription}
-              hint="Subtasks, checklist items and files can be added once the task exists."
+              hint="A checklist, comments and attachments can be added once the task exists."
             />
           </>
         )}

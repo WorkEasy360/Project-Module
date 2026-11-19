@@ -70,6 +70,14 @@ const QUICK_ACTIONS: { label: string; message: string }[] = [
   { label: 'How do I invite my team?', message: 'How do I invite people to my workspace?' },
 ]
 
+/** What the panel says while the assistant works, so it never looks frozen. */
+const WORKING_STEPS = [
+  'Thinking about your question…',
+  'Checking your projects…',
+  'Looking at the tasks…',
+  'Putting the answer together…',
+]
+
 const HAND_OFF = 'Here is a job for you. Please take care of all of it:\n'
 
 /**
@@ -85,6 +93,9 @@ export function AssistantPanel() {
   const [saved, setSaved] = useState<Saved>(load)
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
+  // Each request gets a ticket; "Stop waiting" moves on, and a reply for an old ticket is ignored.
+  const ticketRef = useRef(0)
+  const [waitedSeconds, setWaitedSeconds] = useState(0)
   const [listening, setListening] = useState(false)
   const [voiceReplies, setVoiceReplies] = useState(readVoicePreference)
   const [voiceChat, setVoiceChat] = useState(false)
@@ -111,6 +122,16 @@ export function AssistantPanel() {
     const list = listRef.current
     if (list) list.scrollTop = list.scrollHeight
   }, [saved, busy, open])
+
+  useEffect(() => {
+    if (!busy) {
+      setWaitedSeconds(0)
+      return
+    }
+    const started = Date.now()
+    const timer = window.setInterval(() => setWaitedSeconds(Math.floor((Date.now() - started) / 1000)), 1000)
+    return () => window.clearInterval(timer)
+  }, [busy])
 
   useEffect(() => {
     if (!open) return
@@ -181,14 +202,16 @@ export function AssistantPanel() {
       update(base)
       setDraft('')
       setBusy(true)
+      const ticket = ++ticketRef.current
       try {
         const zone = Intl.DateTimeFormat().resolvedOptions().timeZone
         const context = `page ${location.pathname}; site ${window.location.origin}; local date ${todayIso()}; time zone ${zone}`
-        apply(base, await assistantApi.chat({ conversationId: current.conversationId, message: text, context }))
+        const reply = await assistantApi.chat({ conversationId: current.conversationId, message: text, context })
+        if (ticket === ticketRef.current) apply(savedRef.current, reply)
       } catch (err) {
-        fail(base, err)
+        if (ticket === ticketRef.current) fail(savedRef.current, err)
       } finally {
-        setBusy(false)
+        if (ticket === ticketRef.current) setBusy(false)
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -216,13 +239,23 @@ export function AssistantPanel() {
     }
     update(base)
     setBusy(true)
+    const ticket = ++ticketRef.current
     try {
-      apply(base, await assistantApi.decide(current.conversationId, approve))
+      const reply = await assistantApi.decide(current.conversationId, approve)
+      if (ticket === ticketRef.current) apply(savedRef.current, reply)
     } catch (err) {
-      fail(base, err)
+      if (ticket === ticketRef.current) fail(savedRef.current, err)
     } finally {
-      setBusy(false)
+      if (ticket === ticketRef.current) setBusy(false)
     }
+  }
+
+  /** Stops waiting for the current answer, so the person can carry on; a late answer is ignored. */
+  function stopWaiting() {
+    ticketRef.current++
+    setBusy(false)
+    addNote('Stopped waiting. Ask again whenever you like.')
+    if (voiceChatRef.current) listenTurnRef.current()
   }
 
   sendRef.current = send
@@ -476,10 +509,19 @@ export function AssistantPanel() {
         {busy && (
           <div className="assistant-row">
             <img className="assistant-row-avatar" src="/brand/assistant-avatar-sm.png" alt="" width={26} height={26} />
-            <div className="assistant-line from-assistant assistant-typing" aria-label="The assistant is working">
-              <span />
-              <span />
-              <span />
+            <div className="assistant-line from-assistant assistant-working" role="status" aria-label="The assistant is working">
+              <span className="assistant-typing" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
+              <span className="assistant-working-text">{WORKING_STEPS[Math.floor(waitedSeconds / 3) % WORKING_STEPS.length]}</span>
+              <span className="assistant-working-time">{waitedSeconds}s</span>
+              {waitedSeconds >= 4 && (
+                <button type="button" className="assistant-stop" onClick={stopWaiting}>
+                  Stop waiting
+                </button>
+              )}
             </div>
           </div>
         )}

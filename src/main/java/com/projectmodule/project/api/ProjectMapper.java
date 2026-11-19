@@ -30,16 +30,33 @@ public class ProjectMapper {
                 project.getArchivedBy().map(id -> id.value()).orElse(null),
                 project.getCreatedAt(),
                 project.getUpdatedAt(),
-                project.getVersion());
+                project.getVersion(),
+                project.getCustomerContact().orElse(null),
+                project.getTags());
     }
 
     public ProjectSummaryResponse toSummary(Project project) {
+        return toSummary(project, 0, 0);
+    }
+
+    /** With the project's task counts (live tasks; completed ones among them). */
+    public ProjectSummaryResponse toSummary(Project project, long taskCount, long completedTaskCount) {
         return new ProjectSummaryResponse(
                 project.getId(),
                 project.getName(),
                 project.getStatus(),
                 project.getPriority(),
                 project.getOwnerId().value(),
-                project.getUpdatedAt());
+                project.getUpdatedAt(),
+                project.getDescription().orElse(null),
+                project.getStartDate().orElse(null),
+                project.getTargetEndDate().orElse(null),
+                project.getCustomerContact().orElse(null),
+                project.getTags(),
+                project.isArchived(),
+                project.getArchivedAt().orElse(null),
+                project.getCreatedAt(),
+                taskCount,
+                completedTaskCount);
     }
 }

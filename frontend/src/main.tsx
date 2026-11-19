@@ -3,6 +3,9 @@ import { createRoot } from 'react-dom/client'
 import './styles/global.css'
 import './styles/theme.css'
 import App from './App.tsx'
+import { startFitToWindow } from './fitToWindow'
+
+startFitToWindow()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

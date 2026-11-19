@@ -10,41 +10,20 @@ import { ProjectsListPage } from './pages/projects/ProjectsListPage'
 import { ProjectWorkspace } from './pages/projects/ProjectWorkspace'
 import { OverviewTab } from './pages/projects/tabs/OverviewTab'
 import { MembersTab } from './pages/projects/tabs/MembersTab'
-import { PhasesTab } from './pages/projects/tabs/PhasesTab'
-import { MilestonesTab } from './pages/projects/tabs/MilestonesTab'
-import { TaskListsTab } from './pages/projects/tabs/TaskListsTab'
 import { TasksTab } from './pages/projects/tabs/TasksTab'
 import { TaskDetailPage } from './pages/projects/tabs/TaskDetailPage'
 import { KanbanTab } from './pages/projects/tabs/KanbanTab'
-import { CalendarTab } from './pages/projects/tabs/CalendarTab'
-import { TimelineTab } from './pages/projects/tabs/TimelineTab'
-import { GanttTab } from './pages/projects/tabs/GanttTab'
-import { RisksTab } from './pages/projects/tabs/RisksTab'
-import { IssuesTab } from './pages/projects/tabs/IssuesTab'
-import { DecisionsTab } from './pages/projects/tabs/DecisionsTab'
-import { DependenciesTab } from './pages/projects/tabs/DependenciesTab'
-import { CommentsTab } from './pages/projects/tabs/CommentsTab'
 import { ActivityTab } from './pages/projects/tabs/ActivityTab'
-import { CustomFieldsTab } from './pages/projects/tabs/CustomFieldsTab'
-import { SearchTab } from './pages/projects/tabs/SearchTab'
-import { HealthTab } from './pages/projects/tabs/HealthTab'
-import { DelayedTab } from './pages/projects/tabs/DelayedTab'
-import { ReportsTab } from './pages/projects/tabs/ReportsTab'
-import { AutomationsTab } from './pages/projects/tabs/AutomationsTab'
-import { AutomationRunsPage } from './pages/projects/tabs/AutomationRunsPage'
-import { AITab } from './pages/projects/tabs/AITab'
-import { TemplatesPage } from './pages/templates/TemplatesPage'
-import { MyTasksPage } from './pages/workspace/MyTasksPage'
-import { WorkspaceCalendarPage } from './pages/workspace/WorkspaceCalendarPage'
+import { TasksPage } from './pages/workspace/TasksPage'
 import { TeamPage } from './pages/workspace/TeamPage'
-import { WorkspaceReportsPage } from './pages/workspace/WorkspaceReportsPage'
-import { TimesheetPage } from './pages/workspace/TimesheetPage'
+import { ReportsPage } from './pages/workspace/ReportsPage'
 import { SearchResultsPage } from './pages/workspace/SearchResultsPage'
-import { WorkspaceAutomationsPage } from './pages/workspace/WorkspaceAutomationsPage'
+import { AutomationPage } from './pages/workspace/AutomationPage'
 import { SettingsPage } from './pages/workspace/SettingsPage'
 import { NotFoundPage } from './pages/NotFoundPage'
-import { AdvancedFeaturesPage } from './pages/features/AdvancedFeaturesPage'
+import { HelpdeskPage } from './pages/workspace/HelpdeskPage'
 
+/** Routes for the V3 main navigation: Home, Projects, Tasks, Team, Automation, Reports, Helpdesk, Settings. */
 function App() {
   return (
     <ErrorBoundary>
@@ -54,52 +33,50 @@ function App() {
         <HashRouter>
           <Routes>
             <Route path="sign-in" element={<SignInPage />} />
+            <Route path="sign-up" element={<SignInPage initialMode="register" />} />
             <Route path="join/:inviteToken" element={<SignInPage />} />
             <Route path="reset/:resetToken" element={<SignInPage />} />
             <Route element={<AppLayout />}>
               <Route index element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
-              <Route path="projects" element={<ProjectsListPage />} />
-              <Route path="tasks" element={<MyTasksPage />} />
-              <Route path="calendar" element={<WorkspaceCalendarPage />} />
-              <Route path="team" element={<TeamPage />} />
-              <Route path="timesheet" element={<TimesheetPage />} />
-              <Route path="search" element={<SearchResultsPage />} />
-              <Route path="reports" element={<WorkspaceReportsPage />} />
-              <Route path="templates" element={<TemplatesPage />} />
-              <Route path="automations" element={<WorkspaceAutomationsPage />} />
-              <Route path="settings" element={<SettingsPage />} />
 
+              <Route path="projects" element={<ProjectsListPage />} />
+              <Route path="projects/archived" element={<ProjectsListPage archived />} />
               <Route path="projects/:projectId" element={<ProjectWorkspace />}>
                 <Route index element={<Navigate to="overview" replace />} />
                 <Route path="overview" element={<OverviewTab />} />
-                <Route path="members" element={<MembersTab />} />
-                <Route path="phases" element={<PhasesTab />} />
-                <Route path="milestones" element={<MilestonesTab />} />
-                <Route path="task-lists" element={<TaskListsTab />} />
                 <Route path="tasks" element={<TasksTab />} />
                 <Route path="tasks/:taskId" element={<TaskDetailPage />} />
                 <Route path="kanban" element={<KanbanTab />} />
-                <Route path="calendar" element={<CalendarTab />} />
-                <Route path="timeline" element={<TimelineTab />} />
-                <Route path="gantt" element={<GanttTab />} />
-                <Route path="risks" element={<RisksTab />} />
-                <Route path="issues" element={<IssuesTab />} />
-                <Route path="decisions" element={<DecisionsTab />} />
-                <Route path="dependencies" element={<DependenciesTab />} />
-                <Route path="comments" element={<CommentsTab />} />
+                <Route path="members" element={<MembersTab />} />
                 <Route path="activity" element={<ActivityTab />} />
-                <Route path="custom-fields" element={<CustomFieldsTab />} />
-                <Route path="search" element={<SearchTab />} />
-                <Route path="health" element={<HealthTab />} />
-                <Route path="delayed" element={<DelayedTab />} />
-                <Route path="reports" element={<ReportsTab />} />
-                <Route path="automations" element={<AutomationsTab />} />
-                <Route path="automations/:automationId/runs" element={<AutomationRunsPage />} />
-                <Route path="ai" element={<AITab />} />
-                <Route path="more" element={<AdvancedFeaturesPage />} />
               </Route>
 
+              <Route path="tasks" element={<TasksPage scope="mine" />} />
+              <Route path="tasks/all" element={<TasksPage scope="all" />} />
+
+              <Route path="team" element={<TeamPage section="members" />} />
+              <Route path="team/teams" element={<TeamPage section="teams" />} />
+              <Route path="team/invitations" element={<TeamPage section="invitations" />} />
+
+              <Route path="automations" element={<AutomationPage view="rules" />} />
+              <Route path="automations/runs" element={<AutomationPage view="runs" />} />
+
+              <Route path="reports" element={<ReportsPage view="tasks" />} />
+              <Route path="reports/projects" element={<ReportsPage view="projects" />} />
+              <Route path="reports/workload" element={<ReportsPage view="workload" />} />
+
+              <Route path="helpdesk" element={<HelpdeskPage section="raise" />} />
+              <Route path="helpdesk/tickets" element={<HelpdeskPage section="tickets" />} />
+              <Route path="helpdesk/articles" element={<HelpdeskPage section="articles" />} />
+
+              <Route path="settings" element={<SettingsPage section="workspace" />} />
+              <Route path="settings/fields" element={<SettingsPage section="fields" />} />
+              <Route path="settings/notifications" element={<SettingsPage section="notifications" />} />
+              <Route path="settings/integrations" element={<SettingsPage section="integrations" />} />
+              <Route path="settings/subscription" element={<SettingsPage section="subscription" />} />
+
+              <Route path="search" element={<SearchResultsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>
